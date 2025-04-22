@@ -1,19 +1,19 @@
 #include <bluefruit.h>
-#include "LSM6DS3.h"
-#include "Wire.h"
+#include <Wire.h>
+#include <Adafruit_BNO08x.h>
 #include <Adafruit_Sensor.h>
 
 // For the built-in LED
 #define LED_PIN PIN_LED
 
 // I2C pins for XIAO nRF52840 Sense
-#define I2C_SDA 6  // SDA pin
-#define I2C_SCL 7  // SCL pin
+#define I2C_SDA 4
+#define I2C_SCL 5
 
-// LSM6DS3TR-C I2C address on XIAO nRF52840 Sense
-#define LSM6DS_I2C_ADDR 0x6A
+// BNO085 I2C address
+#define BNO085_I2C_ADDR 0x4B
 
-// HID Report Descriptor for a custom device with 3 axes
+// HID Report Descriptor for a custom device with 4 quaternion values
 // Using a custom usage page to avoid keyboard/gamepad interpretation
 uint8_t const hid_report_descriptor[] = {
   0x06, 0xFF, 0x00,  // Usage Page (Vendor Defined)
@@ -21,24 +21,38 @@ uint8_t const hid_report_descriptor[] = {
   0xA1, 0x01,        // Collection (Application)
   0x85, 0x01,        //   Report ID (1)
   
-  // 3 axes for roll, pitch, yaw
+  // 4 values for quaternion (w, x, y, z)
   0x09, 0x30,        //   Usage (X)
   0x09, 0x31,        //   Usage (Y)
   0x09, 0x32,        //   Usage (Z)
+  0x09, 0x33,        //   Usage (W)
   0x15, 0x81,        //   Logical Minimum (-127)
   0x25, 0x7F,        //   Logical Maximum (127)
   0x75, 0x08,        //   Report Size (8)
-  0x95, 0x03,        //   Report Count (3)
+  0x95, 0x04,        //   Report Count (4)
   0x81, 0x02,        //   Input (Data, Variable, Absolute)
   
   0xC0               // End Collection
 };
 
 // HID report map
-uint8_t report_data[4] = {0};  // Report ID + 3 axis values
+uint8_t report_data[4] = {0};  // 4 values for quaternion
 
-// IMU sensor - Seeed Studio LSM6DS3
-LSM6DS3 myIMU(I2C_MODE, LSM6DS_I2C_ADDR);
+// BNO085 sensor
+Adafruit_BNO08x bno08x;
+sh2_SensorValue_t sensorValue;
+
+// Orientation data
+struct euler_t {
+    float yaw;
+    float pitch;
+    float roll;
+} ypr = {0, 0, 0};
+
+float quaternion_x = 0;
+float quaternion_y = 0;
+float quaternion_z = 0;
+float quaternion_w = 1;
 
 // Bluetooth HID
 BLEDis bledis;
@@ -48,20 +62,19 @@ BLEHidGeneric hid(1, 0, 0);
 BLEBas blebas;
 
 // Complementary filter variables
-float accelRoll = 0, accelPitch = 0;
-float gyroRoll = 0, gyroPitch = 0, gyroYaw = 0;
-float roll = 0, pitch = 0, yaw = 0;
-float gyroXrate = 0, gyroYrate = 0, gyroZrate = 0;
-float dt = 0;
 unsigned long prevTime = 0;
 
 // Update interval (milliseconds)
-const unsigned long UPDATE_INTERVAL = 20;
+const unsigned long UPDATE_INTERVAL = 1;
 unsigned long lastUpdate = 0;
 
 // Debug counter
 unsigned long debugCounter = 0;
 const unsigned long DEBUG_INTERVAL = 1000; // Print debug info every second
+
+// Add these global variables
+bool isMagCalibrated = false;
+uint8_t magAccuracy = 0;
 
 // Function to read battery voltage using internal ADC
 float readVBAT(void) {
@@ -73,7 +86,7 @@ float readVBAT(void) {
   
   // Read the internal voltage reference
   float vref = 3.0;
-  float measuredvbat = analogReadVDDH();
+  float measuredvbat = analogReadVDD();
   
   // Convert the voltage to actual battery voltage
   measuredvbat *= vref;
@@ -106,7 +119,7 @@ void enterDFU() {
     #endif
 }
 
-void checkDFU() {
+void  fxx() {
     if (Serial.available()) {
         if (Serial.read() == 'D') {
             enterDFU();
@@ -117,8 +130,13 @@ void checkDFU() {
 void setup() {
     Serial.begin(115200);
     
-    // Wait a bit for serial connection
-    delay(500);
+    // Wait up to 5 seconds for serial connection
+    unsigned long startTime = millis();
+    while (!Serial && (millis() - startTime < 5000)) {
+        delay(100);
+    }
+    
+    Serial.println("\n\n=== XIAO nRF52840 IMU Tracker Starting ===");
     
     // Check for DFU trigger command
     while (Serial.available()) {
@@ -135,7 +153,7 @@ void setup() {
     while (!Serial && (millis() - start < 2000));
     
     Serial.println("XIAO nRF52840 IMU Bluetooth Orientation Tracker");
-    Serial.println("Using LSM6DS3 sensor with Seeed Studio library");
+    Serial.println("Using BNO085 sensor");
     
     // Initialize IMU
     if (!initIMU()) {
@@ -165,8 +183,8 @@ void setup() {
     // Set our custom report map (descriptor)
     hid.setReportMap(hid_report_descriptor, sizeof(hid_report_descriptor));
     
-    // Set the length of our input report (3 bytes for roll, pitch, yaw)
-    uint16_t input_len[] = {3};  // Length of our single input report
+    // Set the length of our input report (4 bytes for quaternion)
+    uint16_t input_len[] = {4};  // Length of our single input report
     hid.setReportLen(input_len, NULL, NULL);
     
     // Start HID Service
@@ -190,7 +208,7 @@ void loop() {
     // Update orientation at regular intervals
     if (millis() - lastUpdate >= UPDATE_INTERVAL) {
         updateOrientation();
-        sendGamepadReport();
+        sendQuaternionReport();
         lastUpdate = millis();
     }
     
@@ -209,7 +227,7 @@ void loop() {
         Serial.println(report_data[3]);
     }
     
-    updateBatteryLevel();
+    // updateBatteryLevel();
 }
 
 bool initIMU() {
@@ -217,117 +235,107 @@ bool initIMU() {
     Wire.setPins(I2C_SDA, I2C_SCL);
     Wire.begin();
     
-    // I2C Scanner - to help diagnose issues
-    Serial.println("Scanning I2C bus...");
-    byte error, address;
-    int nDevices = 0;
-    
-    for(address = 1; address < 127; address++) {
-        Wire.beginTransmission(address);
-        error = Wire.endTransmission();
-        
-        if (error == 0) {
-            Serial.print("I2C device found at address 0x");
-            if (address < 16) {
-                Serial.print("0");
-            }
-            Serial.print(address, HEX);
-            Serial.println("!");
-            nDevices++;
-        }
-    }
-    
-    if (nDevices == 0) {
-        Serial.println("No I2C devices found!");
-    }
-    
-    // Initialize the LSM6DS3
-    Serial.println("Trying to initialize LSM6DS3...");
-    
-    if (myIMU.begin() != 0) {
-        Serial.println("Failed to initialize LSM6DS3!");
+    // Try to initialize the BNO085
+    if (!bno08x.begin_I2C(BNO085_I2C_ADDR)) {
+        Serial.println("Failed to find BNO085 chip");
         return false;
-    } else {
-        Serial.println("LSM6DS3 initialized successfully!");
     }
+    
+    Serial.println("BNO085 Found!");
+    
+    // Enable the rotation vector report
+    setReports();
+    
+    // Print calibration instructions
+    Serial.println("\nCalibration Instructions:");
+    Serial.println("1. Wave the device in a figure-8 pattern");
+    Serial.println("2. Rotate slowly through all orientations");
+    Serial.println("3. Keep away from magnetic interference");
+    Serial.println("4. Wait for 'Calibrated' message\n");
     
     return true;
 }
 
-void updateOrientation() {
-    // Calculate dt for integration
-    unsigned long currentTime = millis();
-    dt = (currentTime - prevTime) / 1000.0; // Convert to seconds
-    prevTime = currentTime;
-    
-    // Get accelerometer data
-    float accelX = myIMU.readFloatAccelX();
-    float accelY = myIMU.readFloatAccelY();
-    float accelZ = myIMU.readFloatAccelZ();
-    
-    // Get gyroscope data (in degrees per second)
-    float gyroX = myIMU.readFloatGyroX();
-    float gyroY = myIMU.readFloatGyroY();
-    float gyroZ = myIMU.readFloatGyroZ();
-    
-    // Calculate roll and pitch from accelerometer (angles in degrees)
-    // Note: atan2 returns radians, we convert to degrees
-    accelRoll = atan2(accelY, accelZ) * RAD_TO_DEG;
-    accelPitch = atan2(-accelX, sqrt(accelY * accelY + accelZ * accelZ)) * RAD_TO_DEG;
-    
-    // Integrate gyro rates to get angles
-    gyroXrate = gyroX; // degrees per second
-    gyroYrate = gyroY;
-    gyroZrate = gyroZ;
-    
-    // Complementary filter - combine accelerometer and gyroscope angles
-    // Use high % of gyro and low % of accel for smoother results
-    const float GYRO_WEIGHT = 0.96;
-    const float ACCEL_WEIGHT = 0.04;
-    
-    // Update roll, pitch, and yaw
-    gyroRoll += gyroXrate * dt;
-    gyroPitch += gyroYrate * dt;
-    gyroYaw += gyroZrate * dt;
-    
-    // Correct for drift with accelerometer data
-    gyroRoll = gyroRoll * GYRO_WEIGHT + accelRoll * ACCEL_WEIGHT;
-    gyroPitch = gyroPitch * GYRO_WEIGHT + accelPitch * ACCEL_WEIGHT;
-    // Note: No accelerometer correction for yaw as it would require a magnetometer
-    
-    // Transfer filtered angles to global variables
-    roll = gyroRoll;
-    pitch = gyroPitch;
-    yaw = gyroYaw;
-    
-    // Keep yaw in -180 to 180 range
-    while (yaw > 180) yaw -= 360;
-    while (yaw < -180) yaw += 360;
-    
-    Serial.print("Roll: ");
-    Serial.print(roll);
-    Serial.print(" Pitch: ");
-    Serial.print(pitch);
-    Serial.print(" Yaw: ");
-    Serial.println(yaw);
+void setReports() {
+    // Use ROTATION_VECTOR instead of GAME_ROTATION_VECTOR for magnetic north reference
+    if (!bno08x.enableReport(SH2_ROTATION_VECTOR, 5000)) { // 5ms (200Hz)
+        Serial.println("Could not enable rotation vector");
+    }
 }
 
-void sendGamepadReport() {
-    // Map orientation to values (-127 to 127)
-    int8_t rollAxis = constrain(map(roll, -180, 180, -127, 127), -127, 127);
-    int8_t pitchAxis = constrain(map(pitch, -180, 180, -127, 127), -127, 127);
-    int8_t yawAxis = constrain(map(yaw, -180, 180, -127, 127), -127, 127);
+void updateOrientation() {
+    if (bno08x.wasReset()) {
+        Serial.println("BNO085 was reset");
+        setReports();
+    }
+    
+    if (bno08x.getSensorEvent(&sensorValue)) {
+        switch (sensorValue.sensorId) {
+            case SH2_ROTATION_VECTOR:
+                // Update quaternion values
+                quaternion_x = sensorValue.un.rotationVector.i;
+                quaternion_y = sensorValue.un.rotationVector.j;
+                quaternion_z = sensorValue.un.rotationVector.k;
+                quaternion_w = sensorValue.un.rotationVector.real;
+                
+                // Get accuracy and status
+                float accuracy = sensorValue.un.rotationVector.accuracy;
+                magAccuracy = sensorValue.status;
+                
+                // Check if calibrated
+                if (magAccuracy >= 2 && !isMagCalibrated) {
+                    isMagCalibrated = true;
+                    Serial.println("Magnetometer Calibrated!");
+                }
+                
+                // Debug output
+                static uint32_t lastPrint = 0;
+                if (millis() - lastPrint >= 1000) { // Print every second
+                    lastPrint = millis();
+                    Serial.print("Quaternion - W: "); Serial.print(quaternion_w);
+                    Serial.print(" X: "); Serial.print(quaternion_x);
+                    Serial.print(" Y: "); Serial.print(quaternion_y);
+                    Serial.print(" Z: "); Serial.println(quaternion_z);
+                }
+                break;
+        }
+    }
+}
+
+void sendQuaternionReport() {
+    // Map quaternion values (-1 to 1) to HID range (-127 to 127)
+    int8_t w = constrain((int8_t)(quaternion_w * 127.0f), -127, 127);
+    int8_t x = constrain((int8_t)(quaternion_x * 127.0f), -127, 127);
+    int8_t y = constrain((int8_t)(quaternion_y * 127.0f), -127, 127);
+    int8_t z = constrain((int8_t)(quaternion_z * 127.0f), -127, 127);
     
     // Create report
-    // report_data[0] = 1;  // Report ID
-    report_data[0] = rollAxis;
-    report_data[1] = pitchAxis;
-    report_data[2] = yawAxis;
+    report_data[0] = w;
+    report_data[1] = x;
+    report_data[2] = y;
+    report_data[3] = z;
+    
+    // Debug output every second
+    static uint32_t lastDebugPrint = 0;
+    if (millis() - lastDebugPrint >= 1000) {
+        lastDebugPrint = millis();
+        Serial.println("Raw quaternion values:");
+        Serial.print("W: "); Serial.print(quaternion_w);
+        Serial.print(" X: "); Serial.print(quaternion_x);
+        Serial.print(" Y: "); Serial.print(quaternion_y);
+        Serial.print(" Z: "); Serial.println(quaternion_z);
+        
+        Serial.println("Mapped HID values:");
+        Serial.print("W: "); Serial.print((int)w);
+        Serial.print(" X: "); Serial.print((int)x);
+        Serial.print(" Y: "); Serial.print((int)y);
+        Serial.print(" Z: "); Serial.println((int)z);
+    }
     
     // Send the report if connected
     if (Bluefruit.connected()) {
         hid.inputReport(1, report_data, sizeof(report_data));
-        digitalWrite(LED_PIN, !digitalRead(LED_PIN)); // Toggle LED to indicate data sent
+        digitalWrite(LED_PIN, !digitalRead(LED_PIN));
     }
 }
 
@@ -381,4 +389,29 @@ void updateBatteryLevel() {
     Serial.print(battery_level);
     Serial.println("%)");
   }
+}
+
+void quaternionToEuler() {
+    // Different quaternion to euler conversion that might reduce axis coupling
+    ypr.yaw = atan2(2.0f * (quaternion_w * quaternion_z + quaternion_x * quaternion_y),
+                    1.0f - 2.0f * (quaternion_y * quaternion_y + quaternion_z * quaternion_z));
+    ypr.pitch = asin(2.0f * (quaternion_w * quaternion_y - quaternion_z * quaternion_x));
+    ypr.roll = atan2(2.0f * (quaternion_w * quaternion_x + quaternion_y * quaternion_z),
+                     1.0f - 2.0f * (quaternion_x * quaternion_x + quaternion_y * quaternion_y));
+
+    // Convert to degrees
+    ypr.yaw = ypr.yaw * RAD_TO_DEG;
+    ypr.pitch = ypr.pitch * RAD_TO_DEG;
+    ypr.roll = ypr.roll * RAD_TO_DEG;
+}
+
+// Optional: Add a function to save calibration data
+void saveCalibration() {
+    // You could save the quaternion values when fully calibrated
+    // to use as a reference point
+    if (isMagCalibrated) {
+        // Save current orientation as reference
+        // This is just an example - you'd need to implement the actual storage
+        Serial.println("Saving calibration reference point");
+    }
 }
