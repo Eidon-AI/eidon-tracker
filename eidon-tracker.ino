@@ -13,6 +13,10 @@
 // BNO085 I2C address
 #define BNO085_I2C_ADDR 0x4B
 
+// Vendor and Product IDs
+#define VENDOR_ID 0x303A  // Adafruit's vendor ID
+#define PRODUCT_ID 0xABCE // Custom product ID for Eidon Tracker
+
 // HID Report Descriptor for a custom device with 4 quaternion values
 // Using a custom usage page to avoid keyboard/gamepad interpretation
 uint8_t const hid_report_descriptor[] = {
@@ -175,6 +179,12 @@ void setup() {
     
     // Configure and Start Device Information Service
     bledis.begin();
+    bledis.setModel("Eidon Tracker");
+    bledis.setManufacturer("Eidon");
+    bledis.setHardwareRev("1.0");
+    bledis.setFirmwareRev("1.0");
+    bledis.setSerialNum("123456");
+    bledis.setSystemID(VENDOR_ID, PRODUCT_ID);
     
     // Configure HID
     hid.enableKeyboard(false);  // Explicitly disable keyboard
@@ -292,10 +302,10 @@ void updateOrientation() {
                 static uint32_t lastPrint = 0;
                 if (millis() - lastPrint >= 1000) { // Print every second
                     lastPrint = millis();
-                    Serial.print("Quaternion - W: "); Serial.print(quaternion_w);
-                    Serial.print(" X: "); Serial.print(quaternion_x);
+                    Serial.print("Quaternion - X: "); Serial.print(quaternion_x);
                     Serial.print(" Y: "); Serial.print(quaternion_y);
-                    Serial.print(" Z: "); Serial.println(quaternion_z);
+                    Serial.print(" Z: "); Serial.print(quaternion_z);
+                    Serial.print(" W: "); Serial.println(quaternion_w);
                 }
                 break;
         }
@@ -304,32 +314,32 @@ void updateOrientation() {
 
 void sendQuaternionReport() {
     // Map quaternion values (-1 to 1) to HID range (-127 to 127)
-    int8_t w = constrain((int8_t)(quaternion_w * 127.0f), -127, 127);
     int8_t x = constrain((int8_t)(quaternion_x * 127.0f), -127, 127);
     int8_t y = constrain((int8_t)(quaternion_y * 127.0f), -127, 127);
     int8_t z = constrain((int8_t)(quaternion_z * 127.0f), -127, 127);
+    int8_t w = constrain((int8_t)(quaternion_w * 127.0f), -127, 127);
     
     // Create report
-    report_data[0] = w;
-    report_data[1] = x;
-    report_data[2] = y;
-    report_data[3] = z;
+    report_data[0] = x;
+    report_data[1] = y;
+    report_data[2] = z;
+    report_data[3] = w;
     
     // Debug output every second
     static uint32_t lastDebugPrint = 0;
     if (millis() - lastDebugPrint >= 1000) {
         lastDebugPrint = millis();
         Serial.println("Raw quaternion values:");
-        Serial.print("W: "); Serial.print(quaternion_w);
-        Serial.print(" X: "); Serial.print(quaternion_x);
+        Serial.print("X: "); Serial.print(quaternion_x);
         Serial.print(" Y: "); Serial.print(quaternion_y);
         Serial.print(" Z: "); Serial.println(quaternion_z);
+        Serial.print(" W: "); Serial.print(quaternion_w);
         
         Serial.println("Mapped HID values:");
-        Serial.print("W: "); Serial.print((int)w);
-        Serial.print(" X: "); Serial.print((int)x);
+        Serial.print("X: "); Serial.print((int)x);
         Serial.print(" Y: "); Serial.print((int)y);
         Serial.print(" Z: "); Serial.println((int)z);
+        Serial.print(" W: "); Serial.print((int)w);
     }
     
     // Send the report if connected
@@ -350,6 +360,9 @@ void startAdv() {
     // Include HID service
     Bluefruit.Advertising.addService(hid);
     
+    // Include Device Information Service
+    Bluefruit.Advertising.addService(bledis);
+    
     // Include Name
     Bluefruit.Advertising.addName();
     
@@ -363,6 +376,12 @@ void startAdv() {
     Bluefruit.Advertising.start(0);                // 0 = Don't stop advertising after n seconds  
     
     Serial.println("Advertising started");
+    
+    // Debug print the vendor and product IDs
+    Serial.print("Vendor ID: 0x");
+    Serial.println(VENDOR_ID, HEX);
+    Serial.print("Product ID: 0x");
+    Serial.println(PRODUCT_ID, HEX);
 }
 
 // Update battery level periodically
