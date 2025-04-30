@@ -20,8 +20,7 @@
 // System ID string (8 bytes: 4 bytes vendor ID + 4 bytes product ID)
 const char system_id[] = {0x3A, 0x30, 0xCE, 0xAB, 0x00, 0x00, 0x00, 0x00};
 
-// HID Report Descriptor for a custom device with 4 quaternion values
-// Using a custom usage page to avoid keyboard/gamepad interpretation
+// HID Report Descriptor for a custom device with 4 quaternion values and switch states
 uint8_t const hid_report_descriptor[] = {
   0x06, 0xFF, 0x00,  // Usage Page (Vendor Defined)
   0x09, 0x01,        // Usage (1)
@@ -39,11 +38,19 @@ uint8_t const hid_report_descriptor[] = {
   0x95, 0x04,        //   Report Count (4)
   0x81, 0x02,        //   Input (Data, Variable, Absolute)
   
+  // Switch states (1 byte)
+  0x09, 0x34,        //   Usage (Switch States)
+  0x15, 0x00,        //   Logical Minimum (0)
+  0x25, 0x03,        //   Logical Maximum (3)
+  0x75, 0x08,        //   Report Size (8)
+  0x95, 0x01,        //   Report Count (1)
+  0x81, 0x02,        //   Input (Data, Variable, Absolute)
+  
   0xC0               // End Collection
 };
 
 // HID report map
-uint8_t report_data[4] = {0};  // 4 values for quaternion
+uint8_t report_data[5] = {0};  // 4 values for quaternion + 1 byte for switch states
 
 // BNO085 sensor
 Adafruit_BNO08x bno08x;
@@ -88,6 +95,16 @@ const double VREF = 3.3;  // ADC reference voltage
 const unsigned int NUM_READINGS = 1024;  // 10-bit ADC readings 0-1023
 const double VOLTAGE_DIVIDER_RATIO = 1510.0/510.0;  // Voltage divider ratio from VBAT to ADC
 const int BAT_MONITOR_EN_PIN = 14;  // P0.14 for battery monitoring enable
+
+// Switch pins
+#define SWITCH_OUT_LEFT_RIGHT 5  // D5 output for left/right switch
+#define SWITCH_IN_LEFT_RIGHT 6   // D6 input for left/right switch
+#define SWITCH_OUT_UPPER_LOWER 0 // D0 output for upper/lower switch
+#define SWITCH_IN_UPPER_LOWER 1  // D1 input for upper/lower switch
+
+// Switch states
+bool isLeft = false;
+bool isUpper = false;
 
 // Function to read battery voltage using internal ADC
 float readVBAT(void) {
@@ -229,8 +246,8 @@ void setup() {
     // Set our custom report map (descriptor)
     hid.setReportMap(hid_report_descriptor, sizeof(hid_report_descriptor));
     
-    // Set the length of our input report (4 bytes for quaternion)
-    uint16_t input_len[] = {4};  // Length of our single input report
+    // Set the length of our input report (5 bytes: 4 for quaternion + 1 for switch states)
+    uint16_t input_len[] = {5};  // Length of our single input report
     hid.setReportLen(input_len, NULL, NULL);
     
     // Start HID Service
@@ -247,6 +264,12 @@ void setup() {
     
     // Initialize time for complementary filter
     prevTime = millis();
+    
+    // Initialize switch pins
+    pinMode(SWITCH_OUT_LEFT_RIGHT, INPUT);
+    pinMode(SWITCH_IN_LEFT_RIGHT, INPUT_PULLDOWN);
+    pinMode(SWITCH_OUT_UPPER_LOWER, INPUT);
+    pinMode(SWITCH_IN_UPPER_LOWER, INPUT_PULLDOWN);
 }
 
 void loop() {
@@ -275,6 +298,9 @@ void loop() {
         // Serial.print(", ");
         // Serial.println(report_data[3]);
     }
+    
+    // Read switch states
+    readSwitches();
 }
 
 bool initIMU() {
@@ -353,6 +379,12 @@ void sendQuaternionReport() {
     report_data[2] = z;
     report_data[3] = w;
     
+    // Add switch states to the report
+    uint8_t switch_states = 0;
+    if (isLeft) switch_states |= 0x01;  // Set bit 0 for left
+    if (isUpper) switch_states |= 0x02; // Set bit 1 for upper
+    report_data[4] = switch_states;
+    
     // Debug output every second
     static uint32_t lastDebugPrint = 0;
     if (millis() - lastDebugPrint >= 1000) {
@@ -362,17 +394,37 @@ void sendQuaternionReport() {
         Serial.print(" Y: "); Serial.print(quaternion_y);
         Serial.print(" Z: "); Serial.print(quaternion_z);
         Serial.print(" W: "); Serial.println(quaternion_w);
-
+        
         // Serial.println("Mapped HID values:");
         // Serial.print("X: "); Serial.print((int)x);
         // Serial.print(" Y: "); Serial.print((int)y);
-        // Serial.print(" Z: "); Serial.print((int)z);
-        // Serial.print(" W: "); Serial.println((int)w);
+        // Serial.print(" Z: "); Serial.println((int)z);
+        // Serial.print(" W: "); Serial.print((int)w);
+        
+        Serial.print("Switch States: ");
+        Serial.print(isLeft ? "Left" : "Right");
+        Serial.print(", ");
+        Serial.print(isUpper ? "Upper" : "Lower");
+        Serial.print(" (0x");
+        Serial.print(switch_states, HEX);
+        Serial.println(")");
+        
+        // Debug connection and report sending
+        Serial.print("Connected: ");
+        Serial.println(Bluefruit.connected() ? "Yes" : "No");
+        Serial.print("Report data: ");
+        for (int i = 0; i < 5; i++) {
+            Serial.print(report_data[i], HEX);
+            Serial.print(" ");
+        }
+        Serial.println();
     }
     
     // Send the report if connected
     if (Bluefruit.connected()) {
-        hid.inputReport(1, report_data, sizeof(report_data));
+        if (!hid.inputReport(1, report_data, sizeof(report_data))) {
+            Serial.println("Failed to send HID report!");
+        }
         digitalWrite(LED_PIN, !digitalRead(LED_PIN));
     }
 }
@@ -462,4 +514,33 @@ void saveCalibration() {
         // This is just an example - you'd need to implement the actual storage
         Serial.println("Saving calibration reference point");
     }
+}
+
+// Function to read switch states
+void readSwitches() {
+  // Read left/right switch
+  pinMode(SWITCH_OUT_LEFT_RIGHT, OUTPUT);
+  digitalWrite(SWITCH_OUT_LEFT_RIGHT, HIGH);
+  delayMicroseconds(10);  // Small delay for signal to stabilize
+  pinMode(SWITCH_IN_LEFT_RIGHT, INPUT_PULLDOWN);  // Use pulldown to ensure clean low state
+  isLeft = digitalRead(SWITCH_IN_LEFT_RIGHT) == HIGH;
+  pinMode(SWITCH_OUT_LEFT_RIGHT, INPUT);  // Set back to input to prevent floating
+  
+  // Read upper/lower switch
+  pinMode(SWITCH_OUT_UPPER_LOWER, OUTPUT);
+  digitalWrite(SWITCH_OUT_UPPER_LOWER, HIGH);
+  delayMicroseconds(10);  // Small delay for signal to stabilize
+  pinMode(SWITCH_IN_UPPER_LOWER, INPUT_PULLDOWN);  // Use pulldown to ensure clean low state
+  isUpper = digitalRead(SWITCH_IN_UPPER_LOWER) == HIGH;
+  pinMode(SWITCH_OUT_UPPER_LOWER, INPUT);  // Set back to input to prevent floating
+  
+  // Debug output
+  static uint32_t lastPrint = 0;
+  if (millis() - lastPrint >= 1000) {  // Print every second
+    lastPrint = millis();
+    Serial.print("Switch States - Left/Right: ");
+    Serial.print(isLeft ? "Left" : "Right");
+    Serial.print(", Upper/Lower: ");
+    Serial.println(isUpper ? "Upper" : "Lower");
+  }
 }
