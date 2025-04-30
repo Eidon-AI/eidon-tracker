@@ -7,8 +7,8 @@
 #define LED_PIN PIN_LED
 
 // I2C pins for XIAO nRF52840 Sense
-#define I2C_SDA 4
-#define I2C_SCL 5
+#define I2C_SDA 9
+#define I2C_SCL 10
 
 // BNO085 I2C address
 #define BNO085_I2C_ADDR 0x4B
