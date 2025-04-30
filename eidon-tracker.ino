@@ -83,45 +83,70 @@ const unsigned long DEBUG_INTERVAL = 1000; // Print debug info every second
 bool isMagCalibrated = false;
 uint8_t magAccuracy = 0;
 
+// Battery monitoring constants
+const double VREF = 3.3;  // ADC reference voltage
+const unsigned int NUM_READINGS = 1024;  // 10-bit ADC readings 0-1023
+const double VOLTAGE_DIVIDER_RATIO = 1510.0/510.0;  // Voltage divider ratio from VBAT to ADC
+const int BAT_MONITOR_EN_PIN = 14;  // P0.14 for battery monitoring enable
+
 // Function to read battery voltage using internal ADC
 float readVBAT(void) {
-  // Set the analog reference to 3.0V (default = 3.6V)
-  analogReference(AR_INTERNAL_3_0);
+  // Enable battery monitoring
+  pinMode(BAT_MONITOR_EN_PIN, OUTPUT);
+  digitalWrite(BAT_MONITOR_EN_PIN, LOW);
+  delay(1);  // Small delay to ensure pin state is stable
   
-  // Set the resolution to 12-bit (0..4095)
-  analogReadResolution(12);
+  // Read ADC value
+  unsigned int adcCount = analogRead(PIN_VBAT);
   
-  // Read the internal voltage reference
-  float vref = 3.0;
-  float measuredvbat = analogReadVDD();
+  // Debug raw ADC reading
+  Serial.print("Raw ADC reading: ");
+  Serial.println(adcCount);
   
-  // Convert the voltage to actual battery voltage
-  measuredvbat *= vref;
-  measuredvbat /= 4095.0F;
-  measuredvbat *= 2;  // Multiply by 2 as voltage is divided by 2 internally
+  // Convert ADC count to voltage
+  double adcVoltage = (adcCount * VREF) / NUM_READINGS;
   
-  return measuredvbat;
+  // Calculate actual battery voltage using voltage divider ratio
+  double vBat = adcVoltage * VOLTAGE_DIVIDER_RATIO;
+  
+  // Disable battery monitoring to save power
+  digitalWrite(BAT_MONITOR_EN_PIN, HIGH);
+  
+  return vBat;
 }
 
 // Convert voltage to battery percentage with more accurate mapping
 uint8_t mvToPercent(float voltage) {
+  // Debug the input voltage
+  Serial.print("Input voltage: ");
+  Serial.print(voltage, 3);
+  Serial.println("V");
+  
   // For LiPo battery
   if (voltage >= 4.2) return 100;
   if (voltage <= 3.3) return 0;
   
   // Linear mapping between 3.3V and 4.2V
   // 3.3V = 0%, 3.6V = 20%, 3.7V = 40%, 3.8V = 60%, 3.9V = 80%, 4.2V = 100%
+  uint8_t percentage;
   if (voltage < 3.6) {
-    return (voltage - 3.3) * 66.67;  // 20% over 0.3V
+    percentage = (voltage - 3.3) * 66.67;  // 20% over 0.3V
   } else if (voltage < 3.7) {
-    return 20 + (voltage - 3.6) * 200;  // 20% over 0.1V
+    percentage = 20 + (voltage - 3.6) * 200;  // 20% over 0.1V
   } else if (voltage < 3.8) {
-    return 40 + (voltage - 3.7) * 200;  // 20% over 0.1V
+    percentage = 40 + (voltage - 3.7) * 200;  // 20% over 0.1V
   } else if (voltage < 3.9) {
-    return 60 + (voltage - 3.8) * 200;  // 20% over 0.1V
+    percentage = 60 + (voltage - 3.8) * 200;  // 20% over 0.1V
   } else {
-    return 80 + (voltage - 3.9) * 66.67;  // 20% over 0.3V
+    percentage = 80 + (voltage - 3.9) * 66.67;  // 20% over 0.3V
   }
+  
+  // Debug the calculated percentage
+  Serial.print("Calculated percentage: ");
+  Serial.print(percentage);
+  Serial.println("%");
+  
+  return percentage;
 }
 
 void enterDFU() {
@@ -395,6 +420,8 @@ void updateBatteryLevel() {
   if(millis() - lastUpdate >= 10000) {
     lastUpdate = millis();
     
+    Serial.println("\nBattery Reading:");
+    
     // Read battery voltage
     float vbat = readVBAT();
     
@@ -405,11 +432,10 @@ void updateBatteryLevel() {
     blebas.write(battery_level);
     
     // Debug output
-    Serial.print("Battery Voltage: ");
-    Serial.print(vbat, 2);
-    Serial.print("V (");
+    Serial.print("Final Battery Level: ");
     Serial.print(battery_level);
-    Serial.println("%)");
+    Serial.println("%");
+    Serial.println("-------------------");
   }
 }
 
