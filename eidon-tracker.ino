@@ -17,6 +17,9 @@
 #define VENDOR_ID 0x303A  // Adafruit's vendor ID
 #define PRODUCT_ID 0xABCE // Custom product ID for Eidon Tracker
 
+// System ID string (8 bytes: 4 bytes vendor ID + 4 bytes product ID)
+const char system_id[] = {0x3A, 0x30, 0xCE, 0xAB, 0x00, 0x00, 0x00, 0x00};
+
 // HID Report Descriptor for a custom device with 4 quaternion values
 // Using a custom usage page to avoid keyboard/gamepad interpretation
 uint8_t const hid_report_descriptor[] = {
@@ -100,17 +103,25 @@ float readVBAT(void) {
   return measuredvbat;
 }
 
-// Convert voltage to rough battery percentage
+// Convert voltage to battery percentage with more accurate mapping
 uint8_t mvToPercent(float voltage) {
-  if(voltage < 3.3) return 0;
-  if(voltage < 3.6) {
-    voltage -= 3.3;
-    return (voltage * 100) / 0.3;  // Linear from 3.3V to 3.6V
+  // For LiPo battery
+  if (voltage >= 4.2) return 100;
+  if (voltage <= 3.3) return 0;
+  
+  // Linear mapping between 3.3V and 4.2V
+  // 3.3V = 0%, 3.6V = 20%, 3.7V = 40%, 3.8V = 60%, 3.9V = 80%, 4.2V = 100%
+  if (voltage < 3.6) {
+    return (voltage - 3.3) * 66.67;  // 20% over 0.3V
+  } else if (voltage < 3.7) {
+    return 20 + (voltage - 3.6) * 200;  // 20% over 0.1V
+  } else if (voltage < 3.8) {
+    return 40 + (voltage - 3.7) * 200;  // 20% over 0.1V
+  } else if (voltage < 3.9) {
+    return 60 + (voltage - 3.8) * 200;  // 20% over 0.1V
+  } else {
+    return 80 + (voltage - 3.9) * 66.67;  // 20% over 0.3V
   }
-  if(voltage < 4.2) {
-    return 100;  // Consider full between 3.6V and 4.2V
-  }
-  return 100;
 }
 
 void enterDFU() {
@@ -184,7 +195,7 @@ void setup() {
     bledis.setHardwareRev("1.0");
     bledis.setFirmwareRev("1.0");
     bledis.setSerialNum("123456");
-    bledis.setSystemID(VENDOR_ID, PRODUCT_ID);
+    bledis.setSystemID(system_id, 8);
     
     // Configure HID
     hid.enableKeyboard(false);  // Explicitly disable keyboard
@@ -222,22 +233,23 @@ void loop() {
         lastUpdate = millis();
     }
     
+    // Update battery level periodically
+    updateBatteryLevel();
+    
     // Print debug info periodically
     if (millis() - debugCounter >= DEBUG_INTERVAL) {
         debugCounter = millis();
         Serial.print("Connected: ");
         Serial.println(Bluefruit.connected() ? "Yes" : "No");
-        Serial.print("Report data: ");
-        Serial.print(report_data[0]);
-        Serial.print(", ");
-        Serial.print(report_data[1]);
-        Serial.print(", ");
-        Serial.print(report_data[2]);
-        Serial.print(", ");
-        Serial.println(report_data[3]);
+        // Serial.print("Report data: ");
+        // Serial.print(report_data[0]);
+        // Serial.print(", ");
+        // Serial.print(report_data[1]);
+        // Serial.print(", ");
+        // Serial.print(report_data[2]);
+        // Serial.print(", ");
+        // Serial.println(report_data[3]);
     }
-    
-    // updateBatteryLevel();
 }
 
 bool initIMU() {
@@ -298,15 +310,6 @@ void updateOrientation() {
                     Serial.println("Magnetometer Calibrated!");
                 }
                 
-                // Debug output
-                static uint32_t lastPrint = 0;
-                if (millis() - lastPrint >= 1000) { // Print every second
-                    lastPrint = millis();
-                    Serial.print("Quaternion - X: "); Serial.print(quaternion_x);
-                    Serial.print(" Y: "); Serial.print(quaternion_y);
-                    Serial.print(" Z: "); Serial.print(quaternion_z);
-                    Serial.print(" W: "); Serial.println(quaternion_w);
-                }
                 break;
         }
     }
@@ -332,14 +335,14 @@ void sendQuaternionReport() {
         Serial.println("Raw quaternion values:");
         Serial.print("X: "); Serial.print(quaternion_x);
         Serial.print(" Y: "); Serial.print(quaternion_y);
-        Serial.print(" Z: "); Serial.println(quaternion_z);
-        Serial.print(" W: "); Serial.print(quaternion_w);
-        
-        Serial.println("Mapped HID values:");
-        Serial.print("X: "); Serial.print((int)x);
-        Serial.print(" Y: "); Serial.print((int)y);
-        Serial.print(" Z: "); Serial.println((int)z);
-        Serial.print(" W: "); Serial.print((int)w);
+        Serial.print(" Z: "); Serial.print(quaternion_z);
+        Serial.print(" W: "); Serial.println(quaternion_w);
+
+        // Serial.println("Mapped HID values:");
+        // Serial.print("X: "); Serial.print((int)x);
+        // Serial.print(" Y: "); Serial.print((int)y);
+        // Serial.print(" Z: "); Serial.print((int)z);
+        // Serial.print(" W: "); Serial.println((int)w);
     }
     
     // Send the report if connected
@@ -403,7 +406,7 @@ void updateBatteryLevel() {
     
     // Debug output
     Serial.print("Battery Voltage: ");
-    Serial.print(vbat);
+    Serial.print(vbat, 2);
     Serial.print("V (");
     Serial.print(battery_level);
     Serial.println("%)");
