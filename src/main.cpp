@@ -25,14 +25,16 @@ uint8_t const hid_report_descriptor[] = {
   0xA1, 0x01,        // Collection (Application)
   0x85, 0x01,        //   Report ID (1)
   
-  // 4 values for quaternion (w, x, y, z)
+  // 4 values for quaternion (w, x, y, z) - now using 16-bit values
   0x09, 0x30,        //   Usage (X)
   0x09, 0x31,        //   Usage (Y)
   0x09, 0x32,        //   Usage (Z)
   0x09, 0x33,        //   Usage (W)
-  0x15, 0x81,        //   Logical Minimum (-127)
-  0x25, 0x7F,        //   Logical Maximum (127)
-  0x75, 0x08,        //   Report Size (8)
+  0x15, 0x00,        //   Logical Minimum (0)
+  0x26, 0xFF, 0xFF,  //   Logical Maximum (65535)
+  0x35, 0x00,        //   Physical Minimum (0)
+  0x46, 0xFF, 0xFF,  //   Physical Maximum (65535)
+  0x75, 0x10,        //   Report Size (16)
   0x95, 0x04,        //   Report Count (4)
   0x81, 0x02,        //   Input (Data, Variable, Absolute)
   
@@ -47,8 +49,8 @@ uint8_t const hid_report_descriptor[] = {
   0xC0               // End Collection
 };
 
-// HID report map
-uint8_t report_data[5] = {0};  // 4 values for quaternion + 1 byte for switch states
+// HID report map - now 9 bytes total (8 bytes for quaternion + 1 byte for switch states)
+uint8_t report_data[9] = {0};
 
 // BNO085 sensor
 Adafruit_BNO08x bno08x;
@@ -246,23 +248,28 @@ void updateOrientation() {
 }
 
 void sendQuaternionReport() {
-    // Map quaternion values (-1 to 1) to HID range (-127 to 127)
-    int8_t x = constrain((int8_t)(quaternion_x * 127.0f), -127, 127);
-    int8_t y = constrain((int8_t)(quaternion_y * 127.0f), -127, 127);
-    int8_t z = constrain((int8_t)(quaternion_z * 127.0f), -127, 127);
-    int8_t w = constrain((int8_t)(quaternion_w * 127.0f), -127, 127);
+    // Map quaternion values (-1 to 1) to unsigned HID range (0 to 65535)
+    // This maps -1 to 0, 0 to 32768, and 1 to 65535
+    uint16_t x = (uint16_t)((quaternion_x + 1.0f) * 32767.5f);
+    uint16_t y = (uint16_t)((quaternion_y + 1.0f) * 32767.5f);
+    uint16_t z = (uint16_t)((quaternion_z + 1.0f) * 32767.5f);
+    uint16_t w = (uint16_t)((quaternion_w + 1.0f) * 32767.5f);
     
-    // Create report
-    report_data[0] = x;
-    report_data[1] = y;
-    report_data[2] = z;
-    report_data[3] = w;
+    // Create report - store 16-bit values in little-endian format
+    report_data[0] = x & 0xFF;        // LSB of x
+    report_data[1] = (x >> 8) & 0xFF; // MSB of x
+    report_data[2] = y & 0xFF;        // LSB of y
+    report_data[3] = (y >> 8) & 0xFF; // MSB of y
+    report_data[4] = z & 0xFF;        // LSB of z
+    report_data[5] = (z >> 8) & 0xFF; // MSB of z
+    report_data[6] = w & 0xFF;        // LSB of w
+    report_data[7] = (w >> 8) & 0xFF; // MSB of w
     
     // Add switch states to the report
     uint8_t switch_states = 0;
     if (isLeft) switch_states |= 0x01;  // Set bit 0 for left
     if (isUpper) switch_states |= 0x02; // Set bit 1 for upper
-    report_data[4] = switch_states;
+    report_data[8] = switch_states;
     
     // Debug output every second
     static uint32_t lastDebugPrint = 0;
@@ -274,11 +281,11 @@ void sendQuaternionReport() {
         Serial.print(" Z: "); Serial.print(quaternion_z);
         Serial.print(" W: "); Serial.println(quaternion_w);
         
-        // Serial.println("Mapped HID values:");
-        // Serial.print("X: "); Serial.print((int)x);
-        // Serial.print(" Y: "); Serial.print((int)y);
-        // Serial.print(" Z: "); Serial.println((int)z);
-        // Serial.print(" W: "); Serial.print((int)w);
+        Serial.print("Mapped 16-bit values: ");
+        Serial.print(x); Serial.print(", ");
+        Serial.print(y); Serial.print(", ");
+        Serial.print(z); Serial.print(", ");
+        Serial.println(w);
         
         Serial.print("Switch States: ");
         Serial.print(isLeft ? "Left" : "Right");
@@ -292,7 +299,7 @@ void sendQuaternionReport() {
         Serial.print("Connected: ");
         Serial.println(Bluefruit.connected() ? "Yes" : "No");
         Serial.print("Report data: ");
-        for (int i = 0; i < 5; i++) {
+        for (int i = 0; i < 9; i++) {
             Serial.print(report_data[i], HEX);
             Serial.print(" ");
         }
@@ -486,8 +493,8 @@ void setup() {
     // Set our custom report map (descriptor)
     hid.setReportMap(hid_report_descriptor, sizeof(hid_report_descriptor));
     
-    // Set the length of our input report (5 bytes: 4 for quaternion + 1 for switch states)
-    uint16_t input_len[] = {5};  // Length of our single input report
+    // Set the length of our input report (9 bytes: 8 for quaternion + 1 for switch states)
+    uint16_t input_len[] = {9};  // Length of our single input report
     hid.setReportLen(input_len, NULL, NULL);
     
     // Start HID Service
