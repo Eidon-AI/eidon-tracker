@@ -1,7 +1,5 @@
-#include <bluefruit.h>
-#include <Wire.h>
 #include <Adafruit_BNO08x.h>
-#include <Adafruit_Sensor.h>
+#include <bluefruit.h>
 
 // For the built-in LED
 #define LED_PIN PIN_LED
@@ -184,123 +182,11 @@ void  fxx() {
     }
 }
 
-void setup() {
-    Serial.begin(115200);
-    
-    // Wait up to 5 seconds for serial connection
-    unsigned long startTime = millis();
-    while (!Serial && (millis() - startTime < 5000)) {
-        delay(100);
+void setReports() {
+    // Use ROTATION_VECTOR instead of GAME_ROTATION_VECTOR for magnetic north reference
+    if (!bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 5000)) { // 5ms (200Hz)
+        Serial.println("Could not enable rotation vector");
     }
-    
-    Serial.println("\n\n=== XIAO nRF52840 IMU Tracker Starting ===");
-    
-    // Check for DFU trigger command
-    while (Serial.available()) {
-        if (Serial.read() == 'D') {  // 'D' for DFU
-            enterDFU();
-        }
-    }
-    
-    // Set the LED pin as output
-    pinMode(LED_PIN, OUTPUT);
-
-    // Wait for serial port to open (up to 2 seconds)
-    unsigned long start = millis();
-    while (!Serial && (millis() - start < 2000));
-    
-    Serial.println("XIAO nRF52840 IMU Bluetooth Orientation Tracker");
-    Serial.println("Using BNO085 sensor");
-    
-    // Initialize IMU
-    if (!initIMU()) {
-        Serial.println("Failed to initialize IMU!");
-        // Flash LED rapidly to indicate error
-        while (1) {
-            digitalWrite(LED_PIN, HIGH);
-            delay(100);
-            digitalWrite(LED_PIN, LOW);
-            delay(100);
-        }
-    }
-    
-    // Initialize Bluetooth
-    Bluefruit.begin();
-    
-    // Set device name
-    Bluefruit.setName("Eidon Tracker");
-    
-    // Configure and Start Device Information Service
-    bledis.begin();
-    bledis.setModel("Eidon Tracker");
-    bledis.setManufacturer("Eidon");
-    bledis.setHardwareRev("1.0");
-    bledis.setFirmwareRev("1.0");
-    bledis.setSerialNum("123456");
-    bledis.setSystemID(system_id, 8);
-    
-    // Configure HID
-    hid.enableKeyboard(false);  // Explicitly disable keyboard
-    hid.enableMouse(false);     // Explicitly disable mouse
-    
-    // Set our custom report map (descriptor)
-    hid.setReportMap(hid_report_descriptor, sizeof(hid_report_descriptor));
-    
-    // Set the length of our input report (5 bytes: 4 for quaternion + 1 for switch states)
-    uint16_t input_len[] = {5};  // Length of our single input report
-    hid.setReportLen(input_len, NULL, NULL);
-    
-    // Start HID Service
-    hid.begin();
-    
-    // Initialize Battery Service
-    blebas.begin();
-    blebas.write(100);
-    
-    // Start advertising
-    startAdv();
-    
-    Serial.println("Setup complete");
-    
-    // Initialize time for complementary filter
-    prevTime = millis();
-    
-    // Initialize switch pins
-    pinMode(SWITCH_OUT_LEFT_RIGHT, INPUT);
-    pinMode(SWITCH_IN_LEFT_RIGHT, INPUT_PULLDOWN);
-    pinMode(SWITCH_OUT_UPPER_LOWER, INPUT);
-    pinMode(SWITCH_IN_UPPER_LOWER, INPUT_PULLDOWN);
-}
-
-void loop() {
-    // checkDFU();  // Check for DFU command
-    // Update orientation at regular intervals
-    if (millis() - lastUpdate >= UPDATE_INTERVAL) {
-        updateOrientation();
-        sendQuaternionReport();
-        lastUpdate = millis();
-    }
-    
-    // Update battery level periodically
-    updateBatteryLevel();
-    
-    // Print debug info periodically
-    if (millis() - debugCounter >= DEBUG_INTERVAL) {
-        debugCounter = millis();
-        Serial.print("Connected: ");
-        Serial.println(Bluefruit.connected() ? "Yes" : "No");
-        // Serial.print("Report data: ");
-        // Serial.print(report_data[0]);
-        // Serial.print(", ");
-        // Serial.print(report_data[1]);
-        // Serial.print(", ");
-        // Serial.print(report_data[2]);
-        // Serial.print(", ");
-        // Serial.println(report_data[3]);
-    }
-    
-    // Read switch states
-    readSwitches();
 }
 
 bool initIMU() {
@@ -329,13 +215,6 @@ bool initIMU() {
     return true;
 }
 
-void setReports() {
-    // Use ROTATION_VECTOR instead of GAME_ROTATION_VECTOR for magnetic north reference
-    if (!bno08x.enableReport(SH2_ROTATION_VECTOR, 5000)) { // 5ms (200Hz)
-        Serial.println("Could not enable rotation vector");
-    }
-}
-
 void updateOrientation() {
     if (bno08x.wasReset()) {
         Serial.println("BNO085 was reset");
@@ -344,7 +223,7 @@ void updateOrientation() {
     
     if (bno08x.getSensorEvent(&sensorValue)) {
         switch (sensorValue.sensorId) {
-            case SH2_ROTATION_VECTOR:
+            case SH2_GAME_ROTATION_VECTOR:
                 // Update quaternion values
                 quaternion_x = sensorValue.un.rotationVector.i;
                 quaternion_y = sensorValue.un.rotationVector.j;
@@ -352,7 +231,7 @@ void updateOrientation() {
                 quaternion_w = sensorValue.un.rotationVector.real;
                 
                 // Get accuracy and status
-                float accuracy = sensorValue.un.rotationVector.accuracy;
+                // float accuracy = sensorValue.un.rotationVector.accuracy;
                 magAccuracy = sensorValue.status;
                 
                 // Check if calibrated
@@ -543,4 +422,108 @@ void readSwitches() {
     Serial.print(", Upper/Lower: ");
     Serial.println(isUpper ? "Upper" : "Lower");
   }
+}
+
+void setup() {
+    Serial.begin(115200);
+    
+    // Wait up to 5 seconds for serial connection
+    unsigned long startTime = millis();
+    while (!Serial && (millis() - startTime < 5000)) {
+        delay(100);
+    }
+    
+    Serial.println("\n\n=== XIAO nRF52840 IMU Tracker Starting ===");
+    
+    // Check for DFU trigger command
+    while (Serial.available()) {
+        if (Serial.read() == 'D') {  // 'D' for DFU
+            enterDFU();
+        }
+    }
+    
+    // Set the LED pin as output
+    pinMode(LED_PIN, OUTPUT);
+
+    // Wait for serial port to open (up to 2 seconds)
+    unsigned long start = millis();
+    while (!Serial && (millis() - start < 2000));
+    
+    Serial.println("XIAO nRF52840 IMU Bluetooth Orientation Tracker");
+    Serial.println("Using BNO085 sensor");
+    
+    // Initialize IMU
+    if (!initIMU()) {
+        Serial.println("Failed to initialize IMU!");
+        // Flash LED rapidly to indicate error
+        while (1) {
+            digitalWrite(LED_PIN, HIGH);
+            delay(100);
+            digitalWrite(LED_PIN, LOW);
+            delay(100);
+        }
+    }
+    
+    // Initialize Bluetooth
+    Bluefruit.begin();
+    
+    // Set device name
+    Bluefruit.setName("Eidon Tracker");
+    
+    // Configure and Start Device Information Service
+    bledis.begin();
+    bledis.setModel("Eidon Tracker");
+    bledis.setManufacturer("Eidon");
+    bledis.setHardwareRev("1.0");
+    bledis.setFirmwareRev("1.0");
+    bledis.setSerialNum("123456");
+    bledis.setSystemID(system_id, 8);
+    
+    // Configure HID
+    hid.enableKeyboard(false);  // Explicitly disable keyboard
+    hid.enableMouse(false);     // Explicitly disable mouse
+    
+    // Set our custom report map (descriptor)
+    hid.setReportMap(hid_report_descriptor, sizeof(hid_report_descriptor));
+    
+    // Set the length of our input report (5 bytes: 4 for quaternion + 1 for switch states)
+    uint16_t input_len[] = {5};  // Length of our single input report
+    hid.setReportLen(input_len, NULL, NULL);
+    
+    // Start HID Service
+    hid.begin();
+    
+    // Initialize Battery Service
+    blebas.begin();
+    blebas.write(100);
+    
+    // Start advertising
+    startAdv();
+    
+    Serial.println("Setup complete");
+    
+    // Initialize time for complementary filter
+    prevTime = millis();
+    
+    // Initialize switch pins
+    pinMode(SWITCH_OUT_LEFT_RIGHT, INPUT);
+    pinMode(SWITCH_IN_LEFT_RIGHT, INPUT_PULLDOWN);
+    pinMode(SWITCH_OUT_UPPER_LOWER, INPUT);
+    pinMode(SWITCH_IN_UPPER_LOWER, INPUT_PULLDOWN);
+}
+
+void loop() {
+    // checkDFU();  // Check for DFU command
+    // Update orientation at regular intervals
+    if (millis() - lastUpdate >= UPDATE_INTERVAL) {
+        updateOrientation();
+        sendQuaternionReport();
+        lastUpdate = millis();
+    }
+    
+    // Update battery level periodically
+    updateBatteryLevel();
+    
+    // Read switch states
+    readSwitches();
 }
