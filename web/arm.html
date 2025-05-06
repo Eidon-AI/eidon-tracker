@@ -1,0 +1,94 @@
+<html>
+    <body>
+      <button id="connectBtn">Connect IMUs</button>
+      <p id="angle">– deg</p>
+      
+      <script type="module">
+      import {quat, vec3} from 'https://cdn.jsdelivr.net/npm/gl-matrix@3.4.3/+esm';
+      
+      const SCALE = 1/127;          // int8 → [-1,+1]
+      let devHand, devForearm;
+      let qNeutral = quat.create();  // identity at start
+      
+      // ───────── basic quaternion helpers ─────────
+      function i8toQuat(dv, offset=0){
+        return quat.normalize(quat.create(), [
+          dv.getInt8(offset+1)*SCALE, // x
+          dv.getInt8(offset+2)*SCALE, // y
+          dv.getInt8(offset+3)*SCALE, // z
+          dv.getInt8(offset+0)*SCALE  // w (sent first)
+        ]);
+      }
+      function wristAngle(qHand, qFore){               // 0-to-π, signed
+        const currentRel = quat.mul(quat.create(),
+                            quat.conjugate(quat.create(), qFore), qHand);
+        const delta = quat.mul(quat.create(),
+                      quat.conjugate(quat.create(), qNeutral), currentRel);
+        const θ = 2*Math.acos(Math.max(-1,Math.min(1, delta[3]))); // delta.w = cos(θ/2)
+        const s = Math.sqrt(1 - delta[3]*delta[3]);
+        const axis = s<1e-6 ? [1,0,0] : [delta[0]/s, delta[1]/s, delta[2]/s];
+      
+        // use forearm local +X as flexion axis sign reference
+        const sign = Math.sign(vec3.dot(axis, [1,0,0]));
+        return sign*θ*180/Math.PI;
+      }
+      // ───────── WebHID plumbing ─────────
+      document.getElementById('connectBtn').onclick = async ()=>{
+        try {
+          // First device selection
+          console.log('Selecting first IMU...');
+          const devices1 = await navigator.hid.requestDevice({
+            filters: []
+          });
+          console.log('First device selection:', devices1);
+          
+          if (devices1.length === 0) {
+            alert('No device selected. Please select the first IMU.');
+            return;
+          }
+          
+          // Second device selection
+          console.log('Selecting second IMU...');
+          const devices2 = await navigator.hid.requestDevice({
+            filters: []
+          });
+          console.log('Second device selection:', devices2);
+          
+          if (devices2.length === 0) {
+            alert('No device selected. Please select the second IMU.');
+            return;
+          }
+          
+          // Assign devices
+          devHand = devices1[0];
+          devForearm = devices2[0];
+          
+          console.log('Hand device:', devHand);
+          console.log('Forearm device:', devForearm);
+          
+          // Open both devices
+          await Promise.all([devHand.open(), devForearm.open()]);
+          console.log('Both devices opened successfully');
+      
+          const latest = {hand:null, fore:null};
+          const handler = which => e=>{
+            const q = i8toQuat(e.data);
+            latest[which] = q;
+            if(latest.hand && latest.fore){
+              if(!quat.sqrLen(qNeutral)) qNeutral = quat.mul(quat.create(),
+                                  quat.conjugate(quat.create(), latest.fore), latest.hand);
+              const deg = wristAngle(latest.hand, latest.fore).toFixed(1);
+              document.getElementById('angle').textContent = `${deg} °`;
+            }
+          };
+          devHand.addEventListener('inputreport', handler('hand'));
+          devForearm.addEventListener('inputreport', handler('fore'));
+        } catch (error) {
+          console.error('Error connecting to IMUs:', error);
+          alert('Failed to connect to IMUs. Please try again later.');
+        }
+      };
+      </script>
+      
+    </body>
+</html>

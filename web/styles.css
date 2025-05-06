@@ -1,0 +1,33 @@
+.tracker-circle-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 10px;
+}
+
+.tracker-circle {
+    width: 40px;
+    height: 40px;
+    border: 2px solid #ccc;
+    border-radius: 50%;
+    position: relative;
+    margin-bottom: 5px;
+}
+
+.tracker-indicator {
+    width: 8px;
+    height: 8px;
+    background-color: #4CAF50;
+    border-radius: 50%;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform-origin: center;
+    transform: translate(-50%, -50%);
+    transition: transform 0.1s ease-out;
+}
+
+.tracker-label {
+    font-size: 12px;
+    color: #666;
+} 
