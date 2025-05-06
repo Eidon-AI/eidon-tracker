@@ -1,5 +1,19 @@
+#include <Arduino.h>
 #include <Adafruit_BNO08x.h>
 #include <bluefruit.h>
+#include <stdint.h>
+
+// Forward declarations
+void printCalibrationStatus(uint8_t status);
+void saveCalibrationData();
+
+// Calibration data structure
+struct sh2_CalibrationData_t {
+    float mag_bias[3];
+    float mag_scale[3];
+    float accel_bias[3];
+    float gyro_bias[3];
+};
 
 // For the built-in LED
 #define LED_PIN PIN_LED
@@ -20,8 +34,8 @@ const char system_id[] = {0x3A, 0x30, 0xCE, 0xAB, 0x00, 0x00, 0x00, 0x00};
 
 // HID Report Descriptor for a custom device with 4 quaternion values and switch states
 uint8_t const hid_report_descriptor[] = {
-  0x06, 0xFF, 0x00,  // Usage Page (Vendor Defined)
-  0x09, 0x01,        // Usage (1)
+  0x05, 0x01,        // Usage Page (Generic Desktop)
+  0x09, 0x01,        // Usage (Pointer)
   0xA1, 0x01,        // Collection (Application)
   0x85, 0x01,        //   Report ID (1)
   
@@ -39,6 +53,7 @@ uint8_t const hid_report_descriptor[] = {
   0x81, 0x02,        //   Input (Data, Variable, Absolute)
   
   // Switch states (1 byte)
+  0x05, 0xFF,        //   Usage Page (Vendor Defined)
   0x09, 0x34,        //   Usage (Switch States)
   0x15, 0x00,        //   Logical Minimum (0)
   0x25, 0x03,        //   Logical Maximum (3)
@@ -46,11 +61,42 @@ uint8_t const hid_report_descriptor[] = {
   0x95, 0x01,        //   Report Count (1)
   0x81, 0x02,        //   Input (Data, Variable, Absolute)
   
+  // Add calibration status (1 byte)
+  0x05, 0xFF,        //   Usage Page (Vendor Defined)
+  0x09, 0x36,        //   Usage (Calibration Status)
+  0x15, 0x00,        //   Logical Minimum (0)
+  0x25, 0x03,        //   Logical Maximum (3)
+  0x75, 0x08,        //   Report Size (8)
+  0x95, 0x01,        //   Report Count (1)
+  0x81, 0x02,        //   Input (Data, Variable, Absolute)
+  
+  0xC0,              // End Collection
+  
+  // Output report for calibration commands
+  0x05, 0x01,        // Usage Page (Generic Desktop)
+  0x09, 0x02,        // Usage (Mouse)
+  0xA1, 0x01,        // Collection (Application)
+  0x85, 0x02,        //   Report ID (2)
+  
+  // Calibration command (1 byte)
+  0x05, 0xFF,        //   Usage Page (Vendor Defined)
+  0x09, 0x35,        //   Usage (Calibration Command)
+  0x15, 0x00,        //   Logical Minimum (0)
+  0x25, 0x04,        //   Logical Maximum (4)
+  0x35, 0x00,        //   Physical Minimum (0)
+  0x45, 0x04,        //   Physical Maximum (4)
+  0x75, 0x08,        //   Report Size (8)
+  0x95, 0x01,        //   Report Count (1)
+  0x91, 0x02,        //   Output (Data, Variable, Absolute)
+  
   0xC0               // End Collection
 };
 
 // HID report map - now 9 bytes total (8 bytes for quaternion + 1 byte for switch states)
 uint8_t report_data[9] = {0};
+
+// Add output report buffer
+uint8_t output_report[1] = {0};
 
 // BNO085 sensor
 Adafruit_BNO08x bno08x;
@@ -105,6 +151,23 @@ const int BAT_MONITOR_EN_PIN = 14;  // P0.14 for battery monitoring enable
 // Switch states
 bool isLeft = false;
 bool isUpper = false;
+
+// Add calibration status variables
+struct calibration_status_t {
+    uint8_t mag_status;      // 0-3: Unreliable to High accuracy
+    uint8_t accel_status;    // 0-3: Unreliable to High accuracy
+    uint8_t gyro_status;     // 0-3: Unreliable to High accuracy
+    bool needs_calibration;  // True if any sensor needs calibration
+} calibration_status = {0, 0, 0, true};
+
+// Add calibration data storage
+struct calibration_data_t {
+    float mag_bias[3];
+    float mag_scale[3];
+    float accel_bias[3];
+    float gyro_bias[3];
+    uint32_t timestamp;
+} calibration_data;
 
 // Function to read battery voltage using internal ADC
 float readVBAT(void) {
@@ -186,8 +249,20 @@ void  fxx() {
 
 void setReports() {
     // Use ROTATION_VECTOR instead of GAME_ROTATION_VECTOR for magnetic north reference
-    if (!bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 5000)) { // 5ms (200Hz)
+    if (!bno08x.enableReport(SH2_ARVR_STABILIZED_RV, 5000)) { // 5ms (200Hz)
         Serial.println("Could not enable rotation vector");
+    }
+
+    if (!bno08x.enableReport(SH2_MAGNETIC_FIELD_CALIBRATED, 50000)) { // 5ms (200Hz)
+        Serial.println("Could not enable magnetic field calibrated");
+    }
+
+    if (!bno08x.enableReport(SH2_ACCELEROMETER, 60000)) { // 5ms (200Hz)
+        Serial.println("Could not enable accelerometer");
+    }
+
+    if (!bno08x.enableReport(SH2_RAW_GYROSCOPE, 70000)) { // 5ms (200Hz)
+        Serial.println("Could not enable gyroscope");
     }
 }
 
@@ -225,7 +300,7 @@ void updateOrientation() {
     
     if (bno08x.getSensorEvent(&sensorValue)) {
         switch (sensorValue.sensorId) {
-            case SH2_GAME_ROTATION_VECTOR:
+            case SH2_ARVR_STABILIZED_RV:
                 // Update quaternion values
                 quaternion_x = sensorValue.un.rotationVector.i;
                 quaternion_y = sensorValue.un.rotationVector.j;
@@ -235,7 +310,7 @@ void updateOrientation() {
                 // Get accuracy and status
                 // float accuracy = sensorValue.un.rotationVector.accuracy;
                 magAccuracy = sensorValue.status;
-                
+
                 // Check if calibrated
                 if (magAccuracy >= 2 && !isMagCalibrated) {
                     isMagCalibrated = true;
@@ -431,6 +506,125 @@ void readSwitches() {
   }
 }
 
+// Update the calibration status monitoring
+void updateCalibrationStatus() {
+    static uint32_t lastCalibrationCheck = 0;
+    if (millis() - lastCalibrationCheck >= 1000) {  // Check every second
+        lastCalibrationCheck = millis();
+        
+        // Get calibration status
+        sh2_SensorValue_t sensorValue;
+        if (bno08x.getSensorEvent(&sensorValue)) {
+            switch (sensorValue.sensorId) {
+                case SH2_MAGNETIC_FIELD_CALIBRATED:
+                    calibration_status.mag_status = sensorValue.status;
+                    break;
+                case SH2_ACCELEROMETER:
+                    calibration_status.accel_status = sensorValue.status;
+                    break;
+                case SH2_RAW_GYROSCOPE:
+                    calibration_status.gyro_status = sensorValue.status;
+                    break;
+            }
+        }
+
+        // Print calibration status
+        Serial.println("\nCalibration Status:");
+        Serial.print("Magnetometer: ");
+        switch (calibration_status.mag_status) {
+            case 0: Serial.println("Uncalibrated"); break;
+            case 1: Serial.println("Poor"); break;
+            case 2: Serial.println("Good"); break;
+            case 3: Serial.println("Excellent"); break;
+            default: Serial.println("Unknown"); break;
+        }
+        Serial.print("Accelerometer: ");
+        switch (calibration_status.accel_status) {
+            case 0: Serial.println("Uncalibrated"); break;
+            case 1: Serial.println("Poor"); break;
+            case 2: Serial.println("Good"); break;
+            case 3: Serial.println("Excellent"); break;
+            default: Serial.println("Unknown"); break;
+        }
+        Serial.print("Gyroscope: ");
+        switch (calibration_status.gyro_status) {
+            case 0: Serial.println("Uncalibrated"); break;
+            case 1: Serial.println("Poor"); break;
+            case 2: Serial.println("Good"); break;
+            case 3: Serial.println("Excellent"); break;
+            default: Serial.println("Unknown"); break;
+        }
+    }
+}
+
+// Helper function to print calibration status
+void printCalibrationStatus(uint8_t status) {
+    switch (status) {
+        case 0:
+            Serial.println("Uncalibrated");
+            break;
+        case 1:
+            Serial.println("Poor");
+            break;
+        case 2:
+            Serial.println("Good");
+            break;
+        case 3:
+            Serial.println("Excellent");
+            break;
+        default:
+            Serial.println("Unknown");
+            break;
+    }
+}
+
+// Update the calibration command handler
+void handleCalibrationCommand(uint16_t conn_hdl, BLECharacteristic* chr, uint8_t* data, uint16_t len) {
+    if (len >= 1) {
+        switch (data[0]) {
+            case 1:  // Magnetometer calibration
+                Serial.println("\nStarting magnetometer calibration...");
+                Serial.println("Please move the device in a figure-8 pattern");
+                Serial.println("Keep away from magnetic interference");
+                calibration_status.mag_status = 0;
+                break;
+            case 2:  // Accelerometer calibration
+                Serial.println("\nStarting accelerometer calibration...");
+                Serial.println("Please place the device in 6 different stable positions");
+                Serial.println("Hold each position for 2-3 seconds");
+                calibration_status.accel_status = 0;
+                break;
+            case 3:  // Gyroscope calibration
+                Serial.println("\nStarting gyroscope calibration...");
+                Serial.println("Please keep the device completely still");
+                Serial.println("This will take about 5 seconds");
+                calibration_status.gyro_status = 0;
+                break;
+            case 4:  // Full calibration
+                Serial.println("\nStarting full calibration sequence...");
+                Serial.println("1. Keep device still for gyroscope calibration (5s)");
+                Serial.println("2. Place in 6 positions for accelerometer calibration");
+                Serial.println("3. Move in figure-8 pattern for magnetometer calibration");
+                calibration_status.mag_status = 0;
+                calibration_status.accel_status = 0;
+                calibration_status.gyro_status = 0;
+                break;
+            case 5:  // Save calibration data
+                saveCalibrationData();
+                break;
+        }
+    }
+}
+
+// Function to save calibration data
+void saveCalibrationData() {
+    // The BNO085 automatically saves calibration data to non-volatile memory
+    // when calibration is complete. We just need to wait for the calibration
+    // to finish and verify the status.
+    Serial.println("Calibration data is automatically saved when calibration is complete.");
+    Serial.println("Please check the calibration status using the updateCalibrationStatus function.");
+}
+
 void setup() {
     Serial.begin(115200);
     
@@ -493,9 +687,13 @@ void setup() {
     // Set our custom report map (descriptor)
     hid.setReportMap(hid_report_descriptor, sizeof(hid_report_descriptor));
     
-    // Set the length of our input report (9 bytes: 8 for quaternion + 1 for switch states)
-    uint16_t input_len[] = {9};  // Length of our single input report
-    hid.setReportLen(input_len, NULL, NULL);
+    // Set the length of our reports
+    uint16_t input_len[] = {9};  // Length of our input report
+    uint16_t output_len[] = {1}; // Length of our output report
+    hid.setReportLen(input_len, output_len, NULL);
+    
+    // Set the output report callback
+    hid.setOutputReportCallback(2, handleCalibrationCommand);
     
     // Start HID Service
     hid.begin();
@@ -533,4 +731,7 @@ void loop() {
     
     // Read switch states
     readSwitches();
+    
+    // Monitor calibration status
+    updateCalibrationStatus();
 }
