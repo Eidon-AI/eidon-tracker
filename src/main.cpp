@@ -219,22 +219,22 @@ void  fxx() {
 }
 
 void setReports() {
-    // Use ROTATION_VECTOR instead of GAME_ROTATION_VECTOR for magnetic north reference
-    if (!bno08x.enableReport(SH2_ARVR_STABILIZED_RV, 5000)) { // 5ms (200Hz)
+    // Use ARVR_STABILIZED_RV instead of GAME_ROTATION_VECTOR for magnetic north reference
+    if (!bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 5000)) { // 5ms (200Hz)
         Serial.println("Could not enable rotation vector");
     }
 
-    if (!bno08x.enableReport(SH2_MAGNETIC_FIELD_CALIBRATED, 50000)) { // 5ms (200Hz)
-        Serial.println("Could not enable magnetic field calibrated");
-    }
+    // if (!bno08x.enableReport(SH2_MAGNETIC_FIELD_CALIBRATED, 50000)) { // 5ms (200Hz)
+    //     Serial.println("Could not enable magnetic field calibrated");
+    // }
 
-    if (!bno08x.enableReport(SH2_ACCELEROMETER, 60000)) { // 5ms (200Hz)
-        Serial.println("Could not enable accelerometer");
-    }
+    // if (!bno08x.enableReport(SH2_ACCELEROMETER, 60000)) { // 5ms (200Hz)
+    //     Serial.println("Could not enable accelerometer");
+    // }
 
-    if (!bno08x.enableReport(SH2_RAW_GYROSCOPE, 70000)) { // 5ms (200Hz)
-        Serial.println("Could not enable gyroscope");
-    }
+    // if (!bno08x.enableReport(SH2_RAW_GYROSCOPE, 70000)) { // 5ms (200Hz)
+    //     Serial.println("Could not enable gyroscope");
+    // }
 }
 
 bool initIMU() {
@@ -271,7 +271,7 @@ void updateOrientation() {
     
     if (bno08x.getSensorEvent(&sensorValue)) {
         switch (sensorValue.sensorId) {
-            case SH2_ARVR_STABILIZED_RV:
+            case SH2_GAME_ROTATION_VECTOR:
                 // Update quaternion values
                 quaternion_x = sensorValue.un.rotationVector.i;
                 quaternion_y = sensorValue.un.rotationVector.j;
