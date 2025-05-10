@@ -219,7 +219,7 @@ void  fxx() {
 }
 
 void setReports() {
-    // Use ARVR_STABILIZED_RV instead of GAME_ROTATION_VECTOR for magnetic north reference
+    // Use GAME_ROTATION_VECTOR instead of ARVR_STABILIZED_RV for no magnetic north reference
     if (!bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 5000)) { // 5ms (200Hz)
         Serial.println("Could not enable rotation vector");
     }
