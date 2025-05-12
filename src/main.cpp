@@ -140,6 +140,9 @@ struct calibration_data_t {
     uint32_t timestamp;
 } calibration_data;
 
+// Global to hold last tap time
+volatile uint32_t lastTapMillis = 0;
+
 // Function to read battery voltage using internal ADC
 float readVBAT(void) {
   // Enable battery monitoring
@@ -151,8 +154,8 @@ float readVBAT(void) {
   unsigned int adcCount = analogRead(PIN_VBAT);
   
   // Debug raw ADC reading
-  Serial.print("Raw ADC reading: ");
-  Serial.println(adcCount);
+//   Serial.print("Raw ADC reading: ");
+//   Serial.println(adcCount);
   
   // Convert ADC count to voltage
   double adcVoltage = (adcCount * VREF) / NUM_READINGS;
@@ -169,9 +172,9 @@ float readVBAT(void) {
 // Convert voltage to battery percentage with more accurate mapping
 uint8_t mvToPercent(float voltage) {
   // Debug the input voltage
-  Serial.print("Input voltage: ");
-  Serial.print(voltage, 3);
-  Serial.println("V");
+//   Serial.print("Input voltage: ");
+//   Serial.print(voltage, 3);
+//   Serial.println("V");
   
   // For LiPo battery
   if (voltage >= 4.2) return 100;
@@ -193,9 +196,9 @@ uint8_t mvToPercent(float voltage) {
   }
   
   // Debug the calculated percentage
-  Serial.print("Calculated percentage: ");
-  Serial.print(percentage);
-  Serial.println("%");
+//   Serial.print("Calculated percentage: ");
+//   Serial.print(percentage);
+//   Serial.println("%");
   
   return percentage;
 }
@@ -219,22 +222,15 @@ void  fxx() {
 }
 
 void setReports() {
-    // Use GAME_ROTATION_VECTOR instead of ARVR_STABILIZED_RV for no magnetic north reference
-    if (!bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 5000)) { // 5ms (200Hz)
+    // Enable game rotation vector (orientation)
+    if (!bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 5000)) {
         Serial.println("Could not enable rotation vector");
     }
 
-    // if (!bno08x.enableReport(SH2_MAGNETIC_FIELD_CALIBRATED, 50000)) { // 5ms (200Hz)
-    //     Serial.println("Could not enable magnetic field calibrated");
-    // }
-
-    // if (!bno08x.enableReport(SH2_ACCELEROMETER, 60000)) { // 5ms (200Hz)
-    //     Serial.println("Could not enable accelerometer");
-    // }
-
-    // if (!bno08x.enableReport(SH2_RAW_GYROSCOPE, 70000)) { // 5ms (200Hz)
-    //     Serial.println("Could not enable gyroscope");
-    // }
+    // Enable Tap Detector (event-driven, report interval 0)
+    if (!bno08x.enableReport(SH2_TAP_DETECTOR, 1000)) {
+        Serial.println("Could not enable tap detector");
+    }
 }
 
 bool initIMU() {
@@ -253,12 +249,12 @@ bool initIMU() {
     // Enable the rotation vector report
     setReports();
     
-    // Print calibration instructions
-    Serial.println("\nCalibration Instructions:");
-    Serial.println("1. Wave the device in a figure-8 pattern");
-    Serial.println("2. Rotate slowly through all orientations");
-    Serial.println("3. Keep away from magnetic interference");
-    Serial.println("4. Wait for 'Calibrated' message\n");
+    // // Print calibration instructions
+    // Serial.println("\nCalibration Instructions:");
+    // Serial.println("1. Wave the device in a figure-8 pattern");
+    // Serial.println("2. Rotate slowly through all orientations");
+    // Serial.println("3. Keep away from magnetic interference");
+    // Serial.println("4. Wait for 'Calibrated' message\n");
     
     return true;
 }
@@ -268,27 +264,41 @@ void updateOrientation() {
         Serial.println("BNO085 was reset");
         setReports();
     }
-    
+
     if (bno08x.getSensorEvent(&sensorValue)) {
         switch (sensorValue.sensorId) {
             case SH2_GAME_ROTATION_VECTOR:
-                // Update quaternion values
-                quaternion_x = sensorValue.un.rotationVector.i;
-                quaternion_y = sensorValue.un.rotationVector.j;
-                quaternion_z = sensorValue.un.rotationVector.k;
-                quaternion_w = sensorValue.un.rotationVector.real;
-                
-                // Get accuracy and status
-                // float accuracy = sensorValue.un.rotationVector.accuracy;
-                magAccuracy = sensorValue.status;
-
-                // Check if calibrated
-                if (magAccuracy >= 2 && !isMagCalibrated) {
-                    isMagCalibrated = true;
-                    Serial.println("Magnetometer Calibrated!");
-                }
-                
+                // existing quaternion handling
+                quaternion_x = sensorValue.un.gameRotationVector.i;
+                quaternion_y = sensorValue.un.gameRotationVector.j;
+                quaternion_z = sensorValue.un.gameRotationVector.k;
+                quaternion_w = sensorValue.un.gameRotationVector.real;
                 break;
+
+            case SH2_TAP_DETECTOR: {
+                uint8_t f = sensorValue.un.tapDetector.flags;
+                bool isDouble = f & TAPDET_DOUBLE;
+                Serial.print(isDouble ? "Double" : "Single");
+                Serial.print(" tap detected on ");
+                if      (f & TAPDET_X)     Serial.println("-X side");
+                else if (f & TAPDET_X_POS) Serial.println("+X side");
+                else if (f & TAPDET_Y)     Serial.println("-Y side");
+                else if (f & TAPDET_Y_POS) Serial.println("+Y side");
+                else if (f & TAPDET_Z)     Serial.println("-Z side");
+                else if (f & TAPDET_Z_POS) Serial.println("+Z side");
+                else                       Serial.println("unknown side");
+
+                // simple visual feedback
+                Serial.println("Tap detected");
+
+                lastTapMillis = millis();
+                digitalWrite(LED_GREEN, LOW);   // turn blue on
+                bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 0);   // disable
+                bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 5000); // re-enable (200 Hz)
+                delay(2000);
+                digitalWrite(LED_GREEN, HIGH);  // turn blue off
+                break;
+            }
         }
     }
 }
@@ -321,35 +331,35 @@ void sendQuaternionReport() {
     static uint32_t lastDebugPrint = 0;
     if (millis() - lastDebugPrint >= 1000) {
         lastDebugPrint = millis();
-        Serial.println("Raw quaternion values:");
-        Serial.print("X: "); Serial.print(quaternion_x);
-        Serial.print(" Y: "); Serial.print(quaternion_y);
-        Serial.print(" Z: "); Serial.print(quaternion_z);
-        Serial.print(" W: "); Serial.println(quaternion_w);
+        // Serial.println("Raw quaternion values:");
+        // Serial.print("X: "); Serial.print(quaternion_x);
+        // Serial.print(" Y: "); Serial.print(quaternion_y);
+        // Serial.print(" Z: "); Serial.print(quaternion_z);
+        // Serial.print(" W: "); Serial.println(quaternion_w);
         
-        Serial.print("Mapped 16-bit values: ");
-        Serial.print(x); Serial.print(", ");
-        Serial.print(y); Serial.print(", ");
-        Serial.print(z); Serial.print(", ");
-        Serial.println(w);
+        // Serial.print("Mapped 16-bit values: ");
+        // Serial.print(x); Serial.print(", ");
+        // Serial.print(y); Serial.print(", ");
+        // Serial.print(z); Serial.print(", ");
+        // Serial.println(w);
         
-        Serial.print("Switch States: ");
-        Serial.print(isLeft ? "Left" : "Right");
-        Serial.print(", ");
-        Serial.print(isUpper ? "Upper" : "Lower");
-        Serial.print(" (0x");
-        Serial.print(switch_states, HEX);
-        Serial.println(")");
+        // Serial.print("Switch States: ");
+        // Serial.print(isLeft ? "Left" : "Right");
+        // Serial.print(", ");
+        // Serial.print(isUpper ? "Upper" : "Lower");
+        // Serial.print(" (0x");
+        // Serial.print(switch_states, HEX);
+        // Serial.println(")");
         
         // Debug connection and report sending
-        Serial.print("Connected: ");
-        Serial.println(Bluefruit.connected() ? "Yes" : "No");
-        Serial.print("Report data: ");
-        for (int i = 0; i < 9; i++) {
-            Serial.print(report_data[i], HEX);
-            Serial.print(" ");
-        }
-        Serial.println();
+        // Serial.print("Connected: ");
+        // Serial.println(Bluefruit.connected() ? "Yes" : "No");
+        // Serial.print("Report data: ");
+        // for (int i = 0; i < 9; i++) {
+        //     Serial.print(report_data[i], HEX);
+        //     Serial.print(" ");
+        // }
+        // Serial.println();
     }
     
     // Send the report if connected
@@ -404,7 +414,7 @@ void updateBatteryLevel() {
   if(millis() - lastUpdate >= 10000) {
     lastUpdate = millis();
     
-    Serial.println("\nBattery Reading:");
+    // Serial.println("\nBattery Reading:");
     
     // Read battery voltage
     float vbat = readVBAT();
@@ -416,10 +426,10 @@ void updateBatteryLevel() {
     blebas.write(battery_level);
     
     // Debug output
-    Serial.print("Final Battery Level: ");
-    Serial.print(battery_level);
-    Serial.println("%");
-    Serial.println("-------------------");
+    // Serial.print("Final Battery Level: ");
+    // Serial.print(battery_level);
+    // Serial.println("%");
+    // Serial.println("-------------------");
   }
 }
 
@@ -465,16 +475,6 @@ void readSwitches() {
   pinMode(SWITCH_IN_UPPER_LOWER, INPUT_PULLDOWN);  // Use pulldown to ensure clean low state
   isUpper = digitalRead(SWITCH_IN_UPPER_LOWER) == HIGH;
   pinMode(SWITCH_OUT_UPPER_LOWER, INPUT);  // Set back to input to prevent floating
-  
-  // Debug output
-  static uint32_t lastPrint = 0;
-  if (millis() - lastPrint >= 1000) {  // Print every second
-    lastPrint = millis();
-    Serial.print("Switch States - Left/Right: ");
-    Serial.print(isLeft ? "Left" : "Right");
-    Serial.print(", Upper/Lower: ");
-    Serial.println(isUpper ? "Upper" : "Lower");
-  }
 }
 
 // Update the calibration status monitoring
@@ -686,6 +686,9 @@ void setup() {
     pinMode(SWITCH_IN_LEFT_RIGHT, INPUT_PULLDOWN);
     pinMode(SWITCH_OUT_UPPER_LOWER, INPUT);
     pinMode(SWITCH_IN_UPPER_LOWER, INPUT_PULLDOWN);
+
+    pinMode(LED_GREEN, OUTPUT);
+    digitalWrite(LED_GREEN, HIGH); // off (assuming active-low RGB LED)
 }
 
 void loop() {
@@ -704,5 +707,5 @@ void loop() {
     readSwitches();
     
     // Monitor calibration status
-    updateCalibrationStatus();
+    // updateCalibrationStatus();
 }
