@@ -44,10 +44,8 @@ uint8_t const hid_report_descriptor[] = {
   0x09, 0x31,        //   Usage (Y)
   0x09, 0x32,        //   Usage (Z)
   0x09, 0x33,        //   Usage (W)
-  0x15, 0x00,        //   Logical Minimum (0)
-  0x26, 0xFF, 0xFF,  //   Logical Maximum (65535)
-  0x35, 0x00,        //   Physical Minimum (0)
-  0x46, 0xFF, 0xFF,  //   Physical Maximum (65535)
+  0x16, 0x00, 0x00,  // Logical Minimum  (16-bit tag, value 0)
+  0x26, 0xFF, 0x7F,  // Logical Maximum 32767  (0x7FFF)
   0x75, 0x10,        //   Report Size (16)
   0x95, 0x04,        //   Report Count (4)
   0x81, 0x02,        //   Input (Data, Variable, Absolute)
@@ -228,7 +226,7 @@ void setReports() {
     }
 
     // Enable Tap Detector (event-driven, report interval 0)
-    if (!bno08x.enableReport(SH2_TAP_DETECTOR, 1000)) {
+    if (!bno08x.enableReport(SH2_TAP_DETECTOR, 0)) {
         Serial.println("Could not enable tap detector");
     }
 }
