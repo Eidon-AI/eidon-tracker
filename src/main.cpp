@@ -26,11 +26,8 @@ struct sh2_CalibrationData_t {
 #define BNO085_I2C_ADDR 0x4B
 
 // Vendor and Product IDs
-#define VENDOR_ID 0x303A  // Adafruit's vendor ID
-#define PRODUCT_ID 0xABCE // Custom product ID for Eidon Tracker
-
-// System ID string (8 bytes: 4 bytes vendor ID + 4 bytes product ID)
-const char system_id[] = {0x3A, 0x30, 0xCE, 0xAB, 0x00, 0x00, 0x00, 0x00};
+#define VENDOR_ID 0x2886  // Adafruit's vendor ID
+#define PRODUCT_ID 0x8044 // Custom product ID for Eidon Tracker
 
 // HID Report Descriptor for a custom device with 4 quaternion values and switch states
 uint8_t const hid_report_descriptor[] = {
@@ -48,7 +45,7 @@ uint8_t const hid_report_descriptor[] = {
   0x27, 0xFF, 0xFF, 0x00, 0x00,// Logical Maximum  65535  (32-bit form)
   0x81, 0x02,                  //  Input (Data,Var,Abs)
 
-  // Optional switch byte – put it on the Button page so hosts know it’s a button
+  // Optional switch byte – put it on the Button page so hosts know it's a button
   0x05, 0x09,                  //  UsagePage (Button)
   0x19, 0x01,                  //  UsageMinimum (Button 1)
   0x29, 0x02,                  //  UsageMaximum (Button 2)  ← up to you
@@ -641,14 +638,28 @@ void setup() {
     // Set device name
     Bluefruit.setName("Eidon Tracker");
     
-    // Configure and Start Device Information Service
-    bledis.begin();
+    // ---------- Device-information service -----------------------------
+
+    // PnP-ID (see Core Spec vol 3, part C §12.1)
+    static const uint8_t pnp_id[7] = {
+      0x02,                             // 0x01 = BT-SIG, 0x02 = USB-IF
+      (uint8_t)(VENDOR_ID  & 0xFF),
+      (uint8_t)(VENDOR_ID  >> 8),
+      (uint8_t)(PRODUCT_ID & 0xFF),
+      (uint8_t)(PRODUCT_ID >> 8),
+      0x00, 0x01                        // product / firmware version
+    };
+
+    bledis.setPNPID(reinterpret_cast<const char*>(pnp_id), sizeof(pnp_id));
     bledis.setModel("Eidon Tracker");
     bledis.setManufacturer("Eidon");
     bledis.setHardwareRev("1.0");
     bledis.setFirmwareRev("1.0");
     bledis.setSerialNum("123456");
-    bledis.setSystemID(system_id, 8);
+
+    // CREATE the characteristics now
+    bledis.begin();
+    // -------------------------------------------------------------------
     
     // Configure HID
     hid.enableKeyboard(false);  // Explicitly disable keyboard
