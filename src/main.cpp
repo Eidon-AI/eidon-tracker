@@ -246,14 +246,18 @@ void updateOrientation() {
                 else if (f & TAPDET_Z_POS) Serial.println("+Z side");
                 else                       Serial.println("unknown side");
 
-                // simple visual feedback
-                Serial.println("Tap detected");
+                if (isDouble) {
+                    Serial.println("Double tap detected");
 
-                digitalWrite(LED_GREEN, LOW);   // turn blue on
-                bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 0);   // disable
-                bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 5000); // re-enable (200 Hz)
-                delay(2000);
-                digitalWrite(LED_GREEN, HIGH);  // turn blue off
+                    digitalWrite(LED_GREEN, LOW);   // turn blue on
+                    bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 0);   // disable
+                    bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 5000); // re-enable (200 Hz)
+                    delay(2000);
+                    digitalWrite(LED_GREEN, HIGH);  // turn blue off
+                } else {
+                    Serial.println("Single tap detected");
+                }
+
                 break;
             }
         }
@@ -343,7 +347,7 @@ void startAdv() {
     Bluefruit.Advertising.addService(bledis);
     
     // Include Name
-    Bluefruit.Advertising.addName();
+    Bluefruit.ScanResponse.addName();
     
     // Include Battery Service
     Bluefruit.Advertising.addService(blebas);
@@ -518,7 +522,7 @@ void setup() {
 
     bledis.setPNPID(reinterpret_cast<const char*>(pnp_id), sizeof(pnp_id));
     bledis.setModel("Eidon Tracker");
-    bledis.setManufacturer("Eidon");
+    bledis.setManufacturer("Eidon AI");
     bledis.setHardwareRev("1.0");
     bledis.setFirmwareRev("1.0");
     bledis.setSerialNum("123456");
