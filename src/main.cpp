@@ -34,31 +34,32 @@ const char system_id[] = {0x3A, 0x30, 0xCE, 0xAB, 0x00, 0x00, 0x00, 0x00};
 
 // HID Report Descriptor for a custom device with 4 quaternion values and switch states
 uint8_t const hid_report_descriptor[] = {
-  0x06, 0xFF, 0x00,  // Usage Page (Vendor Defined)
-  0x09, 0x01,        // Usage (1)
-  0xA1, 0x01,        // Collection (Application)
-  0x85, 0x01,        //   Report ID (1)
-  
-  // 4 values for quaternion (w, x, y, z) - now using 16-bit values
-  0x09, 0x30,        //   Usage (X)
-  0x09, 0x31,        //   Usage (Y)
-  0x09, 0x32,        //   Usage (Z)
-  0x09, 0x33,        //   Usage (W)
-  0x16, 0x00, 0x00,  // Logical Minimum  (16-bit tag, value 0)
-  0x26, 0xFF, 0x7F,  // Logical Maximum 32767  (0x7FFF)
-  0x75, 0x10,        //   Report Size (16)
-  0x95, 0x04,        //   Report Count (4)
-  0x81, 0x02,        //   Input (Data, Variable, Absolute)
-  
-  // Switch states (1 byte)
-  0x09, 0x34,        //   Usage (Switch States)
-  0x15, 0x00,        //   Logical Minimum (0)
-  0x25, 0x03,        //   Logical Maximum (3)
-  0x75, 0x08,        //   Report Size (8)
-  0x95, 0x01,        //   Report Count (1)
-  0x81, 0x02,        //   Input (Data, Variable, Absolute)
-  
-  0xC0               // End Collection
+  0x05, 0x20,                  //  UsagePage (Sensor)
+  0x09, 0x80,                  //  Usage (Orientation)
+  0xA1, 0x01,                  //  Collection (Application)
+
+  0x85, 0x01,                  //  Report ID (1)
+
+  // 4×16-bit quaternion components (i, j, k, real)
+  0x0A, 0x83, 0x04,            //  Usage 0x0483 – Data Field: Quaternion
+  0x75, 0x10,                  //  ReportSize 16
+  0x95, 0x04,                  //  ReportCount 4
+  0x17, 0x00, 0x00, 0x00, 0x00,// Logical Minimum  0      (32-bit form)
+  0x27, 0xFF, 0xFF, 0x00, 0x00,// Logical Maximum  65535  (32-bit form)
+  0x81, 0x02,                  //  Input (Data,Var,Abs)
+
+  // Optional switch byte – put it on the Button page so hosts know it’s a button
+  0x05, 0x09,                  //  UsagePage (Button)
+  0x19, 0x01,                  //  UsageMinimum (Button 1)
+  0x29, 0x02,                  //  UsageMaximum (Button 2)  ← up to you
+  0x95, 0x02,                  //  ReportCount 2
+  0x75, 0x01,                  //  ReportSize 1
+  0x15, 0x00, 0x25, 0x01,      //  LogicalMin 0, LogicalMax 1
+  0x81, 0x02,                  //  Input (Data,Var,Abs)
+  0x95, 0x06, 0x75, 0x01, 0x81, 0x03, // padding bits
+
+0xC0                            // End Collection
+
 };
 
 // HID report map - now 9 bytes total (8 bytes for quaternion + 1 byte for switch states)
@@ -375,7 +376,7 @@ void startAdv() {
     Bluefruit.Advertising.addTxPower();
     
     // Set appearance to HID Device (not specifically a gamepad)
-    Bluefruit.Advertising.addAppearance(BLE_APPEARANCE_HID_GAMEPAD);
+    Bluefruit.Advertising.addAppearance(BLE_APPEARANCE_GENERIC_HID);
     
     // Include HID service
     Bluefruit.Advertising.addService(hid);
