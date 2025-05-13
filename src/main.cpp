@@ -3,18 +3,6 @@
 #include <bluefruit.h>
 #include <stdint.h>
 
-// Forward declarations
-void printCalibrationStatus(uint8_t status);
-void saveCalibrationData();
-
-// Calibration data structure
-struct sh2_CalibrationData_t {
-    float mag_bias[3];
-    float mag_scale[3];
-    float accel_bias[3];
-    float gyro_bias[3];
-};
-
 // For the built-in LED
 #define LED_PIN PIN_LED
 
@@ -55,8 +43,21 @@ uint8_t const hid_report_descriptor[] = {
   0x81, 0x02,                  //  Input (Data,Var,Abs)
   0x95, 0x06, 0x75, 0x01, 0x81, 0x03, // padding bits
 
-0xC0                            // End Collection
+  0xC0,                           // End Orientation Collection
 
+  // ── Second top-level collection : vendor I/O ─────────────────────────
+  0x06, 0x00, 0xFF,            //  UsagePage (Vendor-defined 0xFF00)
+  0x09, 0x01,                  //  Usage (Vendor usage 1)
+  0xA1, 0x01,                  //  Collection (Application)
+
+  0x85, 0x01,                  //    Report ID (1) – command channel
+  0x15, 0x00, 0x26, 0xFF, 0x00,//    Logical Min 0, Logical Max 255
+  0x75, 0x08,                  //    Report Size 8 bits
+  0x95, 0x01,                  //    Report Count 1
+  0x09, 0x01,                  //    Usage (Vendor usage 1)
+  0x91, 0x02,                  //    Output (Data,Var,Abs)
+
+  0xC0                            //  End Vendor Collection
 };
 
 // HID report map - now 9 bytes total (8 bytes for quaternion + 1 byte for switch states)
@@ -83,13 +84,10 @@ float quaternion_w = 1;
 
 // Bluetooth HID
 BLEDis bledis;
-BLEHidGeneric hid(1, 0, 0);
+BLEHidGeneric blehid(1, 2, 0);
 
 // Battery Service
 BLEBas blebas;
-
-// Complementary filter variables
-unsigned long prevTime = 0;
 
 // Update interval (milliseconds)
 const unsigned long UPDATE_INTERVAL = 1;
@@ -103,11 +101,23 @@ const unsigned long DEBUG_INTERVAL = 1000; // Print debug info every second
 bool isMagCalibrated = false;
 uint8_t magAccuracy = 0;
 
-// Battery monitoring constants
-const double VREF = 3.3;  // ADC reference voltage
-const unsigned int NUM_READINGS = 1024;  // 10-bit ADC readings 0-1023
-const double VOLTAGE_DIVIDER_RATIO = 1510.0/510.0;  // Voltage divider ratio from VBAT to ADC
-const int BAT_MONITOR_EN_PIN = 14;  // P0.14 for battery monitoring enable
+// -----------------------------------------------------------------------------
+// Battery-monitoring constants and helpers
+// Xiao nRF52840 Sense routes VBAT through a resistor divider ( ≈ 2.961 : 1 ) to
+// pin P0.31 (alias PIN_VBAT).
+// The nRF52 ADC is configured for a 0.6 V reference with gain ×6 → 3.6 V full-scale
+// and 12-bit resolution (0–4095).  Use the same settings recommended by Seeed.
+// -----------------------------------------------------------------------------
+const float ADC_REF_VOLTAGE   = 3.6f;       // 0.6 V × 6 gain
+const uint16_t ADC_MAX_COUNT  = 4095;       // 12-bit ADC
+const float VBAT_DIVIDER_RATIO = 2.961f;    // Empirically measured divider ratio
+const int   BAT_MONITOR_EN_PIN = 14;        // P0.14 controls divider (LOW = measure)
+
+// Battery monitoring pins
+#define PIN_VBAT        (32)  // D32 battery voltage
+#define PIN_VBAT_ENABLE (14)  // D14 LOW:read anable
+#define PIN_HICHG       (22)  // D22 charge current setting LOW:100mA HIGH:50mA
+#define PIN_CHG         (23)  // D23 charge indicatore LOW:charge HIGH:no charge
 
 // Switch pins
 #define SWITCH_OUT_LEFT_RIGHT 5  // D5 output for left/right switch
@@ -139,38 +149,30 @@ struct calibration_data_t {
 // Global to hold last tap time
 volatile uint32_t lastTapMillis = 0;
 
-// Function to read battery voltage using internal ADC
 float readVBAT(void) {
-  // Enable battery monitoring
-  pinMode(BAT_MONITOR_EN_PIN, OUTPUT);
-  digitalWrite(BAT_MONITOR_EN_PIN, LOW);
-  delay(1);  // Small delay to ensure pin state is stable
-  
-  // Read ADC value
-  unsigned int adcCount = analogRead(PIN_VBAT);
-  
-  // Debug raw ADC reading
-//   Serial.print("Raw ADC reading: ");
-//   Serial.println(adcCount);
-  
-  // Convert ADC count to voltage
-  double adcVoltage = (adcCount * VREF) / NUM_READINGS;
-  
-  // Calculate actual battery voltage using voltage divider ratio
-  double vBat = adcVoltage * VOLTAGE_DIVIDER_RATIO;
-  
-  // Disable battery monitoring to save power
+  // Enable voltage divider (active LOW)
+//   pinMode(BAT_MONITOR_EN_PIN, OUTPUT);
+//   digitalWrite(BAT_MONITOR_EN_PIN, LOW);
+//   delayMicroseconds(300);                 // allow voltage to settle
+
+//   (void)analogRead(PIN_VBAT);             // dummy read to discard first sample
+  uint16_t adcCount = analogRead(PIN_VBAT);
+
+  // Disable divider to save power
   digitalWrite(BAT_MONITOR_EN_PIN, HIGH);
-  
+
+  // Convert to volts
+  float vBat = ( (float)adcCount / ADC_MAX_COUNT ) * ADC_REF_VOLTAGE * VBAT_DIVIDER_RATIO;
+
   return vBat;
 }
 
 // Convert voltage to battery percentage with more accurate mapping
 uint8_t mvToPercent(float voltage) {
   // Debug the input voltage
-//   Serial.print("Input voltage: ");
-//   Serial.print(voltage, 3);
-//   Serial.println("V");
+  Serial.print("Input voltage: ");
+  Serial.print(voltage, 3);
+  Serial.println("V");
   
   // For LiPo battery
   if (voltage >= 4.2) return 100;
@@ -192,9 +194,9 @@ uint8_t mvToPercent(float voltage) {
   }
   
   // Debug the calculated percentage
-//   Serial.print("Calculated percentage: ");
-//   Serial.print(percentage);
-//   Serial.println("%");
+  Serial.print("Calculated percentage: ");
+  Serial.print(percentage);
+  Serial.println("%");
   
   return percentage;
 }
@@ -207,14 +209,6 @@ void enterDFU() {
         NRF_POWER->GPREGRET = 0x01; // Set the GPREGRET register to indicate DFU mode
         NVIC_SystemReset();         // Perform a system reset
     #endif
-}
-
-void  fxx() {
-    if (Serial.available()) {
-        if (Serial.read() == 'D') {
-            enterDFU();
-        }
-    }
 }
 
 void setReports() {
@@ -360,7 +354,7 @@ void sendQuaternionReport() {
     
     // Send the report if connected
     if (Bluefruit.connected()) {
-        if (!hid.inputReport(1, report_data, sizeof(report_data))) {
+        if (!blehid.inputReport(1, report_data, sizeof(report_data))) {
             Serial.println("Failed to send HID report!");
         }
         digitalWrite(LED_PIN, !digitalRead(LED_PIN));
@@ -376,7 +370,7 @@ void startAdv() {
     Bluefruit.Advertising.addAppearance(BLE_APPEARANCE_GENERIC_HID);
     
     // Include HID service
-    Bluefruit.Advertising.addService(hid);
+    Bluefruit.Advertising.addService(blehid);
     
     // Include Device Information Service
     Bluefruit.Advertising.addService(bledis);
@@ -410,7 +404,7 @@ void updateBatteryLevel() {
   if(millis() - lastUpdate >= 10000) {
     lastUpdate = millis();
     
-    // Serial.println("\nBattery Reading:");
+    Serial.println("\nBattery Reading:");
     
     // Read battery voltage
     float vbat = readVBAT();
@@ -422,10 +416,10 @@ void updateBatteryLevel() {
     blebas.write(battery_level);
     
     // Debug output
-    // Serial.print("Final Battery Level: ");
-    // Serial.print(battery_level);
-    // Serial.println("%");
-    // Serial.println("-------------------");
+    Serial.print("Final Battery Level: ");
+    Serial.print(battery_level);
+    Serial.println("%");
+    Serial.println("-------------------");
   }
 }
 
@@ -473,123 +467,45 @@ void readSwitches() {
   pinMode(SWITCH_OUT_UPPER_LOWER, INPUT);  // Set back to input to prevent floating
 }
 
-// Update the calibration status monitoring
-void updateCalibrationStatus() {
-    static uint32_t lastCalibrationCheck = 0;
-    if (millis() - lastCalibrationCheck >= 1000) {  // Check every second
-        lastCalibrationCheck = millis();
-        
-        // Get calibration status
-        sh2_SensorValue_t sensorValue;
-        if (bno08x.getSensorEvent(&sensorValue)) {
-            switch (sensorValue.sensorId) {
-                case SH2_MAGNETIC_FIELD_CALIBRATED:
-                    calibration_status.mag_status = sensorValue.status;
-                    break;
-                case SH2_ACCELEROMETER:
-                    calibration_status.accel_status = sensorValue.status;
-                    break;
-                case SH2_RAW_GYROSCOPE:
-                    calibration_status.gyro_status = sensorValue.status;
-                    break;
-            }
-        }
+void initBatteryMonitoring() {
+    pinMode(PIN_VBAT, INPUT);
+    pinMode(PIN_VBAT_ENABLE, OUTPUT);
+    pinMode(PIN_HICHG, OUTPUT);
+    pinMode(PIN_CHG, INPUT);
 
-        // Print calibration status
-        Serial.println("\nCalibration Status:");
-        Serial.print("Magnetometer: ");
-        switch (calibration_status.mag_status) {
-            case 0: Serial.println("Uncalibrated"); break;
-            case 1: Serial.println("Poor"); break;
-            case 2: Serial.println("Good"); break;
-            case 3: Serial.println("Excellent"); break;
-            default: Serial.println("Unknown"); break;
-        }
-        Serial.print("Accelerometer: ");
-        switch (calibration_status.accel_status) {
-            case 0: Serial.println("Uncalibrated"); break;
-            case 1: Serial.println("Poor"); break;
-            case 2: Serial.println("Good"); break;
-            case 3: Serial.println("Excellent"); break;
-            default: Serial.println("Unknown"); break;
-        }
-        Serial.print("Gyroscope: ");
-        switch (calibration_status.gyro_status) {
-            case 0: Serial.println("Uncalibrated"); break;
-            case 1: Serial.println("Poor"); break;
-            case 2: Serial.println("Good"); break;
-            case 3: Serial.println("Excellent"); break;
-            default: Serial.println("Unknown"); break;
-        }
-    }
+    digitalWrite(PIN_VBAT_ENABLE, LOW); // VBAT read enable
+    digitalWrite(PIN_HICHG, LOW);       // charge current 100mA
+
+    // -----------------------------------------------------------------
+    // ADC configuration for battery monitoring
+    // -----------------------------------------------------------------
+    analogReference(AR_DEFAULT);   // 0.6 V ×6 = 3.6 V
+    analogReadResolution(12);      // 0-4095 counts
 }
 
-// Helper function to print calibration status
-void printCalibrationStatus(uint8_t status) {
-    switch (status) {
-        case 0:
-            Serial.println("Uncalibrated");
-            break;
-        case 1:
-            Serial.println("Poor");
-            break;
-        case 2:
-            Serial.println("Good");
-            break;
-        case 3:
-            Serial.println("Excellent");
-            break;
-        default:
-            Serial.println("Unknown");
-            break;
-    }
-}
+void handleCommand(uint16_t conn_hdl,
+                   BLECharacteristic* chr,
+                   uint8_t* data, uint16_t len)
+{
+  if (len == 0) return;
 
-// Update the calibration command handler
-void handleCalibrationCommand(uint16_t conn_hdl, BLECharacteristic* chr, uint8_t* data, uint16_t len) {
-    if (len >= 1) {
-        switch (data[0]) {
-            case 1:  // Magnetometer calibration
-                Serial.println("\nStarting magnetometer calibration...");
-                Serial.println("Please move the device in a figure-8 pattern");
-                Serial.println("Keep away from magnetic interference");
-                calibration_status.mag_status = 0;
-                break;
-            case 2:  // Accelerometer calibration
-                Serial.println("\nStarting accelerometer calibration...");
-                Serial.println("Please place the device in 6 different stable positions");
-                Serial.println("Hold each position for 2-3 seconds");
-                calibration_status.accel_status = 0;
-                break;
-            case 3:  // Gyroscope calibration
-                Serial.println("\nStarting gyroscope calibration...");
-                Serial.println("Please keep the device completely still");
-                Serial.println("This will take about 5 seconds");
-                calibration_status.gyro_status = 0;
-                break;
-            case 4:  // Full calibration
-                Serial.println("\nStarting full calibration sequence...");
-                Serial.println("1. Keep device still for gyroscope calibration (5s)");
-                Serial.println("2. Place in 6 positions for accelerometer calibration");
-                Serial.println("3. Move in figure-8 pattern for magnetometer calibration");
-                calibration_status.mag_status = 0;
-                calibration_status.accel_status = 0;
-                calibration_status.gyro_status = 0;
-                break;
-            case 5:  // Save calibration data
-                saveCalibrationData();
-                break;
-        }
-    }
-}
+  switch (data[0])
+  {
+    case 0x01:               // soft-reset IMU
+      Serial.println("Host requested IMU reset");
+      digitalWrite(LED_GREEN, LOW);   // turn blue on
+      bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 0);   // disable
+      bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 5000); // re-enable (200 Hz)
+      delay(2000);
+      digitalWrite(LED_GREEN, HIGH);  // turn blue off
+      break;
 
-// Function to save calibration data
-void saveCalibrationData() {
-    // The BNO085 automatically saves calibration data to non-volatile memory
-    // when calibration is complete. We just need to wait for the calibration
-    // to finish and verify the status.
-    Serial.println("Calibration data is automatically saved when calibration is complete.");
-    Serial.println("Please check the calibration status using the updateCalibrationStatus function.");
+    // Add more command bytes here if you wish
+    default:
+      Serial.print("Unknown command 0x");
+      Serial.println(data[0], HEX);
+      break;
+  }
 }
 
 void setup() {
@@ -620,6 +536,9 @@ void setup() {
     Serial.println("XIAO nRF52840 IMU Bluetooth Orientation Tracker");
     Serial.println("Using BNO085 sensor");
     
+
+    initBatteryMonitoring();
+
     // Initialize IMU
     if (!initIMU()) {
         Serial.println("Failed to initialize IMU!");
@@ -662,22 +581,22 @@ void setup() {
     // -------------------------------------------------------------------
     
     // Configure HID
-    hid.enableKeyboard(false);  // Explicitly disable keyboard
-    hid.enableMouse(false);     // Explicitly disable mouse
+    blehid.enableKeyboard(false);  // Explicitly disable keyboard
+    blehid.enableMouse(false);     // Explicitly disable mouse
     
     // Set our custom report map (descriptor)
-    hid.setReportMap(hid_report_descriptor, sizeof(hid_report_descriptor));
+    blehid.setReportMap(hid_report_descriptor, sizeof(hid_report_descriptor));
     
     // Set the length of our reports
-    uint16_t input_len[] = {9};  // Length of our input report
-    uint16_t output_len[] = {1}; // Length of our output report
-    hid.setReportLen(input_len, output_len, NULL);
-    
-    // Set the output report callback
-    hid.setOutputReportCallback(2, handleCalibrationCommand);
+    uint16_t input_len[]  = { 9 };   // Quaternion + switches
+    uint16_t output_len[] = { 1, 1 };   // 1-byte dummy, 1-byte command (ID 2)
+    blehid.setReportLen(input_len, output_len, NULL);
     
     // Start HID Service
-    hid.begin();
+    blehid.begin();
+    
+    // Set the output report callback
+    blehid.setOutputReportCallback(1, handleCommand);
     
     // Initialize Battery Service
     blebas.begin();
@@ -687,9 +606,6 @@ void setup() {
     startAdv();
     
     Serial.println("Setup complete");
-    
-    // Initialize time for complementary filter
-    prevTime = millis();
     
     // Initialize switch pins
     pinMode(SWITCH_OUT_LEFT_RIGHT, INPUT);
@@ -715,7 +631,4 @@ void loop() {
     
     // Read switch states
     readSwitches();
-    
-    // Monitor calibration status
-    // updateCalibrationStatus();
 }
