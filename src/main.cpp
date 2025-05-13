@@ -6,16 +6,19 @@
 // For the built-in LED
 #define LED_PIN PIN_LED
 
-// I2C pins for XIAO nRF52840 Sense
-#define I2C_SDA 9
-#define I2C_SCL 10
+// LSM6DS3TR-C I2C pins and Address (for XIAO nRF52840 Sense built-in IMU)
+// #define LSM6DS_I2C_SDA 6  // SDA pin
+// #define LSM6DS_I2C_SCL 7  // SCL pin
+// #define LSM6DS_I2C_ADDR 0x6A // Address
 
-// BNO085 I2C address
-#define BNO085_I2C_ADDR 0x4B
+// BNO085 I2C pins and Address (for external IMU)
+#define BNO085_I2C_SDA 9
+#define BNO085_I2C_SCL 10
+#define BNO085_I2C_ADDR 0x4B // Address
 
 // Vendor and Product IDs
-#define VENDOR_ID 0x2886  // Adafruit's vendor ID
-#define PRODUCT_ID 0x8044 // Custom product ID for Eidon Tracker
+#define VENDOR_ID  0x2886 // Seeed Studio vendor ID
+#define PRODUCT_ID 0x8044 // XIAO nRF52840 Sense product ID
 
 // HID Report Descriptor for a custom device with 4 quaternion values and switch states
 uint8_t const hid_report_descriptor[] = {
@@ -93,14 +96,6 @@ BLEBas blebas;
 const unsigned long UPDATE_INTERVAL = 1;
 unsigned long lastUpdate = 0;
 
-// Debug counter
-unsigned long debugCounter = 0;
-const unsigned long DEBUG_INTERVAL = 1000; // Print debug info every second
-
-// Add these global variables
-bool isMagCalibrated = false;
-uint8_t magAccuracy = 0;
-
 // -----------------------------------------------------------------------------
 // Battery-monitoring constants and helpers
 // Xiao nRF52840 Sense routes VBAT through a resistor divider ( ≈ 2.961 : 1 ) to
@@ -128,26 +123,6 @@ const int   BAT_MONITOR_EN_PIN = 14;        // P0.14 controls divider (LOW = mea
 // Switch states
 bool isLeft = false;
 bool isUpper = false;
-
-// Add calibration status variables
-struct calibration_status_t {
-    uint8_t mag_status;      // 0-3: Unreliable to High accuracy
-    uint8_t accel_status;    // 0-3: Unreliable to High accuracy
-    uint8_t gyro_status;     // 0-3: Unreliable to High accuracy
-    bool needs_calibration;  // True if any sensor needs calibration
-} calibration_status = {0, 0, 0, true};
-
-// Add calibration data storage
-struct calibration_data_t {
-    float mag_bias[3];
-    float mag_scale[3];
-    float accel_bias[3];
-    float gyro_bias[3];
-    uint32_t timestamp;
-} calibration_data;
-
-// Global to hold last tap time
-volatile uint32_t lastTapMillis = 0;
 
 float readVBAT(void) {
   // Enable voltage divider (active LOW)
@@ -225,7 +200,7 @@ void setReports() {
 
 bool initIMU() {
     // Initialize I2C with explicit pins for XIAO nRF52840 Sense
-    Wire.setPins(I2C_SDA, I2C_SCL);
+    Wire.setPins(BNO085_I2C_SDA, BNO085_I2C_SCL);
     Wire.begin();
     
     // Try to initialize the BNO085
@@ -233,19 +208,12 @@ bool initIMU() {
         Serial.println("Failed to find BNO085 chip");
         return false;
     }
-    
+
     Serial.println("BNO085 Found!");
-    
+
     // Enable the rotation vector report
     setReports();
-    
-    // // Print calibration instructions
-    // Serial.println("\nCalibration Instructions:");
-    // Serial.println("1. Wave the device in a figure-8 pattern");
-    // Serial.println("2. Rotate slowly through all orientations");
-    // Serial.println("3. Keep away from magnetic interference");
-    // Serial.println("4. Wait for 'Calibrated' message\n");
-    
+
     return true;
 }
 
@@ -281,7 +249,6 @@ void updateOrientation() {
                 // simple visual feedback
                 Serial.println("Tap detected");
 
-                lastTapMillis = millis();
                 digitalWrite(LED_GREEN, LOW);   // turn blue on
                 bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 0);   // disable
                 bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 5000); // re-enable (200 Hz)
@@ -318,7 +285,7 @@ void sendQuaternionReport() {
     report_data[8] = switch_states;
     
     // Debug output every second
-    static uint32_t lastDebugPrint = 0;
+    static unsigned long lastDebugPrint = 0;
     if (millis() - lastDebugPrint >= 1000) {
         lastDebugPrint = millis();
         // Serial.println("Raw quaternion values:");
@@ -398,7 +365,7 @@ void startAdv() {
 
 // Update battery level periodically
 void updateBatteryLevel() {
-  static uint32_t lastUpdate = 0;
+  static unsigned long lastUpdate = 0;
   
   // Update every 10 seconds
   if(millis() - lastUpdate >= 10000) {
@@ -435,17 +402,6 @@ void quaternionToEuler() {
     ypr.yaw = ypr.yaw * RAD_TO_DEG;
     ypr.pitch = ypr.pitch * RAD_TO_DEG;
     ypr.roll = ypr.roll * RAD_TO_DEG;
-}
-
-// Optional: Add a function to save calibration data
-void saveCalibration() {
-    // You could save the quaternion values when fully calibrated
-    // to use as a reference point
-    if (isMagCalibrated) {
-        // Save current orientation as reference
-        // This is just an example - you'd need to implement the actual storage
-        Serial.println("Saving calibration reference point");
-    }
 }
 
 // Function to read switch states
@@ -510,32 +466,23 @@ void handleCommand(uint16_t conn_hdl,
 
 void setup() {
     Serial.begin(115200);
-    
-    // Wait up to 5 seconds for serial connection
-    unsigned long startTime = millis();
-    while (!Serial && (millis() - startTime < 5000)) {
-        delay(100);
-    }
-    
-    Serial.println("\n\n=== XIAO nRF52840 IMU Tracker Starting ===");
-    
+
+    // Wait for serial port to open (up to 2 seconds)
+    unsigned long start = millis();
+    while (!Serial && (millis() - start < 2000));
+
     // Check for DFU trigger command
     while (Serial.available()) {
         if (Serial.read() == 'D') {  // 'D' for DFU
             enterDFU();
         }
     }
-    
-    // Set the LED pin as output
-    pinMode(LED_PIN, OUTPUT);
 
-    // Wait for serial port to open (up to 2 seconds)
-    unsigned long start = millis();
-    while (!Serial && (millis() - start < 2000));
-    
     Serial.println("XIAO nRF52840 IMU Bluetooth Orientation Tracker");
     Serial.println("Using BNO085 sensor");
-    
+
+    // Set the LED pin as output
+    pinMode(LED_PIN, OUTPUT);
 
     initBatteryMonitoring();
 

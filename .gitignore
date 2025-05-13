@@ -1,6 +1,10 @@
-.DS_Store
-.pio
-.vscode
+# VS-Code
 .vscode/*
-.vscode/
-.vscode/
+!.vscode/settings.json
+!.vscode/extensions.json
+
+# PlatformIO build output
+.pio/
+
+# macOS
+.DS_Store
