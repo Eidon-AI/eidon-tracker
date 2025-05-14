@@ -2,6 +2,7 @@
 #include <Adafruit_BNO08x.h>
 #include <bluefruit.h>
 #include <stdint.h>
+#include <nrf_nvmc.h>
 
 // For the built-in LED
 #define LED_PIN PIN_LED
@@ -19,6 +20,14 @@
 // Vendor and Product IDs
 #define VENDOR_ID  0xE1D0 // Eidon AI vendor ID
 #define PRODUCT_ID 0x0002 // Eidon Tracker product ID
+
+// Flash page size
+#define COLOUR_MAGIC   0xE7          // any value ≠ 0xFF
+#define FLASH_PAGE_SZ  4096          // nRF52 page size (bytes)
+#define FLASH_BASE     0x00000000UL  // code flash starts here
+
+// Address of very last 4-kB page
+#define CFG_PAGE_ADDR  ( (FLASH_BASE + NRF_FICR->CODEPAGESIZE * NRF_FICR->CODESIZE) - FLASH_PAGE_SZ )
 
 // HID Report Descriptor for a custom device with 4 quaternion values and switch states
 uint8_t const hid_report_descriptor[] = {
@@ -60,6 +69,14 @@ uint8_t const hid_report_descriptor[] = {
   0x09, 0x01,                  //    Usage (Vendor usage 1)
   0x91, 0x02,                  //    Output (Data,Var,Abs)
 
+  // ---- Saved colour (Feature report, 3-byte RGB) ------------------
+  0x85, 0x02,                    //   Report ID = 2
+  0x15, 0x00, 0x26, 0xFF, 0x00,  //   Logical Min 0, Max 255
+  0x75, 0x08,                    //   Report Size 8 bits
+  0x95, 0x03,                    //   Report Count 3 (R,G,B)
+  0x09, 0x02,                    //   Usage (Vendor-defined 2)
+  0xB1, 0x02,                    //   Feature (Data,Var,Abs — host↔device)
+
   0xC0                            //  End Vendor Collection
 };
 
@@ -87,7 +104,10 @@ float quaternion_w = 1;
 
 // Bluetooth HID
 BLEDis bledis;
-BLEHidGeneric blehid(1, 2, 0);
+BLEHidGeneric blehid(1, 2, 1);
+
+// Device colour RGB stored (default white)
+uint8_t device_colour[3] = {0xFF, 0xFF, 0xFF};
 
 // Battery Service
 BLEBas blebas;
@@ -484,6 +504,72 @@ void handleCommand(uint16_t conn_hdl,
   }
 }
 
+static void colour_flash_write(uint8_t rgb[3])
+{
+  uint32_t word =
+      (COLOUR_MAGIC       << 24) |
+      (rgb[0]             << 16) |
+      (rgb[1]             <<  8) |
+      (rgb[2]);
+
+  // Enable erase mode and erase the whole page that stores the colour
+  nrf_nvmc_mode_set(NRF_NVMC, NRF_NVMC_MODE_ERASE);
+  nrf_nvmc_page_erase_start(NRF_NVMC, CFG_PAGE_ADDR);
+  while (!nrf_nvmc_ready_check(NRF_NVMC)) {
+    /* wait */
+  }
+
+  // Enable write mode and program the single 32-bit word
+  nrf_nvmc_mode_set(NRF_NVMC, NRF_NVMC_MODE_WRITE);
+  *(volatile uint32_t *)CFG_PAGE_ADDR = word;
+  while (!nrf_nvmc_ready_check(NRF_NVMC)) {
+    /* wait */
+  }
+
+  // Back to read-only mode for normal execution
+  nrf_nvmc_mode_set(NRF_NVMC, NRF_NVMC_MODE_READONLY);
+}
+
+static bool colour_flash_read(uint8_t rgb[3])
+{
+  uint32_t word = *(uint32_t const *)CFG_PAGE_ADDR;
+  if ((word >> 24) != COLOUR_MAGIC) return false;
+
+  rgb[0] = (word >> 16) & 0xFF;
+  rgb[1] = (word >>  8) & 0xFF;
+  rgb[2] =  word        & 0xFF;
+  return true;
+}
+
+void handleColourFeature(uint16_t         /*conn*/,
+                         BLECharacteristic* chr,
+                         uint8_t*          data,
+                         uint16_t          len)
+{
+  if (len != 3) return;                 // expect exactly R-G-B
+
+  // 1. store locally
+  memcpy(device_colour, data, 3);      // keep it in RAM
+  colour_flash_write(device_colour);   // <-- write to flash
+
+  // 2. update the GATT database value of *this* characteristic
+  //    (so the next Get-Feature Read returns the new bytes)
+  chr->write(device_colour, 3);
+
+  // optional debug
+  Serial.print  ("Colour set to #");
+  for (uint8_t i=0; i<3; ++i) {
+      if (device_colour[i] < 16) Serial.print('0');
+      Serial.print(device_colour[i], HEX);
+  }
+  Serial.println();
+}
+
+void sendColourFeature()
+{
+  blehid.inputReport(   /*ID*/ 2, device_colour, 3);   // echoes new value once
+}
+
 void setup() {
     Serial.begin(115200);
 
@@ -565,13 +651,18 @@ void setup() {
     // Set the length of our reports
     uint16_t input_len[]  = { 9 };   // Quaternion + switches
     uint16_t output_len[] = { 1, 1 };   // 1-byte dummy, 1-byte command (ID 2)
-    blehid.setReportLen(input_len, output_len, NULL);
+    uint16_t feat_len[] = { 3 };     // RGB
+    blehid.setReportLen(input_len, output_len, feat_len);
     
     // Start HID Service
     blehid.begin();
     
     // Set the output report callback
     blehid.setOutputReportCallback(1, handleCommand);
+    
+    // Read the colour from flash
+    colour_flash_read(device_colour);
+    blehid.featureReport(1 /*ID*/, device_colour, 3);
     
     // Initialize Battery Service
     blebas.begin();
@@ -590,6 +681,8 @@ void setup() {
 
     pinMode(LED_GREEN, OUTPUT);
     digitalWrite(LED_GREEN, HIGH); // off (assuming active-low RGB LED)
+
+    blehid.setFeatureReportCallback(1, handleColourFeature);
 }
 
 void loop() {
