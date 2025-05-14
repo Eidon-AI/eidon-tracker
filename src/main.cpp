@@ -17,8 +17,8 @@
 #define BNO085_I2C_ADDR 0x4B // Address
 
 // Vendor and Product IDs
-#define VENDOR_ID  0x2886 // Seeed Studio vendor ID
-#define PRODUCT_ID 0x8044 // XIAO nRF52840 Sense product ID
+#define VENDOR_ID  0xE1D0 // Eidon AI vendor ID
+#define PRODUCT_ID 0x0002 // Eidon Tracker product ID
 
 // HID Report Descriptor for a custom device with 4 quaternion values and switch states
 uint8_t const hid_report_descriptor[] = {
@@ -332,6 +332,21 @@ void sendQuaternionReport() {
     }
 }
 
+void appendUniqueToName() {
+  // 1. Fetch the STATIC RANDOM address the SoftDevice is using
+  uint8_t addr[6];
+  Bluefruit.getAddr(addr);            // LSByte = addr[0]
+
+  // 2. Build "Eidon Tracker-xxxx", where xxxx = low 16 bits of the address
+  char advName[32];
+  sprintf(advName, "Eidon Tracker-%02X%02X", addr[1], addr[0]); // 4 hex chars
+
+  // 3. Replace the default name and put it in the scan-response
+  Bluefruit.setName(advName);
+  Bluefruit.ScanResponse.clearData(); // keep other SR fields if you added any
+  Bluefruit.ScanResponse.addName();   // full name lives in scan response
+}
+
 void startAdv() {
     // Advertising packet
     Bluefruit.Advertising.addFlags(BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE);
@@ -347,7 +362,8 @@ void startAdv() {
     Bluefruit.Advertising.addService(bledis);
     
     // Include Name
-    Bluefruit.ScanResponse.addName();
+    // Bluefruit.ScanResponse.addName();
+    appendUniqueToName();
     
     // Include Battery Service
     Bluefruit.Advertising.addService(blebas);
@@ -523,9 +539,17 @@ void setup() {
     bledis.setPNPID(reinterpret_cast<const char*>(pnp_id), sizeof(pnp_id));
     bledis.setModel("Eidon Tracker");
     bledis.setManufacturer("Eidon AI");
-    bledis.setHardwareRev("1.0");
-    bledis.setFirmwareRev("1.0");
-    bledis.setSerialNum("123456");
+    bledis.setHardwareRev("v1.0");
+    bledis.setFirmwareRev("v1.0");
+
+    char uid[17];                              // 16 hex digits + NUL
+    sprintf(uid, "%08lX%08lX",
+            NRF_FICR->DEVICEID[1],
+            NRF_FICR->DEVICEID[0]);
+    bledis.setSerialNum(uid);
+
+    // const char* uid = getMcuUniqueID();   // returns NUL-terminated C-string
+    Serial.print("Board UID = "); Serial.println(uid);
 
     // CREATE the characteristics now
     bledis.begin();
