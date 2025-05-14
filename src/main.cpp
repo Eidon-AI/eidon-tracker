@@ -2,7 +2,27 @@
 #include <Adafruit_BNO08x.h>
 #include <bluefruit.h>
 #include <stdint.h>
-#include <nrf_nvmc.h>
+#include "Adafruit_SPIFlash.h"
+
+// Built from the P25Q16H datasheet.
+SPIFlash_Device_t const P25Q16H {
+  .total_size = (1UL << 21), // 2MiB
+  .start_up_time_us = 10000, // Don't know where to find that value
+
+  .manufacturer_id = 0x85,
+  .memory_type = 0x60,
+  .capacity = 0x15,
+
+  .max_clock_speed_mhz = 55,
+  .quad_enable_bit_mask = 0x02, // Datasheet p. 27
+  .has_sector_protection = 1,   // Datasheet p. 27
+  .supports_fast_read = 1,      // Datasheet p. 29
+  .supports_qspi = 1,           // Obviously
+  .supports_qspi_writes = 1,    // Datasheet p. 41
+  .write_status_register_split = 1, // Datasheet p. 28
+  .single_status_byte = 0,      // 2 bytes
+  .is_fram = 0,                 // Flash Memory
+};
 
 // For the built-in LED
 #define LED_PIN PIN_LED
@@ -20,14 +40,6 @@
 // Vendor and Product IDs
 #define VENDOR_ID  0xE1D0 // Eidon AI vendor ID
 #define PRODUCT_ID 0x0002 // Eidon Tracker product ID
-
-// Flash page size
-#define COLOUR_MAGIC   0xE7          // any value ≠ 0xFF
-#define FLASH_PAGE_SZ  4096          // nRF52 page size (bytes)
-#define FLASH_BASE     0x00000000UL  // code flash starts here
-
-// Address of very last 4-kB page
-#define CFG_PAGE_ADDR  ( (FLASH_BASE + NRF_FICR->CODEPAGESIZE * NRF_FICR->CODESIZE) - FLASH_PAGE_SZ )
 
 // HID Report Descriptor for a custom device with 4 quaternion values and switch states
 uint8_t const hid_report_descriptor[] = {
@@ -70,7 +82,7 @@ uint8_t const hid_report_descriptor[] = {
   0x91, 0x02,                  //    Output (Data,Var,Abs)
 
   // ---- Saved colour (Feature report, 3-byte RGB) ------------------
-  0x85, 0x02,                    //   Report ID = 2
+  0x85, 0x01,                    //   Report ID = 1
   0x15, 0x00, 0x26, 0xFF, 0x00,  //   Logical Min 0, Max 255
   0x75, 0x08,                    //   Report Size 8 bits
   0x95, 0x03,                    //   Report Count 3 (R,G,B)
@@ -91,12 +103,6 @@ Adafruit_BNO08x bno08x;
 sh2_SensorValue_t sensorValue;
 
 // Orientation data
-struct euler_t {
-    float yaw;
-    float pitch;
-    float roll;
-} ypr = {0, 0, 0};
-
 float quaternion_x = 0;
 float quaternion_y = 0;
 float quaternion_z = 0;
@@ -105,6 +111,8 @@ float quaternion_w = 1;
 // Bluetooth HID
 BLEDis bledis;
 BLEHidGeneric blehid(1, 2, 1);
+
+#define COLOUR_MAGIC   0xE7          // any value ≠ 0xFF
 
 // Device colour RGB stored (default white)
 uint8_t device_colour[3] = {0xFF, 0xFF, 0xFF};
@@ -430,20 +438,6 @@ void updateBatteryLevel() {
   }
 }
 
-void quaternionToEuler() {
-    // Different quaternion to euler conversion that might reduce axis coupling
-    ypr.yaw = atan2(2.0f * (quaternion_w * quaternion_z + quaternion_x * quaternion_y),
-                    1.0f - 2.0f * (quaternion_y * quaternion_y + quaternion_z * quaternion_z));
-    ypr.pitch = asin(2.0f * (quaternion_w * quaternion_y - quaternion_z * quaternion_x));
-    ypr.roll = atan2(2.0f * (quaternion_w * quaternion_x + quaternion_y * quaternion_z),
-                     1.0f - 2.0f * (quaternion_x * quaternion_x + quaternion_y * quaternion_y));
-
-    // Convert to degrees
-    ypr.yaw = ypr.yaw * RAD_TO_DEG;
-    ypr.pitch = ypr.pitch * RAD_TO_DEG;
-    ypr.roll = ypr.roll * RAD_TO_DEG;
-}
-
 // Function to read switch states
 void readSwitches() {
   // Read left/right switch
@@ -504,41 +498,48 @@ void handleCommand(uint16_t conn_hdl,
   }
 }
 
-static void colour_flash_write(uint8_t rgb[3])
-{
-  uint32_t word =
-      (COLOUR_MAGIC       << 24) |
-      (rgb[0]             << 16) |
-      (rgb[1]             <<  8) |
-      (rgb[2]);
 
-  // Enable erase mode and erase the whole page that stores the colour
-  nrf_nvmc_mode_set(NRF_NVMC, NRF_NVMC_MODE_ERASE);
-  nrf_nvmc_page_erase_start(NRF_NVMC, CFG_PAGE_ADDR);
-  while (!nrf_nvmc_ready_check(NRF_NVMC)) {
-    /* wait */
-  }
+// QSPI flash transport and object for XIAO nRF52840 Sense (external 2-MiB P25Q16H)
+Adafruit_FlashTransport_QSPI flashTransport;
+Adafruit_SPIFlash qspiFlash(&flashTransport);
 
-  // Enable write mode and program the single 32-bit word
-  nrf_nvmc_mode_set(NRF_NVMC, NRF_NVMC_MODE_WRITE);
-  *(volatile uint32_t *)CFG_PAGE_ADDR = word;
-  while (!nrf_nvmc_ready_check(NRF_NVMC)) {
-    /* wait */
-  }
+// Sector/offset inside external flash that holds the colour record
+#define COLOUR_SECTOR      0          // last sector in 2-MiB device
+#define COLOUR_ADDR        (COLOUR_SECTOR * 4096)
 
-  // Back to read-only mode for normal execution
-  nrf_nvmc_mode_set(NRF_NVMC, NRF_NVMC_MODE_READONLY);
+// ── Helper to write colour to external flash ───────────────────────────────
+static void colour_store_write(uint8_t rgb[3]) {
+    uint8_t buf[4] = { COLOUR_MAGIC, rgb[0], rgb[1], rgb[2] };
+
+    // Erase sector 0 (first 4-kB) — pass sector *number*, not byte address
+    if (!qspiFlash.eraseSector(COLOUR_SECTOR)) {
+        Serial.println("QSPI eraseSector() failed");
+        return;
+    }
+    qspiFlash.waitUntilReady();
+    if (qspiFlash.writeBuffer(COLOUR_ADDR, buf, sizeof(buf)) != sizeof(buf)) {
+        Serial.println("QSPI writeBuffer() failed");
+        return;
+    }
+    qspiFlash.waitUntilReady(); // ensure data is on flash before power-down
+
+    // read back for verification during development
+    uint8_t verify[4];
+    qspiFlash.readBuffer(COLOUR_ADDR, verify, sizeof(verify));
+    Serial.print("Colour written / verify: ");
+    for(int i=0;i<4;i++){ Serial.print(verify[i], HEX); Serial.print(" "); }
+    Serial.println();
 }
 
-static bool colour_flash_read(uint8_t rgb[3])
-{
-  uint32_t word = *(uint32_t const *)CFG_PAGE_ADDR;
-  if ((word >> 24) != COLOUR_MAGIC) return false;
+static bool colour_store_read(uint8_t rgb[3]) {
+    uint8_t buf[4];
+    qspiFlash.readBuffer(COLOUR_ADDR, buf, sizeof(buf));
+    if (buf[0] != COLOUR_MAGIC) return false;
 
-  rgb[0] = (word >> 16) & 0xFF;
-  rgb[1] = (word >>  8) & 0xFF;
-  rgb[2] =  word        & 0xFF;
-  return true;
+    rgb[0] = buf[1];
+    rgb[1] = buf[2];
+    rgb[2] = buf[3];
+    return true;
 }
 
 void handleColourFeature(uint16_t         /*conn*/,
@@ -550,7 +551,7 @@ void handleColourFeature(uint16_t         /*conn*/,
 
   // 1. store locally
   memcpy(device_colour, data, 3);      // keep it in RAM
-  colour_flash_write(device_colour);   // <-- write to flash
+  colour_store_write(device_colour);
 
   // 2. update the GATT database value of *this* characteristic
   //    (so the next Get-Feature Read returns the new bytes)
@@ -591,6 +592,13 @@ void setup() {
     pinMode(LED_PIN, OUTPUT);
 
     initBatteryMonitoring();
+
+    // -------------------------------------------------
+    // Initialise external QSPI flash
+    // -------------------------------------------------
+    if (!qspiFlash.begin(&P25Q16H, 1)) {
+        Serial.println("QSPI Flash init FAILED – colour will not persist");
+    }
 
     // Initialize IMU
     if (!initIMU()) {
@@ -660,10 +668,6 @@ void setup() {
     // Set the output report callback
     blehid.setOutputReportCallback(1, handleCommand);
     
-    // Read the colour from flash
-    colour_flash_read(device_colour);
-    blehid.featureReport(1 /*ID*/, device_colour, 3);
-    
     // Initialize Battery Service
     blebas.begin();
     blebas.write(100);
@@ -683,6 +687,20 @@ void setup() {
     digitalWrite(LED_GREEN, HIGH); // off (assuming active-low RGB LED)
 
     blehid.setFeatureReportCallback(1, handleColourFeature);
+    
+    // Send initial feature report to host (optional)
+    blehid.featureReport(1 /*ID*/, device_colour, 3);
+    
+    // Read the colour from flash
+    colour_store_read(device_colour);
+
+    Serial.print("Saved Colour: #");
+    Serial.print(device_colour[0], HEX);
+    Serial.print(device_colour[1], HEX);
+    Serial.println(device_colour[2], HEX);
+
+    // Update color feature report
+    blehid.featureReport(1 /*ID*/, device_colour, 3);
 }
 
 void loop() {
