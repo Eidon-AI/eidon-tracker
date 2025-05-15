@@ -38,7 +38,7 @@ print("Framework folder:", fw_dir)
 # ----------------------------------------------------------------------
 project_dir = Path(env["PROJECT_DIR"])
 patches = [
-    (project_dir / "patches/blehid_generic.patch", fw_dir),
+    (project_dir / "firmware/patches/blehid_generic.patch", fw_dir),
 ]
 
 for patch_file, cwd in patches:
