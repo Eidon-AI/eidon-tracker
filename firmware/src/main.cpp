@@ -24,9 +24,6 @@ SPIFlash_Device_t const P25Q16H {
   .is_fram = 0,                 // Flash Memory
 };
 
-// For the built-in LED
-#define LED_PIN PIN_LED
-
 // LSM6DS3TR-C I2C pins and Address (for XIAO nRF52840 Sense built-in IMU)
 // #define LSM6DS_I2C_SDA 6  // SDA pin
 // #define LSM6DS_I2C_SCL 7  // SCL pin
@@ -115,10 +112,10 @@ float quaternion_w = 1;
 BLEDis bledis;
 BLEHidGeneric blehid(1, 2, 1);
 
-#define COLOUR_MAGIC   0xE7          // any value ≠ 0xFF
+#define COLOR_MAGIC   0xE7          // any value ≠ 0xFF
 
-// Device colour RGB stored (default white)
-uint8_t device_colour[3] = {0xFF, 0xFF, 0xFF};
+// Device color RGB stored (default white)
+uint8_t device_color[3] = {0xFF, 0xFF, 0xFF};
 
 // Battery Service
 BLEBas blebas;
@@ -359,7 +356,7 @@ void sendQuaternionReport() {
         if (!blehid.inputReport(1, report_data, sizeof(report_data))) {
             Serial.println("Failed to send HID report!");
         }
-        digitalWrite(LED_PIN, !digitalRead(LED_PIN));
+        digitalWrite(PIN_LED, !digitalRead(PIN_LED));
     }
 }
 
@@ -506,21 +503,21 @@ void handleCommand(uint16_t conn_hdl,
 Adafruit_FlashTransport_QSPI flashTransport;
 Adafruit_SPIFlash qspiFlash(&flashTransport);
 
-// Sector/offset inside external flash that holds the colour record
-#define COLOUR_SECTOR      0          // last sector in 2-MiB device
-#define COLOUR_ADDR        (COLOUR_SECTOR * 4096)
+// Sector/offset inside external flash that holds the color record
+#define COLOR_SECTOR      0          // last sector in 2-MiB device
+#define COLOR_ADDR        (COLOR_SECTOR * 4096)
 
-// ── Helper to write colour to external flash ───────────────────────────────
-static void colour_store_write(uint8_t rgb[3]) {
-    uint8_t buf[4] = { COLOUR_MAGIC, rgb[0], rgb[1], rgb[2] };
+// ── Helper to write color to external flash ───────────────────────────────
+static void color_store_write(uint8_t rgb[3]) {
+    uint8_t buf[4] = { COLOR_MAGIC, rgb[0], rgb[1], rgb[2] };
 
     // Erase sector 0 (first 4-kB) — pass sector *number*, not byte address
-    if (!qspiFlash.eraseSector(COLOUR_SECTOR)) {
+    if (!qspiFlash.eraseSector(COLOR_SECTOR)) {
         Serial.println("QSPI eraseSector() failed");
         return;
     }
     qspiFlash.waitUntilReady();
-    if (qspiFlash.writeBuffer(COLOUR_ADDR, buf, sizeof(buf)) != sizeof(buf)) {
+    if (qspiFlash.writeBuffer(COLOR_ADDR, buf, sizeof(buf)) != sizeof(buf)) {
         Serial.println("QSPI writeBuffer() failed");
         return;
     }
@@ -528,16 +525,16 @@ static void colour_store_write(uint8_t rgb[3]) {
 
     // read back for verification during development
     uint8_t verify[4];
-    qspiFlash.readBuffer(COLOUR_ADDR, verify, sizeof(verify));
-    Serial.print("Colour written / verify: ");
+    qspiFlash.readBuffer(COLOR_ADDR, verify, sizeof(verify));
+    Serial.print("Color written / verify: ");
     for(int i=0;i<4;i++){ Serial.print(verify[i], HEX); Serial.print(" "); }
     Serial.println();
 }
 
-static bool colour_store_read(uint8_t rgb[3]) {
+static bool color_store_read(uint8_t rgb[3]) {
     uint8_t buf[4];
-    qspiFlash.readBuffer(COLOUR_ADDR, buf, sizeof(buf));
-    if (buf[0] != COLOUR_MAGIC) return false;
+    qspiFlash.readBuffer(COLOR_ADDR, buf, sizeof(buf));
+    if (buf[0] != COLOR_MAGIC) return false;
 
     rgb[0] = buf[1];
     rgb[1] = buf[2];
@@ -545,7 +542,7 @@ static bool colour_store_read(uint8_t rgb[3]) {
     return true;
 }
 
-void handleColourFeature(uint16_t         /*conn*/,
+void handleColorFeature(uint16_t         /*conn*/,
                          BLECharacteristic* chr,
                          uint8_t*          data,
                          uint16_t          len)
@@ -553,25 +550,25 @@ void handleColourFeature(uint16_t         /*conn*/,
   if (len != 3) return;                 // expect exactly R-G-B
 
   // 1. store locally
-  memcpy(device_colour, data, 3);      // keep it in RAM
-  colour_store_write(device_colour);
+  memcpy(device_color, data, 3);      // keep it in RAM
+  color_store_write(device_color);
 
   // 2. update the GATT database value of *this* characteristic
   //    (so the next Get-Feature Read returns the new bytes)
-  chr->write(device_colour, 3);
+  chr->write(device_color, 3);
 
   // optional debug
-  Serial.print  ("Colour set to #");
+  Serial.print  ("Color set to #");
   for (uint8_t i=0; i<3; ++i) {
-      if (device_colour[i] < 16) Serial.print('0');
-      Serial.print(device_colour[i], HEX);
+      if (device_color[i] < 16) Serial.print('0');
+      Serial.print(device_color[i], HEX);
   }
   Serial.println();
 }
 
-void sendColourFeature()
+void sendColorFeature()
 {
-  blehid.inputReport(   /*ID*/ 2, device_colour, 3);   // echoes new value once
+  blehid.inputReport(   /*ID*/ 2, device_color, 3);   // echoes new value once
 }
 
 void setup() {
@@ -592,7 +589,7 @@ void setup() {
     Serial.println("Using BNO085 sensor");
 
     // Set the LED pin as output
-    pinMode(LED_PIN, OUTPUT);
+    pinMode(PIN_LED, OUTPUT);
 
     initBatteryMonitoring();
 
@@ -600,7 +597,7 @@ void setup() {
     // Initialise external QSPI flash
     // -------------------------------------------------
     if (!qspiFlash.begin(&P25Q16H, 1)) {
-        Serial.println("QSPI Flash init FAILED – colour will not persist");
+        Serial.println("QSPI Flash init FAILED – color will not persist");
     }
 
     // Initialize IMU
@@ -608,9 +605,9 @@ void setup() {
         Serial.println("Failed to initialize IMU!");
         // Flash LED rapidly to indicate error
         while (1) {
-            digitalWrite(LED_PIN, HIGH);
+            digitalWrite(PIN_LED, HIGH);
             delay(100);
-            digitalWrite(LED_PIN, LOW);
+            digitalWrite(PIN_LED, LOW);
             delay(100);
         }
     }
@@ -689,21 +686,21 @@ void setup() {
     pinMode(LED_GREEN, OUTPUT);
     digitalWrite(LED_GREEN, HIGH); // off (assuming active-low RGB LED)
 
-    blehid.setFeatureReportCallback(1, handleColourFeature);
+    blehid.setFeatureReportCallback(1, handleColorFeature);
     
     // Send initial feature report to host (optional)
-    blehid.featureReport(1 /*ID*/, device_colour, 3);
+    blehid.featureReport(1 /*ID*/, device_color, 3);
     
-    // Read the colour from flash
-    colour_store_read(device_colour);
+    // Read the color from flash
+    color_store_read(device_color);
 
-    Serial.print("Saved Colour: #");
-    Serial.print(device_colour[0], HEX);
-    Serial.print(device_colour[1], HEX);
-    Serial.println(device_colour[2], HEX);
+    Serial.print("Saved Color: #");
+    Serial.print(device_color[0], HEX);
+    Serial.print(device_color[1], HEX);
+    Serial.println(device_color[2], HEX);
 
     // Update color feature report
-    blehid.featureReport(1 /*ID*/, device_colour, 3);
+    blehid.featureReport(1 /*ID*/, device_color, 3);
 }
 
 void loop() {
