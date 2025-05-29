@@ -294,8 +294,7 @@ void updateOrientation() {
 
 void sendQuaternionReport() {
     // Apply 180-degree rotation around Z-axis to correct for IMU mounting
-    // Rotation quaternion for 180° around Z: (w=0, x=0, y=0, z=1)
-    // Quaternion multiplication: q_corrected = q_sensor * q_rotation
+    // For 180° rotation around Z: negate X and Y components, keep Z and W unchanged
     
     // Original sensor quaternion
     float qw_sensor = quaternion_w;
@@ -303,12 +302,11 @@ void sendQuaternionReport() {
     float qy_sensor = quaternion_y;
     float qz_sensor = quaternion_z;
     
-    // Apply 180-degree Z-rotation: multiply by (0, 0, 0, 1)
-    // q_corrected = q_sensor * (0, 0, 0, 1)
-    float corrected_w = -qz_sensor;  // w_corrected = w*0 - x*0 - y*0 - z*1
-    float corrected_x = qy_sensor;   // x_corrected = w*0 + x*0 + y*1 - z*0
-    float corrected_y = -qx_sensor;  // y_corrected = w*0 - x*1 + y*0 + z*0
-    float corrected_z = qw_sensor;   // z_corrected = w*1 + x*0 - y*0 + z*0
+    // Apply 180-degree Z-rotation by negating X and Y components
+    float corrected_w = qw_sensor;   // W stays the same
+    float corrected_x = -qx_sensor;  // Negate X (East becomes West)
+    float corrected_y = -qy_sensor;  // Negate Y (North becomes South)
+    float corrected_z = qz_sensor;   // Z stays the same (Up is still Up)
     
     // Map corrected quaternion values (-1 to 1) to unsigned HID range (0 to 65535)
     // This maps -1 to 0, 0 to 32768, and 1 to 65535
@@ -337,7 +335,7 @@ void sendQuaternionReport() {
     // static unsigned long lastDebugPrint = 0;
     // if (millis() - lastDebugPrint >= 1000) {
     //     lastDebugPrint = millis();
-    //     // Uncomment these lines for debugging the quaternion correction
+    //     // Debug the quaternion correction
     //     Serial.println("Raw sensor quaternion:");
     //     Serial.print("W: "); Serial.print(qw_sensor, 4);
     //     Serial.print(" X: "); Serial.print(qx_sensor, 4);
@@ -349,30 +347,7 @@ void sendQuaternionReport() {
     //     Serial.print(" X: "); Serial.print(corrected_x, 4);
     //     Serial.print(" Y: "); Serial.print(corrected_y, 4);
     //     Serial.print(" Z: "); Serial.println(corrected_z, 4);
-        
-    //     Serial.print("Mapped 16-bit values: ");
-    //     Serial.print(x); Serial.print(", ");
-    //     Serial.print(y); Serial.print(", ");
-    //     Serial.print(z); Serial.print(", ");
-    //     Serial.println(w);
-        
-    //     Serial.print("Switch States: ");
-    //     Serial.print(isLeft ? "Left" : "Right");
-    //     Serial.print(", ");
-    //     Serial.print(isUpper ? "Upper" : "Lower");
-    //     Serial.print(" (0x");
-    //     Serial.print(switch_states, HEX);
-    //     Serial.println(")");
-        
-    //     Debug connection and report sending
-    //     Serial.print("Connected: ");
-    //     Serial.println(Bluefruit.connected() ? "Yes" : "No");
-    //     Serial.print("Report data: ");
-    //     for (int i = 0; i < 9; i++) {
-    //         Serial.print(report_data[i], HEX);
-    //         Serial.print(" ");
-    //     }
-    //     Serial.println();
+    //     Serial.println("---");
     // }
     
     // Send the report if connected
