@@ -649,8 +649,8 @@ void setup() {
     bledis.setPNPID(reinterpret_cast<const char*>(pnp_id), sizeof(pnp_id));
     bledis.setModel("Eidon Tracker");
     bledis.setManufacturer("Eidon AI");
-    bledis.setHardwareRev("1.1");
-    bledis.setFirmwareRev("1.1");
+    bledis.setHardwareRev("1.2");
+    bledis.setFirmwareRev("1.2");
 
     char uid[17];                              // 16 hex digits + NUL
     sprintf(uid, "%08lX%08lX",
