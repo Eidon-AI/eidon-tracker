@@ -33,6 +33,7 @@ SPIFlash_Device_t const P25Q16H {
 #define BNO085_I2C_SDA 9
 #define BNO085_I2C_SCL 10
 #define BNO085_I2C_ADDR 0x4B // Address
+#define BNO085_INT_PIN 8     // Interrupt pin for data ready
 
 // Vendor and Product IDs
 #define VENDOR_ID  0xE1D0 // Eidon AI vendor ID
@@ -173,9 +174,9 @@ float readVBAT(void) {
 // Convert voltage to battery percentage with more accurate mapping
 uint8_t mvToPercent(float voltage) {
   // Debug the input voltage
-  Serial.print("Input voltage: ");
-  Serial.print(voltage, 3);
-  Serial.println("V");
+  // Serial.print("Input voltage: ");
+  // Serial.print(voltage, 3);
+  // Serial.println("V");
   
   // For LiPo battery
   if (voltage >= 4.2) return 100;
@@ -197,9 +198,9 @@ uint8_t mvToPercent(float voltage) {
   }
   
   // Debug the calculated percentage
-  Serial.print("Calculated percentage: ");
-  Serial.print(percentage);
-  Serial.println("%");
+  // Serial.print("Calculated percentage: ");
+  // Serial.print(percentage);
+  // Serial.println("%");
   
   return percentage;
 }
@@ -215,8 +216,8 @@ void enterDFU() {
 }
 
 void setReports() {
-    // Enable game rotation vector (orientation)
-    if (!bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 5000)) {
+    // Enable game rotation vector at maximum rate (1000 Hz)
+    if (!bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 1000)) {
         Serial.println("Could not enable rotation vector");
     }
 
@@ -414,11 +415,11 @@ void startAdv() {
 void updateBatteryLevel() {
   static unsigned long lastUpdate = 0;
   
-  // Update every 10 seconds
-  if(millis() - lastUpdate >= 10000) {
+  // Update every 5 minutes to minimize performance impact
+  if(millis() - lastUpdate >= 300000) {  // 300 seconds = 5 minutes
     lastUpdate = millis();
     
-    Serial.println("\nBattery Reading:");
+    // Serial.println("\nBattery Reading:");
     
     // Read battery voltage
     float vbat = readVBAT();
@@ -430,10 +431,10 @@ void updateBatteryLevel() {
     blebas.write(battery_level);
     
     // Debug output
-    Serial.print("Final Battery Level: ");
-    Serial.print(battery_level);
-    Serial.println("%");
-    Serial.println("-------------------");
+    // Serial.print("Final Battery Level: ");
+    // Serial.print(battery_level);
+    // Serial.println("%");
+    // Serial.println("-------------------");
   }
 }
 
@@ -570,12 +571,20 @@ void sendColorFeature()
   blehid.inputReport(   /*ID*/ 2, device_color, 3);   // echoes new value once
 }
 
+// Add interrupt flag for faster sensor reading
+volatile bool sensorDataReady = false;
+
+// Interrupt service routine
+void sensorISR() {
+    sensorDataReady = true;
+}
+
 void setup() {
     Serial.begin(115200);
 
-    // Wait for serial port to open (up to 2 seconds)
+    // Reduced wait time for faster startup (500ms max)
     unsigned long start = millis();
-    while (!Serial && (millis() - start < 2000));
+    while (!Serial && (millis() - start < 500));
 
     // Check for DFU trigger command
     while (Serial.available()) {
@@ -611,11 +620,19 @@ void setup() {
         }
     }
     
+    // Configure interrupt pin for sensor data ready
+    pinMode(BNO085_INT_PIN, INPUT_PULLUP);
+    attachInterrupt(digitalPinToInterrupt(BNO085_INT_PIN), sensorISR, FALLING);
+    
     // Initialize Bluetooth
     Bluefruit.begin();
     
     // Set device name
     Bluefruit.setName("Eidon Tracker");
+    
+    // Optimize BLE for minimum latency
+    Bluefruit.Periph.setConnInterval(6, 12);   // 7.5-15ms intervals (fast as possible)
+    // Note: setConnSupervision and setConnSlaveLatency may not be available in this library version
     
     // ---------- Device-information service -----------------------------
 
@@ -632,8 +649,8 @@ void setup() {
     bledis.setPNPID(reinterpret_cast<const char*>(pnp_id), sizeof(pnp_id));
     bledis.setModel("Eidon Tracker");
     bledis.setManufacturer("Eidon AI");
-    bledis.setHardwareRev("v1.0");
-    bledis.setFirmwareRev("v1.0");
+    bledis.setHardwareRev("1.1");
+    bledis.setFirmwareRev("1.1");
 
     char uid[17];                              // 16 hex digits + NUL
     sprintf(uid, "%08lX%08lX",
@@ -703,17 +720,16 @@ void setup() {
 }
 
 void loop() {
-    // checkDFU();  // Check for DFU command
-    // Update orientation at regular intervals
-    if (millis() - lastUpdate >= UPDATE_INTERVAL) {
+    // Interrupt-driven sensor reading for minimum latency
+    if (sensorDataReady) {
+        sensorDataReady = false;
         updateOrientation();
         sendQuaternionReport();
-        lastUpdate = millis();
     }
     
-    // Update battery level periodically
+    // Update battery level very infrequently to avoid performance impact
     updateBatteryLevel();
     
-    // Read switch states
+    // Read switch states (keep this frequent for responsiveness)
     readSwitches();
 }
