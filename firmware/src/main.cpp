@@ -721,11 +721,11 @@ void setup() {
 
 void loop() {
     // Interrupt-driven sensor reading for minimum latency
-    if (sensorDataReady) {
-        sensorDataReady = false;
+    // if (sensorDataReady) {
+    //     sensorDataReady = false;
         updateOrientation();
         sendQuaternionReport();
-    }
+    // }
     
     // Update battery level very infrequently to avoid performance impact
     updateBatteryLevel();
