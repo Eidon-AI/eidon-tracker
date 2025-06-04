@@ -19,7 +19,7 @@ A complete Bluetooth IMU tracking system featuring custom hardware, 3D printed e
 ## Bill of Materials (BOM)
 
 <div align="center">
-  <img src="images/eidon-tracker-open.png" alt="Eidon Tracker - Open" width="45%" />
+  <img src="images/eidon-tracker-opened.png" alt="Eidon Tracker - Open" width="45%" />
 </div>
 
 ### Required Components
