@@ -39,6 +39,32 @@ SPIFlash_Device_t const P25Q16H {
 #define VENDOR_ID  0xE1D0 // Eidon AI vendor ID
 #define PRODUCT_ID 0x0002 // Eidon Tracker product ID
 
+// Custom GATT Service UUIDs
+#define EIDON_SERVICE_UUID        "E1D00001-8B5A-3E5B-9E23-4F9B5C91BBDE"
+#define QUATERNION_CHAR_UUID      "E1D00002-8B5A-3E5B-9E23-4F9B5C91BBDE"
+#define CALIBRATION_CHAR_UUID     "E1D00003-8B5A-3E5B-9E23-4F9B5C91BBDE"
+#define COLOR_CHAR_UUID           "E1D00004-8B5A-3E5B-9E23-4F9B5C91BBDE"
+#define DEVICE_INFO_CHAR_UUID     "E1D00005-8B5A-3E5B-9E23-4F9B5C91BBDE"
+
+// Custom GATT Service
+BLEService        eidonService(EIDON_SERVICE_UUID);
+BLECharacteristic quaternionChar(QUATERNION_CHAR_UUID);
+BLECharacteristic calibrationChar(CALIBRATION_CHAR_UUID);
+BLECharacteristic colorChar(COLOR_CHAR_UUID);
+BLECharacteristic deviceInfoChar(DEVICE_INFO_CHAR_UUID);
+
+// Quaternion data structure for GATT (20 bytes)
+struct QuaternionData {
+    float w;
+    float x;
+    float y;
+    float z;
+    uint8_t switches;    // bit 0: isLeft, bit 1: isUpper
+    uint8_t reserved[3]; // padding to 20 bytes
+} __attribute__((packed));
+
+QuaternionData gattQuaternionData;
+
 /* One top-level application collection, Usage = Orientation                */
 /*  ├─ Input  (Quaternion + 2 switch bits)                                  */
 /*  ├─ Output (Vendor byte)                                                 */
@@ -124,6 +150,10 @@ BLEBas blebas;
 // Update interval (milliseconds)
 const unsigned long UPDATE_INTERVAL = 1;
 unsigned long lastUpdate = 0;
+
+// Forward declarations
+static void color_store_write(uint8_t rgb[3]);
+static bool color_store_read(uint8_t rgb[3]);
 
 // -----------------------------------------------------------------------------
 // Battery-monitoring constants and helpers
@@ -309,28 +339,50 @@ void sendQuaternionReport() {
     float corrected_y = -qy_sensor;  // Negate Y (North becomes South)
     float corrected_z = qz_sensor;   // Z stays the same (Up is still Up)
     
-    // Map corrected quaternion values (-1 to 1) to unsigned HID range (0 to 65535)
-    // This maps -1 to 0, 0 to 32768, and 1 to 65535
-    uint16_t x = (uint16_t)((corrected_x + 1.0f) * 32767.5f);
-    uint16_t y = (uint16_t)((corrected_y + 1.0f) * 32767.5f);
-    uint16_t z = (uint16_t)((corrected_z + 1.0f) * 32767.5f);
-    uint16_t w = (uint16_t)((corrected_w + 1.0f) * 32767.5f);
-    
-    // Create report - store 16-bit values in little-endian format
-    report_data[0] = x & 0xFF;        // LSB of x
-    report_data[1] = (x >> 8) & 0xFF; // MSB of x
-    report_data[2] = y & 0xFF;        // LSB of y
-    report_data[3] = (y >> 8) & 0xFF; // MSB of y
-    report_data[4] = z & 0xFF;        // LSB of z
-    report_data[5] = (z >> 8) & 0xFF; // MSB of z
-    report_data[6] = w & 0xFF;        // LSB of w
-    report_data[7] = (w >> 8) & 0xFF; // MSB of w
-    
-    // Add switch states to the report
+    // Prepare switch states
     uint8_t switch_states = 0;
     if (isLeft) switch_states |= 0x01;  // Set bit 0 for left
     if (isUpper) switch_states |= 0x02; // Set bit 1 for upper
-    report_data[8] = switch_states;
+    
+    // Send via HID if connected
+    if (Bluefruit.connected()) {
+        // Map corrected quaternion values (-1 to 1) to unsigned HID range (0 to 65535)
+        uint16_t x = (uint16_t)((corrected_x + 1.0f) * 32767.5f);
+        uint16_t y = (uint16_t)((corrected_y + 1.0f) * 32767.5f);
+        uint16_t z = (uint16_t)((corrected_z + 1.0f) * 32767.5f);
+        uint16_t w = (uint16_t)((corrected_w + 1.0f) * 32767.5f);
+        
+        // Create HID report - store 16-bit values in little-endian format
+        report_data[0] = x & 0xFF;        // LSB of x
+        report_data[1] = (x >> 8) & 0xFF; // MSB of x
+        report_data[2] = y & 0xFF;        // LSB of y
+        report_data[3] = (y >> 8) & 0xFF; // MSB of y
+        report_data[4] = z & 0xFF;        // LSB of z
+        report_data[5] = (z >> 8) & 0xFF; // MSB of z
+        report_data[6] = w & 0xFF;        // LSB of w
+        report_data[7] = (w >> 8) & 0xFF; // MSB of w
+        report_data[8] = switch_states;
+        
+        // Send HID report
+        if (!blehid.inputReport(1, report_data, sizeof(report_data))) {
+            Serial.println("Failed to send HID report!");
+        }
+        
+        // Also send via GATT service
+        gattQuaternionData.w = corrected_w;
+        gattQuaternionData.x = corrected_x;
+        gattQuaternionData.y = corrected_y;
+        gattQuaternionData.z = corrected_z;
+        gattQuaternionData.switches = switch_states;
+        memset(gattQuaternionData.reserved, 0, sizeof(gattQuaternionData.reserved));
+        
+        // Send GATT notification
+        if (quaternionChar.notify(&gattQuaternionData, sizeof(gattQuaternionData))) {
+            // Successfully sent
+        }
+        
+        digitalWrite(PIN_LED, !digitalRead(PIN_LED));
+    }
     
     // Debug output every second
     // static unsigned long lastDebugPrint = 0;
@@ -350,14 +402,6 @@ void sendQuaternionReport() {
     //     Serial.print(" Z: "); Serial.println(corrected_z, 4);
     //     Serial.println("---");
     // }
-    
-    // Send the report if connected
-    if (Bluefruit.connected()) {
-        if (!blehid.inputReport(1, report_data, sizeof(report_data))) {
-            Serial.println("Failed to send HID report!");
-        }
-        digitalWrite(PIN_LED, !digitalRead(PIN_LED));
-    }
 }
 
 void appendUniqueToName() {
@@ -385,6 +429,9 @@ void startAdv() {
     
     // Include HID service
     Bluefruit.Advertising.addService(blehid);
+    
+    // Include custom Eidon service
+    Bluefruit.Advertising.addService(eidonService);
     
     // Include Device Information Service
     Bluefruit.Advertising.addService(bledis);
@@ -429,6 +476,12 @@ void updateBatteryLevel() {
     
     // Update Battery Service
     blebas.write(battery_level);
+    
+    // Update GATT device info with battery level
+    uint8_t deviceInfo[8];
+    deviceInfoChar.read(deviceInfo, sizeof(deviceInfo));
+    deviceInfo[4] = battery_level;  // Update battery level byte
+    deviceInfoChar.write(deviceInfo, sizeof(deviceInfo));
     
     // Debug output
     // Serial.print("Final Battery Level: ");
@@ -498,6 +551,58 @@ void handleCommand(uint16_t conn_hdl,
   }
 }
 
+// GATT Calibration characteristic write callback
+void gattCalibrationCallback(uint16_t conn_hdl, BLECharacteristic* chr, uint8_t* data, uint16_t len)
+{
+  if (len == 0) return;
+  
+  switch (data[0])
+  {
+    case 0x01: { // Reset/calibrate IMU
+      Serial.println("GATT: IMU calibration requested");
+      digitalWrite(LED_GREEN, LOW);
+      bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 0);
+      bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 5000);
+      delay(2000);
+      digitalWrite(LED_GREEN, HIGH);
+      
+      // Send acknowledgment
+      uint8_t ack = 0x01;
+      calibrationChar.write(&ack, 1);
+      break;
+    }
+      
+    case 0x02:  // Request device info
+      Serial.println("GATT: Device info requested");
+      // Device info will be available via deviceInfoChar read
+      break;
+      
+    default:
+      Serial.print("GATT: Unknown calibration command 0x");
+      Serial.println(data[0], HEX);
+      break;
+  }
+}
+
+// GATT Color characteristic write callback
+void gattColorCallback(uint16_t conn_hdl, BLECharacteristic* chr, uint8_t* data, uint16_t len)
+{
+  if (len != 3) return;  // Expect RGB values
+  
+  // Store color
+  memcpy(device_color, data, 3);
+  color_store_write(device_color);
+  
+  // Update the characteristic value
+  colorChar.write(device_color, 3);
+  
+  Serial.print("GATT: Color set to #");
+  for (uint8_t i = 0; i < 3; ++i) {
+    if (device_color[i] < 16) Serial.print('0');
+    Serial.print(device_color[i], HEX);
+  }
+  Serial.println();
+}
 
 // QSPI flash transport and object for XIAO nRF52840 Sense (external 2-MiB P25Q16H)
 Adafruit_FlashTransport_QSPI flashTransport;
@@ -634,6 +739,50 @@ void setup() {
     Bluefruit.Periph.setConnInterval(6, 12);   // 7.5-15ms intervals (fast as possible)
     // Note: setConnSupervision and setConnSlaveLatency may not be available in this library version
     
+    // ---------- Custom GATT Service Setup -----------------------------
+    // Configure Eidon Service
+    eidonService.begin();
+    
+    // Configure Quaternion characteristic (notify, read)
+    quaternionChar.setProperties(CHR_PROPS_NOTIFY | CHR_PROPS_READ);
+    quaternionChar.setPermission(SECMODE_OPEN, SECMODE_NO_ACCESS);
+    quaternionChar.setFixedLen(sizeof(QuaternionData));
+    quaternionChar.setMaxLen(sizeof(QuaternionData));
+    quaternionChar.begin();
+    quaternionChar.setCccdWriteCallback([](uint16_t conn_hdl, BLECharacteristic* chr, uint16_t cccd_value) {
+        Serial.print("GATT: Quaternion notifications ");
+        Serial.println(cccd_value & BLE_GATT_HVX_NOTIFICATION ? "enabled" : "disabled");
+    });
+    
+    // Configure Calibration characteristic (write, read)
+    calibrationChar.setProperties(CHR_PROPS_WRITE | CHR_PROPS_READ);
+    calibrationChar.setPermission(SECMODE_OPEN, SECMODE_OPEN);
+    calibrationChar.setFixedLen(1);
+    calibrationChar.begin();
+    calibrationChar.setWriteCallback(gattCalibrationCallback);
+    
+    // Configure Color characteristic (write, read)
+    colorChar.setProperties(CHR_PROPS_WRITE | CHR_PROPS_READ);
+    colorChar.setPermission(SECMODE_OPEN, SECMODE_OPEN);
+    colorChar.setFixedLen(3);
+    colorChar.begin();
+    colorChar.setWriteCallback(gattColorCallback);
+    
+    // Configure Device Info characteristic (read only)
+    deviceInfoChar.setProperties(CHR_PROPS_READ);
+    deviceInfoChar.setPermission(SECMODE_OPEN, SECMODE_NO_ACCESS);
+    deviceInfoChar.setFixedLen(8);  // 2 bytes for each: device_id, firmware_version, battery_level, reserved
+    deviceInfoChar.begin();
+    
+    // Set initial device info
+    uint8_t deviceInfo[8] = {
+        0x01, 0x00,  // Device ID (can be based on switch states later)
+        0x01, 0x02,  // Firmware version 1.2
+        100,         // Battery level (will be updated)
+        0, 0, 0      // Reserved
+    };
+    deviceInfoChar.write(deviceInfo, sizeof(deviceInfo));
+    
     // ---------- Device-information service -----------------------------
 
     // PnP-ID (see Core Spec vol 3, part C §12.1)
@@ -704,9 +853,6 @@ void setup() {
 
     blehid.setFeatureReportCallback(1, handleColorFeature);
     
-    // Send initial feature report to host (optional)
-    blehid.featureReport(1 /*ID*/, device_color, 3);
-    
     // Read the color from flash
     color_store_read(device_color);
 
@@ -717,6 +863,9 @@ void setup() {
 
     // Update color feature report
     blehid.featureReport(1 /*ID*/, device_color, 3);
+    
+    // Also set GATT color characteristic
+    colorChar.write(device_color, 3);
 }
 
 void loop() {
