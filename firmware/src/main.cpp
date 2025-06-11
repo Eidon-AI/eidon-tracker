@@ -420,42 +420,35 @@ void appendUniqueToName() {
 }
 
 void startAdv() {
-    // Advertising packet
+    // Primary Advertising packet
     Bluefruit.Advertising.addFlags(BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE);
     Bluefruit.Advertising.addTxPower();
-    
-    // Set appearance to HID Device (not specifically a gamepad)
     Bluefruit.Advertising.addAppearance(BLE_APPEARANCE_GENERIC_HID);
     
-    // Include HID service
-    Bluefruit.Advertising.addService(blehid);
+    // Keep standard 16-bit service UUIDs in primary advertising
+    Bluefruit.Advertising.addService(blehid);    // HID Service
+    Bluefruit.Advertising.addService(bledis);    // Device Info Service
+    Bluefruit.Advertising.addService(blebas);    // Battery Service
     
-    // Include custom Eidon service
-    Bluefruit.Advertising.addService(eidonService);
+    // Add manufacturer data with device color (5 bytes total)
+    uint8_t manufacturerData[] = {
+        0xD0, 0xE1,  // Company ID (0xE1D0 in little-endian)
+        device_color[0],  // R
+        device_color[1],  // G
+        device_color[2]   // B
+    };
+    Bluefruit.Advertising.addManufacturerData(manufacturerData, sizeof(manufacturerData));
     
-    // Include Device Information Service
-    Bluefruit.Advertising.addService(bledis);
-    
-    // Include Name
-    // Bluefruit.ScanResponse.addName();
+    // Scan Response - only include custom service and name
+    Bluefruit.ScanResponse.clearData();
+    Bluefruit.ScanResponse.addService(eidonService);
     appendUniqueToName();
     
-    // Include Battery Service
-    Bluefruit.Advertising.addService(blebas);
-    
-    // Start advertising
+    // Rest of the advertising setup
     Bluefruit.Advertising.restartOnDisconnect(true);
-    Bluefruit.Advertising.setInterval(32, 244);    // in unit of 0.625 ms
-    Bluefruit.Advertising.setFastTimeout(30);      // number of seconds in fast mode
-    Bluefruit.Advertising.start(0);                // 0 = Don't stop advertising after n seconds  
-    
-    Serial.println("Advertising started");
-    
-    // Debug print the vendor and product IDs
-    Serial.print("Vendor ID: 0x");
-    Serial.println(VENDOR_ID, HEX);
-    Serial.print("Product ID: 0x");
-    Serial.println(PRODUCT_ID, HEX);
+    Bluefruit.Advertising.setInterval(32, 244);
+    Bluefruit.Advertising.setFastTimeout(30);
+    Bluefruit.Advertising.start(0);
 }
 
 // Update battery level periodically
