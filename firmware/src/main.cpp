@@ -4,24 +4,16 @@
 #include <NimBLEUtils.h>
 #include <NimBLEHIDDevice.h>
 #include <NimBLECharacteristic.h>
-#include <Adafruit_BNO08x.h>
-#include <Preferences.h>
 #include "BNO085.h"
 
 // Function declarations
-void scanI2C();
-bool testBNO085Direct();
-bool initIMU();
-void setReports();
-void updateOrientation();
 void sendQuaternionReport();
-void readSwitches();
 void updateLEDStatus();
 void startIMUResetPattern();
-bool isBNO085Available();
-void quaternionToEuler();
-void updateBNO085();
 bool isConnected();
+
+// BNO085 IMU instance
+BNO085 imu;
 
 // BNO085 I2C pins and Address (for external IMU) - now using constants from BNO085.h
 // #define BNO085_I2C_SDA 9  // Now using I2C_SDA from BNO085.h
@@ -36,7 +28,6 @@ bool isConnected();
 #define EIDON_SERVICE_UUID        "E1D00001-8B5A-3E5B-9E23-4F9B5C91BBDE"
 #define QUATERNION_CHAR_UUID      "E1D00002-8B5A-3E5B-9E23-4F9B5C91BBDE"
 #define CALIBRATION_CHAR_UUID     "E1D00003-8B5A-3E5B-9E23-4F9B5C91BBDE"
-#define COLOR_CHAR_UUID           "E1D00004-8B5A-3E5B-9E23-4F9B5C91BBDE"
 #define DEVICE_INFO_CHAR_UUID     "E1D00005-8B5A-3E5B-9E23-4F9B5C91BBDE"
 
 // Quaternion data structure for GATT (20 bytes)
@@ -111,24 +102,11 @@ uint8_t report_data[9] = {0};
 // Add output report buffer
 uint8_t output_report[1] = {0};
 
-// BNO085 sensor
-Adafruit_BNO08x bno08x;
-sh2_SensorValue_t sensorValue;
-
-// Add BNO085 availability tracking
-bool bno085_available = false;  // Track if BNO085 is working
-
-// Orientation data
+// Global quaternion variables (for backward compatibility)
 float quaternion_x = 0;
 float quaternion_y = 0;
 float quaternion_z = 0;
 float quaternion_w = 1;
-
-// Add euler angles structure for quaternion conversion
-euler_t ypr = {0, 0, 0};
-
-// Device color RGB stored (default white)
-uint8_t device_color[3] = {0xFF, 0xFF, 0xFF};
 
 // Update interval (milliseconds)
 const unsigned long UPDATE_INTERVAL = 1;
@@ -144,16 +122,6 @@ unsigned long lastTransmission = 0;
 
 // Track subscription status
 bool quaternionSubscribed = false;
-
-// Switch pins
-#define SWITCH_OUT_LEFT_RIGHT 5  // D5 output for left/right switch
-#define SWITCH_IN_LEFT_RIGHT 6   // D6 input for left/right switch
-#define SWITCH_OUT_UPPER_LOWER 0 // D0 output for upper/lower switch
-#define SWITCH_IN_UPPER_LOWER 1  // D1 input for upper/lower switch
-
-// Switch states
-bool isLeft = false;
-bool isUpper = false;
 
 // LED pin - changed from 5 to 2 to avoid conflict with switch pin
 #define LED_PIN 2
@@ -184,7 +152,6 @@ volatile bool sensorDataReady = false;
 
 // BLE connection state variables (moved up for LED functions)
 bool deviceConnected = false;
-bool oldDeviceConnected = false;
 
 // Interrupt service routine
 void IRAM_ATTR sensorISR() {
@@ -247,17 +214,12 @@ NimBLEServer* pServer = nullptr;
 NimBLEHIDDevice* hid = nullptr;
 NimBLECharacteristic* inputReport = nullptr;
 NimBLECharacteristic* outputReport = nullptr;
-NimBLECharacteristic* featureReport = nullptr;
 
 // Custom GATT Service
 NimBLEService* eidonService = nullptr;
 NimBLECharacteristic* quaternionChar = nullptr;
 NimBLECharacteristic* calibrationChar = nullptr;
-NimBLECharacteristic* colorChar = nullptr;
 NimBLECharacteristic* deviceInfoChar = nullptr;
-
-// Persistent storage
-Preferences prefs;
 
 // Server callbacks
 class ServerCallbacks : public NimBLEServerCallbacks {
@@ -285,6 +247,10 @@ class ServerCallbacks : public NimBLEServerCallbacks {
         Serial.println("Connection terminated");
         Serial.println("CALLBACK: onDisconnect fired!");
         deviceConnected = false;
+        
+        // Immediately restart advertising when disconnected
+        Serial.println("Disconnect callback: restarting advertising");
+        NimBLEDevice::startAdvertising();
     };
     
     void onMTUChange(uint16_t MTU, ble_gap_conn_desc* desc) {
@@ -324,41 +290,16 @@ class OutputReportCallbacks : public NimBLECharacteristicCallbacks {
             Serial.println(cmd, HEX);
 
             if (cmd == 0x01) {
-                Serial.println("Reset command: resetting BNO085");
-                // Reset BNO085
-                bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 0);
-                delay(100);
-                bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 1000);
-                startIMUResetPattern(); // Start IMU reset LED pattern
+                if (imu.isAvailable()) {
+                    Serial.println("Reset command: resetting BNO085");
+                    // Reset BNO085 using the library
+                    imu.reset();
+                    startIMUResetPattern(); // Start IMU reset LED pattern
+                } else {
+                    Serial.println("Reset command received, but BNO085 is not available");
+                }
             }
         }
-    }
-};
-
-// Feature report callback
-class FeatureReportCallbacks : public NimBLECharacteristicCallbacks {
-    void onRead(NimBLECharacteristic* pChar, const std::string& value) {
-        // Manually prepend report ID 1 to the color data
-        uint8_t reportData[4];
-        reportData[0] = 0x01;  // Report ID
-        memcpy(reportData + 1, device_color, 3);
-        pChar->setValue(reportData, 4);
-    }
-    
-    void onWrite(NimBLECharacteristic* pChar, const std::string& value) {
-        size_t len = value.size();
-        if (len == 4) {
-            // Host included Report ID as first byte – skip it
-            memcpy(device_color, value.data() + 1, 3);
-        } else if (len >= 3) {
-            memcpy(device_color, value.data(), 3);
-  } else {
-            return; // invalid length
-        }
-
-        // Persist to NVS
-        prefs.putBytes("color", device_color, 3);
-        Serial.printf("Color updated to %02X %02X %02X and saved to flash\n", device_color[0], device_color[1], device_color[2]);
     }
 };
 
@@ -372,10 +313,12 @@ class CalibrationCallbacks : public NimBLECharacteristicCallbacks {
         switch (cmd) {
             case 0x01: { // Reset/calibrate IMU
                 Serial.println("GATT: IMU calibration requested");
-                bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 0);
-                delay(100);
-                bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 1000);
-                startIMUResetPattern(); // Start IMU reset LED pattern
+                if (imu.isAvailable()) {
+                    imu.reset();
+                    startIMUResetPattern(); // Start IMU reset LED pattern
+                } else {
+                    Serial.println("GATT: IMU calibration requested, but BNO085 is not available");
+                }
                 
                 // Send acknowledgment
                 uint8_t ack = 0x01;
@@ -387,28 +330,6 @@ class CalibrationCallbacks : public NimBLECharacteristicCallbacks {
                 Serial.println(cmd, HEX);
                 break;
         }
-    }
-};
-
-// GATT Color characteristic write callback
-class ColorCallbacks : public NimBLECharacteristicCallbacks {
-    void onWrite(NimBLECharacteristic* chr) {
-        std::string value = chr->getValue();
-        if (value.size() != 3) return;  // Expect RGB values
-        
-        // Store color
-        memcpy(device_color, value.data(), 3);
-        prefs.putBytes("color", device_color, 3);
-        
-        // Update the characteristic value
-        colorChar->setValue(device_color, 3);
-        
-        Serial.print("GATT: Color set to #");
-        for (uint8_t i = 0; i < 3; ++i) {
-            if (device_color[i] < 16) Serial.print('0');
-            Serial.print(device_color[i], HEX);
-        }
-        Serial.println();
     }
 };
 
@@ -444,336 +365,34 @@ class QuaternionCharCallbacks : public NimBLECharacteristicCallbacks {
     }
 };
 
-void setReports() {
-    // Use GAME_ROTATION_VECTOR for fast quaternion updates (no magnetic north reference)
-    // Reduce to 50Hz (20ms) for stability - prevents overwhelming I2C and BLE
-    if (!bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 20000)) { // 20ms (50Hz) - stable rate
-        Serial.println("Could not enable rotation vector at 50Hz, trying 100Hz...");
-        if (!bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 10000)) { // 10ms (100Hz) fallback
-            Serial.println("Could not enable rotation vector at 100Hz, trying 200Hz...");
-            if (!bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 5000)) { // 5ms (200Hz) fallback
-                Serial.println("Could not enable rotation vector");
-            } else {
-                Serial.println("Game rotation vector enabled at 200Hz");
-            }
-        } else {
-            Serial.println("Game rotation vector enabled at 100Hz");
-        }
-    } else {
-        Serial.println("Game rotation vector enabled at 50Hz (stable rate)");
-    }
-
-    // Enable Tap Detector (event-driven, report interval 0)
-    if (!bno08x.enableReport(SH2_TAP_DETECTOR, 0)) {
-        Serial.println("Could not enable tap detector");
-    }
-}
-
-// Add I2C scanning function
-void scanI2C() {
-    Serial.println("Scanning I2C bus...");
-    Serial.print("SDA: GPIO"); Serial.print(I2C_SDA);
-    Serial.print(", SCL: GPIO"); Serial.println(I2C_SCL);
-    
-    int nDevices = 0;
-    for (byte address = 1; address < 127; address++) {
-        Wire.beginTransmission(address);
-        byte error = Wire.endTransmission();
-        
-        if (error == 0) {
-            Serial.print("I2C device found at address 0x");
-            if (address < 16) Serial.print("0");
-            Serial.print(address, HEX);
-            Serial.println(" !");
-            nDevices++;
-        }
-        else if (error == 4) {
-            Serial.print("Unknown error at address 0x");
-            if (address < 16) Serial.print("0");
-            Serial.println(address, HEX);
-        }
-    }
-    if (nDevices == 0) {
-        Serial.println("No I2C devices found");
-    } else {
-        Serial.print("Found ");
-        Serial.print(nDevices);
-        Serial.println(" device(s)");
-    }
-    Serial.println("Scan complete\n");
-}
-
-// Add direct BNO085 communication test function
-bool testBNO085Direct() {
-    Serial.println("Testing direct BNO085 communication...");
-    
-    // BNO085 uses SHTP (Sensor Hub Transport Protocol)
-    // Try to read the SHTP header to see if we can communicate
-    Wire.requestFrom(I2C_ADDR, 4); // Request 4 bytes (SHTP header)
-    
-    if (Wire.available() >= 4) {
-        byte header[4];
-        for (int i = 0; i < 4; i++) {
-            header[i] = Wire.read();
-        }
-        
-        Serial.print("SHTP Header received: ");
-        for (int i = 0; i < 4; i++) {
-            if (header[i] < 16) Serial.print("0");
-            Serial.print(header[i], HEX);
-            Serial.print(" ");
-        }
-        Serial.println();
-        
-        // Check if this looks like a valid SHTP header
-        uint16_t length = (header[1] << 8) | header[0];
-        Serial.print("Packet length: ");
-        Serial.println(length);
-        
-        if (length > 0 && length < 1000) { // Reasonable packet length
-            Serial.println("Valid SHTP communication detected!");
-            return true;
-        } else {
-            Serial.println("SHTP header format unexpected");
-            return false;
-        }
-    } else {
-        Serial.print("Only ");
-        Serial.print(Wire.available());
-        Serial.println(" bytes available from SHTP request");
-        return false;
-    }
-}
-
-bool initIMU() {
-    Serial.println("Setting up I2C pins...");
-    Serial.print("SDA: GPIO"); Serial.print(I2C_SDA);
-    Serial.print(" (D9), SCL: GPIO"); Serial.print(I2C_SCL);
-    Serial.println(" (D10)");
-    
-    // Initialize I2C with explicit pins for ESP32-C6
-    Wire.setPins(I2C_SDA, I2C_SCL);
-    Wire.begin();
-    Wire.setClock(400000); // Set to 400kHz (standard fast mode) for stability
-    
-    Serial.println("I2C initialized, testing basic communication...");
-    
-    // Test basic I2C communication with retries
-    int i2c_attempts = 0;
-    bool i2c_success = false;
-    
-    while (!i2c_success && i2c_attempts < 5) {
-        Wire.beginTransmission(I2C_ADDR);
-        byte error = Wire.endTransmission();
-        
-        if (error == 0) {
-            Serial.println("I2C communication successful!");
-            i2c_success = true;
-        } else {
-            i2c_attempts++;
-            Serial.print("I2C attempt "); Serial.print(i2c_attempts);
-            Serial.print(" failed with error: "); Serial.println(error);
-            if (i2c_attempts < 5) {
-                Serial.println("Retrying I2C in 500ms...");
-                delay(500);
-            }
-        }
-    }
-    
-    if (!i2c_success) {
-        Serial.println("I2C communication failed after 5 attempts, giving up on BNO085");
-        return false;
-    }
-    
-    // Test direct BNO085 communication
-    if (testBNO085Direct()) {
-        Serial.println("Direct BNO085 SHTP communication successful!");
-    } else {
-        Serial.println("Direct BNO085 SHTP communication failed!");
-        // Don't return here - still try the Adafruit library
-    }
-    
-    Serial.println("Initializing BNO085 with Adafruit library...");
-    
-    // Scan the I2C bus
-    scanI2C();
-    
-    // Try multiple initialization approaches with retries
-    bool bno_initialized = false;
-    int total_attempts = 0;
-    const int max_attempts = 15;
-    
-    while (!bno_initialized && total_attempts < max_attempts) {
-        total_attempts++;
-        
-        Serial.print("BNO085 initialization attempt "); 
-        Serial.print(total_attempts); 
-        Serial.print("/"); 
-        Serial.println(max_attempts);
-        
-        // Try different initialization methods
-        if (total_attempts <= 5) {
-            // First 5 attempts: Try with explicit Wire object
-            Serial.println("  -> Trying with explicit Wire object...");
-            if (bno08x.begin_I2C(I2C_ADDR, &Wire)) {
-                Serial.println("BNO085 initialized successfully with explicit Wire object!");
-                bno_initialized = true;
-                break;
-            }
-        } else if (total_attempts <= 10) {
-            // Next 5 attempts: Try with default address
-            Serial.println("  -> Trying with default address...");
-            if (bno08x.begin_I2C()) {
-                Serial.println("BNO085 initialized successfully with default address!");
-                bno_initialized = true;
-                break;
-            }
-        } else {
-            // Final attempts: Try with different I2C speeds
-            if (total_attempts == 11) {
-                Serial.println("  -> Trying with 400kHz I2C clock...");
-                Wire.setClock(400000);
-            } else if (total_attempts == 13) {
-                Serial.println("  -> Trying with 50kHz I2C clock...");
-                Wire.setClock(50000);
-            }
-            
-            Serial.println("  -> Trying standard initialization...");
-            if (bno08x.begin_I2C(I2C_ADDR)) {
-                Serial.println("BNO085 initialized successfully!");
-                bno_initialized = true;
-                break;
-            }
-        }
-        
-        // Wait between attempts, with longer waits for later attempts
-        int delay_ms = (total_attempts <= 5) ? 500 : 1000;
-        Serial.print("  -> Failed, waiting "); Serial.print(delay_ms); Serial.println("ms...");
-        delay(delay_ms);
-        
-        // Rescan I2C bus every 5 attempts to verify device is still there
-        if (total_attempts % 5 == 0) {
-            Serial.println("  -> Rescanning I2C bus...");
-            scanI2C();
-            
-            // Reset I2C if device is not responding
-            Wire.beginTransmission(I2C_ADDR);
-            if (Wire.endTransmission() != 0) {
-                Serial.println("  -> Device not responding, reinitializing I2C...");
-                Wire.end();
-                delay(100);
-                Wire.setPins(I2C_SDA, I2C_SCL);
-                Wire.begin();
-                Wire.setClock(100000);
-            }
-        }
-    }
-    
-    if (!bno_initialized) {
-        Serial.print("BNO085 failed to initialize after ");
-        Serial.print(max_attempts);
-        Serial.println(" attempts. Continuing without IMU...");
-        return false;
-    }
-
-    Serial.print("BNO085 successfully initialized on attempt ");
-    Serial.print(total_attempts);
-    Serial.println("!");
-
-    // Enable the rotation vector report
-    setReports();
-    
-    // Set availability flag
-    bno085_available = true;
-
-    return true;
-}
-
-// Function to check if BNO085 is available
-bool isBNO085Available() {
-    return bno085_available;
-}
-
 // Function to get current BLE connection state (similar to Bluefruit.connected())
 bool isConnected() {
     return deviceConnected; // Simple state tracking like reference code
 }
 
-void updateOrientation() {
-    // Don't try to update if BNO085 is not available
-    if (!bno085_available) {
-        return;
-    }
-    
-    if (bno08x.wasReset()) {
-        Serial.println("BNO085 was reset");
-        setReports();
-    }
-
-    if (bno08x.getSensorEvent(&sensorValue)) {
-        switch (sensorValue.sensorId) {
-            case SH2_GAME_ROTATION_VECTOR:
-                quaternion_x = sensorValue.un.gameRotationVector.i;
-                quaternion_y = sensorValue.un.gameRotationVector.j;
-                quaternion_z = sensorValue.un.gameRotationVector.k;
-                quaternion_w = sensorValue.un.gameRotationVector.real;
-                break;
-
-            case SH2_TAP_DETECTOR: {
-                uint8_t f = sensorValue.un.tapDetector.flags;
-                bool isDouble = f & TAPDET_DOUBLE;
-                Serial.print(isDouble ? "Double" : "Single");
-                Serial.print(" tap detected on ");
-                if      (f & TAPDET_X)     Serial.println("-X side");
-                else if (f & TAPDET_X_POS) Serial.println("+X side");
-                else if (f & TAPDET_Y)     Serial.println("-Y side");
-                else if (f & TAPDET_Y_POS) Serial.println("+Y side");
-                else if (f & TAPDET_Z)     Serial.println("-Z side");
-                else if (f & TAPDET_Z_POS) Serial.println("+Z side");
-                else                       Serial.println("unknown side");
-
-                if (isDouble) {
-                    Serial.println("Double tap detected");
-                    bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 0);
-                    bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 5000);
-                }
-                break;
-            }
-        }
-    }
-}
-
 void sendQuaternionReport() {
-    // Rate limit data transmission to prevent overwhelming BLE connection
-    unsigned long currentTime = millis();
-    if (currentTime - lastTransmission < TRANSMISSION_INTERVAL) {
-        // Skip this transmission cycle to maintain stable rate
-        delay(1); // Small delay to prevent busy waiting
-        return; // Early return to avoid rest of function processing
-    }
-    lastTransmission = currentTime;
+    // Rate limiting is now handled in the main loop to prevent double rate limiting
+    
+    // Get current quaternion data from the library
+    float qw_sensor, qx_sensor, qy_sensor, qz_sensor;
+    imu.getQuaternion(qw_sensor, qx_sensor, qy_sensor, qz_sensor);
     
     // Apply 180-degree rotation around Z-axis to correct for IMU mounting
-    float qw_sensor = quaternion_w;
-    float qx_sensor = quaternion_x;
-    float qy_sensor = quaternion_y;
-    float qz_sensor = quaternion_z;
-    
-    // Apply 180-degree Z-rotation by negating X and Y components
     float corrected_w = qw_sensor;
     float corrected_x = -qx_sensor;
     float corrected_y = -qy_sensor;
     float corrected_z = qz_sensor;
     
-    // Prepare switch states
-    uint8_t switch_states = 0;
-    if (isLeft) switch_states |= 0x01;
-    if (isUpper) switch_states |= 0x02;
+    // Update global variables for backward compatibility
+    quaternion_w = qw_sensor;
+    quaternion_x = qx_sensor;
+    quaternion_y = qy_sensor;
+    quaternion_z = qz_sensor;
     
     // Send via HID if connected
     if (isConnected()) {
         // Only send quaternion data if BNO085 is available
-        if (bno085_available) {
+        if (imu.isAvailable()) {
             // Map corrected quaternion values (-1 to 1) to unsigned HID range (0 to 65535)
             uint16_t x = (uint16_t)((corrected_x + 1.0f) * 32767.5f);
             uint16_t y = (uint16_t)((corrected_y + 1.0f) * 32767.5f);
@@ -789,7 +408,7 @@ void sendQuaternionReport() {
             report_data[5] = (z >> 8) & 0xFF;
             report_data[6] = w & 0xFF;
             report_data[7] = (w >> 8) & 0xFF;
-            report_data[8] = switch_states;
+            report_data[8] = 0; // No switch states
             
             // Send HID report with error handling
             if (inputReport != nullptr) {
@@ -823,12 +442,13 @@ void sendQuaternionReport() {
             gattQuaternionData.x = corrected_x;
             gattQuaternionData.y = corrected_y;
             gattQuaternionData.z = corrected_z;
-            gattQuaternionData.switches = switch_states;
+            gattQuaternionData.switches = 0;
             memset(gattQuaternionData.reserved, 0, sizeof(gattQuaternionData.reserved));
             
             // Send GATT notification with rate limiting
             if (quaternionChar != nullptr) {
                 // Rate limit notifications to prevent overwhelming the BLE stack
+                unsigned long currentTime = millis();
                 if (currentTime - lastNotificationTime >= BLE_NOTIFICATION_INTERVAL) {
                     bool notifyResult = quaternionChar->notify((uint8_t*)&gattQuaternionData, sizeof(gattQuaternionData));
                     lastNotificationTime = currentTime;
@@ -852,7 +472,7 @@ void sendQuaternionReport() {
         } else {
             // Send zero quaternion when BNO085 is not available
             memset(report_data, 0, sizeof(report_data));
-            report_data[8] = switch_states; // Still send switch states
+            report_data[8] = 0; // No switch states
             
             if (inputReport != nullptr) {
                 inputReport->setValue(report_data, sizeof(report_data));
@@ -864,7 +484,7 @@ void sendQuaternionReport() {
             gattQuaternionData.x = 0.0f;
             gattQuaternionData.y = 0.0f;
             gattQuaternionData.z = 0.0f;
-            gattQuaternionData.switches = switch_states;
+            gattQuaternionData.switches = 0;
             memset(gattQuaternionData.reserved, 0, sizeof(gattQuaternionData.reserved));
             
             if (quaternionChar != nullptr) {
@@ -879,25 +499,6 @@ void sendQuaternionReport() {
         
         // LED is now controlled by updateLEDStatus() in the main loop
     }
-}
-
-// Function to read switch states
-void readSwitches() {
-    // Read left/right switch
-    pinMode(SWITCH_OUT_LEFT_RIGHT, OUTPUT);
-    digitalWrite(SWITCH_OUT_LEFT_RIGHT, HIGH);
-    delayMicroseconds(10);
-    pinMode(SWITCH_IN_LEFT_RIGHT, INPUT_PULLDOWN);
-    isLeft = digitalRead(SWITCH_IN_LEFT_RIGHT) == HIGH;
-    pinMode(SWITCH_OUT_LEFT_RIGHT, INPUT);
-    
-    // Read upper/lower switch
-    pinMode(SWITCH_OUT_UPPER_LOWER, OUTPUT);
-    digitalWrite(SWITCH_OUT_UPPER_LOWER, HIGH);
-    delayMicroseconds(10);
-    pinMode(SWITCH_IN_UPPER_LOWER, INPUT_PULLDOWN);
-    isUpper = digitalRead(SWITCH_IN_UPPER_LOWER) == HIGH;
-    pinMode(SWITCH_OUT_UPPER_LOWER, INPUT);
 }
 
 // Helper to generate unique BLE name
@@ -923,7 +524,7 @@ void setup() {
     pinMode(LED_PIN, OUTPUT);
 
     // Initialize IMU
-    if (!initIMU()) {
+    if (!imu.begin()) {
         Serial.println("Failed to initialize IMU!");
         while (1) {
             digitalWrite(LED_PIN, HIGH);
@@ -932,11 +533,7 @@ void setup() {
             delay(100);
         }
     }
-    
-    // Remove interrupt setup - using polling instead
-    // pinMode(BNO085_INT_PIN, INPUT_PULLUP);
-    // attachInterrupt(digitalPinToInterrupt(BNO085_INT_PIN), sensorISR, FALLING);
-    
+        
     // Initialize Bluetooth
     NimBLEDevice::init("");
     
@@ -963,10 +560,6 @@ void setup() {
     inputReport = hid->getInputReport(1);
     outputReport = hid->getOutputReport(1);
     outputReport->setCallbacks(new OutputReportCallbacks());
-    
-    // Feature report for RGB color
-    featureReport = hid->getFeatureReport(1);
-    featureReport->setCallbacks(new FeatureReportCallbacks());
     
     // Configure HID device
     hid->setManufacturer("Eidon AI");
@@ -999,14 +592,6 @@ void setup() {
     calibrationChar->setCallbacks(new CalibrationCallbacks());
     Serial.println("GATT: Calibration characteristic created");
     
-    // Configure Color characteristic
-    colorChar = eidonService->createCharacteristic(
-        COLOR_CHAR_UUID,
-        NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE
-    );
-    colorChar->setCallbacks(new ColorCallbacks());
-    Serial.println("GATT: Color characteristic created");
-    
     // Configure Device Info characteristic
     deviceInfoChar = eidonService->createCharacteristic(
         DEVICE_INFO_CHAR_UUID,
@@ -1026,18 +611,6 @@ void setup() {
     // Start custom service
     eidonService->start();
     Serial.println("GATT: Eidon service started");
-    
-    // Open NVS and load saved color
-    prefs.begin("tracker", false);
-    if (prefs.getBytes("color", device_color, 3) != 3) {
-        device_color[0] = 0xFF;
-        device_color[1] = 0xFF;
-        device_color[2] = 0xFF;
-    }
-    
-    // Set initial color values
-    featureReport->setValue(device_color, 3);
-    colorChar->setValue(device_color, 3);
     
     // Configure advertising
     NimBLEAdvertising* pAdvertising = NimBLEDevice::getAdvertising();
@@ -1065,12 +638,6 @@ void setup() {
     Serial.println(EIDON_SERVICE_UUID);
     
     Serial.println("Setup complete");
-    
-    // Initialize switch pins
-    pinMode(SWITCH_OUT_LEFT_RIGHT, INPUT);
-    pinMode(SWITCH_IN_LEFT_RIGHT, INPUT_PULLDOWN);
-    pinMode(SWITCH_OUT_UPPER_LOWER, INPUT);
-    pinMode(SWITCH_IN_UPPER_LOWER, INPUT_PULLDOWN);
 }
 
 void loop() {
@@ -1084,42 +651,43 @@ void loop() {
         // Minimal logging to avoid delays
         if (deviceConnected) {
             Serial.println("Connected - starting to send data");
+            // Force reset LED state and start fresh pattern
+            digitalWrite(LED_PIN, LOW);  // Start with LED OFF
+            ledState = false;
+            ledLastUpdate = 0; // Force immediate update
+            currentLEDPattern = LED_CONNECTED;
         } else {
             Serial.println("Disconnected - restarting advertising");
             NimBLEDevice::startAdvertising();
+            currentLEDPattern = LED_ADVERTISING; // Switch to advertising LED pattern
         }
     }
     
-    // Handle connection state changes (simplified)
-    if (deviceConnected && !oldDeviceConnected) {
-        // Just connected
-        oldDeviceConnected = deviceConnected;
-        
-        // Force reset LED state and start fresh pattern
-        digitalWrite(LED_PIN, LOW);  // Start with LED OFF
-        ledState = false;
-        ledLastUpdate = 0; // Force immediate update
-        currentLEDPattern = LED_CONNECTED;
-    }
-    
-    if (!deviceConnected && oldDeviceConnected) {
-        // Just disconnected
-        oldDeviceConnected = deviceConnected;
-        currentLEDPattern = LED_ADVERTISING; // Switch to advertising LED pattern
-    }
-    
     // Read sensor data directly (polling-based instead of interrupt-driven)
-    updateBNO085();
+    imu.update();;
     
-    // Send quaternion report if connected
+    // Send data if connected
     if (deviceConnected) {
+        // Rate limit data transmission to prevent overwhelming BLE connection
+        static unsigned long lastTransmission = 0;
+        const unsigned long TRANSMISSION_INTERVAL = 20; // 50Hz max (20ms interval) for stability
+        
+        if (millis() - lastTransmission < TRANSMISSION_INTERVAL) {
+            // Skip this transmission cycle to maintain stable rate
+            delay(1); // Small delay to prevent busy waiting
+            return; // Early return to avoid rest of loop processing
+        }
+        
+        lastTransmission = millis();
+        
+        // Send quaternion report if connected
         sendQuaternionReport();
         
         // Add basic debug output every 30 seconds (increased from 10 seconds)
         static unsigned long lastDebugPrint = 0;
         if (millis() - lastDebugPrint >= 30000) {
             Serial.print("DEBUG: Connected="); Serial.print(deviceConnected);
-            Serial.print(", BNO085_available="); Serial.print(bno085_available);
+            Serial.print(", BNO085_available="); Serial.print(imu.isAvailable());
             Serial.print(", quaternion: W="); Serial.print(quaternion_w, 4);
             Serial.print(" X="); Serial.print(quaternion_x, 4);
             Serial.print(" Y="); Serial.print(quaternion_y, 4);
@@ -1134,13 +702,6 @@ void loop() {
             Serial.println("DEBUG: Not connected, waiting for client...");
             lastDebugPrint = millis();
         }
-    }
-    
-    // Read switch states (optimized - read every 50ms instead of every 1ms)
-    static unsigned long lastSwitchRead = 0;
-    if (millis() - lastSwitchRead >= 50) { // Read every 50ms instead of every 1ms
-        readSwitches();
-        lastSwitchRead = millis();
     }
     
     // Only restart advertising if truly disconnected and not advertising
@@ -1159,90 +720,6 @@ void loop() {
             Serial.println("Restarting advertising to reconnect...");
             NimBLEDevice::startAdvertising();
             lastAdvertisingRestart = millis();
-        }
-    }
-}
-
-// Function to convert quaternion to euler angles
-void quaternionToEuler() {
-    float sqr = sq(quaternion_w);
-    float sqi = sq(quaternion_x);
-    float sqj = sq(quaternion_y);
-    float sqk = sq(quaternion_z);
-
-    ypr.yaw = asin(-2.0 * (quaternion_x * quaternion_z - quaternion_y * quaternion_w) /
-                     (sqi + sqj + sqk + sqr));
-    ypr.pitch = atan2(2.0 * (quaternion_x * quaternion_y + quaternion_z * quaternion_w),
-                    (sqi - sqj - sqk + sqr));
-    ypr.roll = atan2(2.0 * (quaternion_y * quaternion_z + quaternion_x * quaternion_w),
-                     (-sqi - sqj + sqk + sqr));
-
-    // Convert to degrees
-    ypr.yaw = ypr.yaw * RAD_TO_DEG;
-    ypr.pitch = ypr.pitch * RAD_TO_DEG;
-    ypr.roll = ypr.roll * RAD_TO_DEG;
-}
-
-// Function to update BNO085 sensor data
-void updateBNO085() {
-    // Don't try to update if BNO085 is not available
-    if (!bno085_available) {
-        return;
-    }
-    
-    static unsigned long lastPrint = 0;
-    const unsigned long PRINT_INTERVAL = 2000; // Print every 2 seconds (increased from 500ms)
-
-    if (bno08x.wasReset()) {
-        Serial.println("BNO085 was reset");
-        setReports();
-    }
-    
-    if (bno08x.getSensorEvent(&sensorValue)) {
-        switch (sensorValue.sensorId) {
-            case SH2_GAME_ROTATION_VECTOR:
-                quaternion_x = sensorValue.un.gameRotationVector.i;
-                quaternion_y = sensorValue.un.gameRotationVector.j;
-                quaternion_z = sensorValue.un.gameRotationVector.k;
-                quaternion_w = sensorValue.un.gameRotationVector.real;
-                break;
-
-            case SH2_TAP_DETECTOR: {
-                uint8_t f = sensorValue.un.tapDetector.flags;
-                bool isDouble = f & TAPDET_DOUBLE;
-                Serial.print(isDouble ? "Double" : "Single");
-                Serial.print(" tap detected on ");
-                if      (f & TAPDET_X)     Serial.println("-X side");
-                else if (f & TAPDET_X_POS) Serial.println("+X side");
-                else if (f & TAPDET_Y)     Serial.println("-Y side");
-                else if (f & TAPDET_Y_POS) Serial.println("+Y side");
-                else if (f & TAPDET_Z)     Serial.println("-Z side");
-                else if (f & TAPDET_Z_POS) Serial.println("+Z side");
-                else                       Serial.println("unknown side");
-
-                if (isDouble) {
-                    Serial.println("Double tap detected");
-                    bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 0);
-                    bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 5000);
-                }
-                break;
-            }
-        }
-
-        // Print quaternion values every PRINT_INTERVAL milliseconds
-        if (millis() - lastPrint >= PRINT_INTERVAL) {
-            Serial.print("Quaternion - X: "); Serial.print(quaternion_x, 4);
-            Serial.print(" Y: "); Serial.print(quaternion_y, 4);
-            Serial.print(" Z: "); Serial.print(quaternion_z, 4);
-            Serial.print(" W: "); Serial.print(quaternion_w, 4);
-            
-            // Also show magnitude to verify it's normalized (should be ~1.0)
-            float magnitude = sqrt(quaternion_x*quaternion_x + quaternion_y*quaternion_y + 
-                                 quaternion_z*quaternion_z + quaternion_w*quaternion_w);
-            Serial.print(" |Mag: "); Serial.print(magnitude, 4);
-            Serial.println("|");
-            
-            lastPrint = millis();
         }
     }
 }
