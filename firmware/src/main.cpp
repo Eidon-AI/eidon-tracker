@@ -6,6 +6,7 @@
 #include <NimBLECharacteristic.h>
 #include "BNO085.h"
 #include "BLE_Callbacks.h"
+#include "HID_Descriptor.h"
 
 // Function declarations
 void sendQuaternionReport();
@@ -38,62 +39,8 @@ struct QuaternionData {
 
 QuaternionData gattQuaternionData;
 
-/* One top-level application collection, Usage = Orientation                */
-/*  ├─ Input  (Quaternion + 2 switch bits)                                  */
-/*  ├─ Output (Vendor byte)                                                 */
-/*  └─ Feature(RGB)                                                         */
-
-const uint8_t hid_report_descriptor[] = {
-
-  /* -----------------------------------------------------------------------
-   * Top-level collection : sensor orientation + vendor channel, ID = 1
-   * ---------------------------------------------------------------------*/
-  0x05, 0x20,             /* UsagePage (Sensor)                    */
-  0x09, 0x80,             /* Usage     (Orientation)               */
-  0xA1, 0x01,             /* Collection (Application)              */
-
-    0x85, 0x01,           /*   Report ID (1)                       */
-
-    /* --- quaternion : 4 × 16-bit -------------------------------------- */
-    0x0A, 0x83, 0x04,     /*   Usage 0x0483 – Quaternion           */
-    0x75, 0x10,           /*   ReportSize 16                       */
-    0x95, 0x04,           /*   ReportCount 4                       */
-    0x17, 0x00,0x00,0x00,0x00, /* Logical Min 0                    */
-    0x27, 0xFF,0xFF,0x00,0x00, /* Logical Max 65535                */
-    0x81, 0x02,           /*   Input (Data,Var,Abs)                */
-
-    /* --- two switch bits on the Button page --------------------------- */
-    0x05, 0x09,           /*   UsagePage (Button)                  */
-    0x19, 0x01, 0x29, 0x02, /* Usage Min/Max (Button 1-2)         */
-    0x95, 0x02, 0x75, 0x01, /* ReportCount 2, ReportSize 1        */
-    0x15, 0x00, 0x25, 0x01, /* Logical 0-1                        */
-    0x81, 0x02,           /*   Input (Data,Var,Abs)                */
-
-    /* --- six padding bits --------------------------------------------- */
-    0x95, 0x06, 0x75, 0x01,
-    0x81, 0x03,           /*   Input (Cnst,Var,Abs)                */
-
-    /* ------------------------------------------------------------------
-     * Vendor-defined channel : Output (1 byte)
-     * ---------------------------------------------------------------- */
-    0x06, 0x00, 0xFF,     /*   UsagePage (Vendor 0xFF00)           */
-    0x09, 0x01,           /*   Usage      (Vendor 1)               */
-    0x15, 0x00, 0x26, 0xFF, 0x00,   /* Logical 0-255               */
-    0x75, 0x08, 0x95, 0x01,         /* ReportSize 8, Count 1       */
-    0x91, 0x02,           /*   Output (Data,Var,Abs)               */
-
-    /* ------------------------------------------------------------------
-     * Vendor-defined Feature report : saved RGB (3 bytes)
-     * ---------------------------------------------------------------- */
-    0x09, 0x02,           /*   Usage (Vendor 2)                    */
-    0x95, 0x03,           /*   ReportCount 3                       */
-    0xB1, 0x02,           /*   Feature (Data,Var,Abs)              */
-
-  0xC0                  /* End Collection                         */
-};
-
-// HID report map - now 9 bytes total (8 bytes for quaternion + 1 byte for switch states)
-uint8_t report_data[9] = {0};
+// HID report map - now 8 bytes total (8 bytes for quaternion, no switch states)
+uint8_t report_data[8] = {0};
 
 // Add output report buffer
 uint8_t output_report[1] = {0};
@@ -260,7 +207,6 @@ void sendQuaternionReport() {
             report_data[5] = (z >> 8) & 0xFF;
             report_data[6] = w & 0xFF;
             report_data[7] = (w >> 8) & 0xFF;
-            report_data[8] = 0; // No switch states
             
             // Send HID report with error handling
             if (inputReport != nullptr) {
@@ -324,7 +270,6 @@ void sendQuaternionReport() {
         } else {
             // Send zero quaternion when BNO085 is not available
             memset(report_data, 0, sizeof(report_data));
-            report_data[8] = 0; // No switch states
             
             if (inputReport != nullptr) {
                 inputReport->setValue(report_data, sizeof(report_data));
@@ -417,7 +362,7 @@ void setup() {
     hid->setManufacturer("Eidon AI");
     hid->setPnp(0x02, VENDOR_ID, PRODUCT_ID, 0x0110);
     hid->setHidInfo(0x00, 0x01);
-    hid->setReportMap((uint8_t*)hid_report_descriptor, sizeof(hid_report_descriptor));
+    hid->setReportMap((uint8_t*)hid_report_descriptor, hid_report_descriptor_size);
     
     // Start HID services
     hid->startServices();
