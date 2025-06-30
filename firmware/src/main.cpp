@@ -135,8 +135,12 @@ const unsigned long UPDATE_INTERVAL = 1;
 unsigned long lastUpdate = 0;
 
 // Add rate limiting for BLE notifications
-const unsigned long BLE_NOTIFICATION_INTERVAL = 50; // Send every 50ms (20Hz) instead of every 1ms
+const unsigned long BLE_NOTIFICATION_INTERVAL = 20; // Send every 20ms (50Hz) for stability instead of 10ms
 unsigned long lastNotificationTime = 0;
+
+// Add transmission rate limiting for main loop
+const unsigned long TRANSMISSION_INTERVAL = 20; // 50Hz max (20ms interval) for stability
+unsigned long lastTransmission = 0;
 
 // Track subscription status
 bool quaternionSubscribed = false;
@@ -151,8 +155,8 @@ bool quaternionSubscribed = false;
 bool isLeft = false;
 bool isUpper = false;
 
-// LED pin
-#define LED_PIN 5
+// LED pin - changed from 5 to 2 to avoid conflict with switch pin
+#define LED_PIN 2
 
 // LED status variables
 unsigned long ledLastUpdate = 0;
@@ -181,14 +185,6 @@ volatile bool sensorDataReady = false;
 // BLE connection state variables (moved up for LED functions)
 bool deviceConnected = false;
 bool oldDeviceConnected = false;
-
-// Add connection attempt tracking
-static unsigned long connectionAttempts = 0;
-static unsigned long lastConnectionCheck = 0;
-
-// Add more robust connection state tracking
-static unsigned long lastConnectionStateCheck = 0;
-const unsigned long CONNECTION_CHECK_INTERVAL = 100; // Check every 100ms instead of 5 seconds
 
 // Interrupt service routine
 void IRAM_ATTR sensorISR() {
@@ -229,14 +225,13 @@ void updateLEDStatus() {
         return;
     }
     
-    // Only handle advertising when not connected
+    // Only handle advertising when not connected - simplified and less frequent
     if (currentLEDPattern == LED_ADVERTISING) {
-        // Strobing brightness pattern (sine wave)
-        if (currentTime - ledLastUpdate >= 20) { // Update every 20ms for smooth animation
+        // Simple blinking pattern instead of complex sine wave
+        if (currentTime - ledLastUpdate >= 100) { // Update every 100ms instead of 20ms
             ledLastUpdate = currentTime;
-            // Create a sine wave brightness pattern (0-255)
-            ledBrightness = 128 + 127 * sin(currentTime / 500.0);
-            analogWrite(LED_PIN, ledBrightness);
+            ledState = !ledState;
+            digitalWrite(LED_PIN, ledState ? HIGH : LOW);
         }
     }
 }
@@ -271,6 +266,18 @@ class ServerCallbacks : public NimBLEServerCallbacks {
         Serial.println("Connection established successfully");
         Serial.println("CALLBACK: onConnect fired!");
         deviceConnected = true;
+        
+        // Stop advertising when connected to prevent conflicts
+        if (NimBLEDevice::getAdvertising()->isAdvertising()) {
+            Serial.println("Stopping advertising after connection");
+            NimBLEDevice::getAdvertising()->stop();
+        }
+        
+        // Request stable connection parameters to prevent disconnections
+        NimBLEConnInfo connInfo = pServer->getPeerInfo(0);
+        Serial.println("Requesting stable connection parameters...");
+        // Use conservative parameters: 12-24ms interval, latency 0, timeout 400ms
+        pServer->updateConnParams(connInfo.getConnHandle(), 12, 24, 0, 400);
     };
 
     void onDisconnect(NimBLEServer* pServer) {
@@ -283,6 +290,28 @@ class ServerCallbacks : public NimBLEServerCallbacks {
     void onMTUChange(uint16_t MTU, ble_gap_conn_desc* desc) {
         Serial.print("MTU changed to: ");
         Serial.println(MTU);
+    }
+    
+    // Security callbacks moved to ServerCallbacks in NimBLE 2.0+
+    void onPassKeyDisplay(uint32_t pass_key) {
+        Serial.print("Passkey Display: ");
+        Serial.println(pass_key);
+    }
+
+    void onAuthenticationComplete(NimBLEConnInfo& connInfo) {
+        Serial.println("Authentication Complete");
+        Serial.print("Secure: ");
+        Serial.println(connInfo.isEncrypted() ? "Yes" : "No");
+        
+        // Print connection parameters for debugging
+        Serial.print("Connection interval: ");
+        Serial.print(connInfo.getConnInterval() * 1.25);
+        Serial.println("ms");
+        Serial.print("Connection latency: ");
+        Serial.println(connInfo.getConnLatency());
+        Serial.print("Supervision timeout: ");
+        Serial.print(connInfo.getConnTimeout() * 10);
+        Serial.println("ms");
     }
 };
 
@@ -416,9 +445,22 @@ class QuaternionCharCallbacks : public NimBLECharacteristicCallbacks {
 };
 
 void setReports() {
-    // Enable game rotation vector at maximum rate (1000 Hz)
-    if (!bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 1000)) {
-        Serial.println("Could not enable rotation vector");
+    // Use GAME_ROTATION_VECTOR for fast quaternion updates (no magnetic north reference)
+    // Reduce to 50Hz (20ms) for stability - prevents overwhelming I2C and BLE
+    if (!bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 20000)) { // 20ms (50Hz) - stable rate
+        Serial.println("Could not enable rotation vector at 50Hz, trying 100Hz...");
+        if (!bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 10000)) { // 10ms (100Hz) fallback
+            Serial.println("Could not enable rotation vector at 100Hz, trying 200Hz...");
+            if (!bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 5000)) { // 5ms (200Hz) fallback
+                Serial.println("Could not enable rotation vector");
+            } else {
+                Serial.println("Game rotation vector enabled at 200Hz");
+            }
+        } else {
+            Serial.println("Game rotation vector enabled at 100Hz");
+        }
+    } else {
+        Serial.println("Game rotation vector enabled at 50Hz (stable rate)");
     }
 
     // Enable Tap Detector (event-driven, report interval 0)
@@ -512,7 +554,7 @@ bool initIMU() {
     // Initialize I2C with explicit pins for ESP32-C6
     Wire.setPins(I2C_SDA, I2C_SCL);
     Wire.begin();
-    Wire.setClock(100000); // Set to 100kHz for better reliability
+    Wire.setClock(400000); // Set to 400kHz (standard fast mode) for stability
     
     Serial.println("I2C initialized, testing basic communication...");
     
@@ -654,10 +696,7 @@ bool isBNO085Available() {
 
 // Function to get current BLE connection state (similar to Bluefruit.connected())
 bool isConnected() {
-    if (pServer != nullptr) {
-        return (pServer->getConnectedCount() > 0);
-    }
-    return deviceConnected; // Fallback to tracked state
+    return deviceConnected; // Simple state tracking like reference code
 }
 
 void updateOrientation() {
@@ -705,6 +744,15 @@ void updateOrientation() {
 }
 
 void sendQuaternionReport() {
+    // Rate limit data transmission to prevent overwhelming BLE connection
+    unsigned long currentTime = millis();
+    if (currentTime - lastTransmission < TRANSMISSION_INTERVAL) {
+        // Skip this transmission cycle to maintain stable rate
+        delay(1); // Small delay to prevent busy waiting
+        return; // Early return to avoid rest of function processing
+    }
+    lastTransmission = currentTime;
+    
     // Apply 180-degree rotation around Z-axis to correct for IMU mounting
     float qw_sensor = quaternion_w;
     float qx_sensor = quaternion_x;
@@ -743,10 +791,31 @@ void sendQuaternionReport() {
             report_data[7] = (w >> 8) & 0xFF;
             report_data[8] = switch_states;
             
-            // Send HID report
+            // Send HID report with error handling
             if (inputReport != nullptr) {
                 inputReport->setValue(report_data, sizeof(report_data));
-                inputReport->notify();
+                if (inputReport->notify()) {
+                    // Successful transmission
+                    static unsigned long successCount = 0;
+                    successCount++;
+                    
+                    // Print success rate occasionally
+                    static unsigned long lastSuccessReport = 0;
+                    if (millis() - lastSuccessReport >= 10000) { // Every 10 seconds instead of 5
+                        Serial.print("Successful HID transmissions: ");
+                        Serial.println(successCount);
+                        lastSuccessReport = millis();
+                    }
+                } else {
+                    // Failed to send notification
+                    Serial.println("Warning: Failed to send HID notification");
+                    static unsigned long failCount = 0;
+                    failCount++;
+                    if (failCount % 10 == 0) {
+                        Serial.print("Failed HID transmissions: ");
+                        Serial.println(failCount);
+                    }
+                }
             }
             
             // Also send via GATT service
@@ -757,16 +826,15 @@ void sendQuaternionReport() {
             gattQuaternionData.switches = switch_states;
             memset(gattQuaternionData.reserved, 0, sizeof(gattQuaternionData.reserved));
             
-            // Send GATT notification
+            // Send GATT notification with rate limiting
             if (quaternionChar != nullptr) {
                 // Rate limit notifications to prevent overwhelming the BLE stack
-                unsigned long currentTime = millis();
                 if (currentTime - lastNotificationTime >= BLE_NOTIFICATION_INTERVAL) {
                     bool notifyResult = quaternionChar->notify((uint8_t*)&gattQuaternionData, sizeof(gattQuaternionData));
                     lastNotificationTime = currentTime;
                     
                     static unsigned long lastDebugPrint = 0;
-                    if (currentTime - lastDebugPrint >= 1000) { // Print every second
+                    if (currentTime - lastDebugPrint >= 10000) { // Print every 10 seconds (increased from 5 seconds)
                         Serial.print("GATT: Quaternion notification sent, result=");
                         Serial.print(notifyResult);
                         Serial.print(", subscribed="); Serial.print(quaternionSubscribed ? "YES" : "NO");
@@ -774,8 +842,6 @@ void sendQuaternionReport() {
                         Serial.print(" X="); Serial.print(corrected_x, 4);
                         Serial.print(" Y="); Serial.print(corrected_y, 4);
                         Serial.print(" Z="); Serial.print(corrected_z, 4);
-                        Serial.print(" switches=0x"); Serial.print(switch_states, HEX);
-                        Serial.print(", data_size="); Serial.print(sizeof(gattQuaternionData));
                         Serial.println();
                         lastDebugPrint = currentTime;
                     }
@@ -804,7 +870,7 @@ void sendQuaternionReport() {
             if (quaternionChar != nullptr) {
                 quaternionChar->notify((uint8_t*)&gattQuaternionData, sizeof(gattQuaternionData));
                 static unsigned long lastDebugPrint = 0;
-                if (millis() - lastDebugPrint >= 1000) {
+                if (millis() - lastDebugPrint >= 5000) { // Increased from 1 second
                     Serial.println("GATT: Sent zero quaternion (BNO085 not available)");
                     lastDebugPrint = millis();
                 }
@@ -880,6 +946,13 @@ void setup() {
     
     Serial.print("Advertising as: ");
     Serial.println(deviceName.c_str());
+    
+    // Configure security for reliable pairing - simplified for NimBLE 2.0+
+    NimBLEDevice::setSecurityAuth(true, true, true);
+    NimBLEDevice::setSecurityIOCap(BLE_HS_IO_NO_INPUT_OUTPUT);
+    
+    // Set consistent power level
+    NimBLEDevice::setPower(9); // Use integer value instead of ESP_PWR_LVL_P9
     
     // Create server
     pServer = NimBLEDevice::createServer();
@@ -973,6 +1046,10 @@ void setup() {
     pAdvertising->addServiceUUID(eidonService->getUUID());
     Serial.println("GATT: Added services to advertising");
     
+    // Set conservative advertising intervals for stable connection
+    pAdvertising->setMinInterval(160);  // 100ms minimum (more conservative)
+    pAdvertising->setMaxInterval(320);  // 200ms maximum (more conservative)
+    
     // Create scan response data
     NimBLEAdvertisementData scanResponse;
     scanResponse.setName(deviceName);
@@ -1000,80 +1077,34 @@ void loop() {
     // Update LED status first
     updateLEDStatus();
     
-    // Add BLE stack debugging every 2 seconds
-    static unsigned long lastBleDebug = 0;
-    if (millis() - lastBleDebug >= 2000) {
-        Serial.print("BLE DEBUG: deviceConnected="); Serial.print(deviceConnected);
-        Serial.print(", isConnected()="); Serial.print(isConnected());
-        Serial.print(", oldDeviceConnected="); Serial.print(oldDeviceConnected);
-        Serial.print(", advertising="); Serial.print(NimBLEDevice::getAdvertising()->isAdvertising());
-        Serial.print(", server="); Serial.print(pServer != nullptr ? "OK" : "NULL");
-        Serial.print(", eidonService="); Serial.print(eidonService != nullptr ? "OK" : "NULL");
-        Serial.print(", quaternionChar="); Serial.print(quaternionChar != nullptr ? "OK" : "NULL");
-        Serial.print(", connectionAttempts="); Serial.print(connectionAttempts);
-        Serial.println();
-        lastBleDebug = millis();
-    }
-    
-    // Check for connection attempts (simple heuristic)
-    if (!deviceConnected && millis() - lastConnectionCheck >= 1000) {
-        // If advertising stops briefly, it might be a connection attempt
-        static bool wasAdvertising = true;
-        bool isAdvertising = NimBLEDevice::getAdvertising()->isAdvertising();
-        
-        if (wasAdvertising && !isAdvertising) {
-            connectionAttempts++;
-            Serial.print("BLE: Possible connection attempt detected! #");
-            Serial.println(connectionAttempts);
-        }
-        wasAdvertising = isAdvertising;
-        lastConnectionCheck = millis();
-    }
-    
-    // Robust connection state checking - handle NimBLE callback issues
-    if (millis() - lastConnectionStateCheck >= CONNECTION_CHECK_INTERVAL) {
-        lastConnectionStateCheck = millis();
-        
-        // Get actual connection state from server
-        bool serverHasConnections = false;
-        if (pServer != nullptr) {
-            serverHasConnections = (pServer->getConnectedCount() > 0);
-        }
-        
-        // Update deviceConnected state based on server state
-        if (serverHasConnections != deviceConnected) {
-            if (serverHasConnections && !deviceConnected) {
-                // Connection established but callback didn't fire
-                Serial.println("BLE: Connection detected via server state check");
-                Serial.println("BLE: NimBLE callback issue detected - connection established");
-                deviceConnected = true;
-                oldDeviceConnected = false; // Force connection change detection
-            } else if (!serverHasConnections && deviceConnected) {
-                // Disconnection detected
-                Serial.println("BLE: Disconnection detected via server state check");
-                deviceConnected = false;
-                oldDeviceConnected = true; // Force disconnection change detection
-            }
+    // Simplified connection state management for maximum performance (like reference code)
+    bool actuallyConnected = (pServer->getConnectedCount() > 0);
+    if (actuallyConnected != deviceConnected) {
+        deviceConnected = actuallyConnected;
+        // Minimal logging to avoid delays
+        if (deviceConnected) {
+            Serial.println("Connected - starting to send data");
+        } else {
+            Serial.println("Disconnected - restarting advertising");
+            NimBLEDevice::startAdvertising();
         }
     }
     
-    // Handle connection state changes
-    if (isConnected() && !oldDeviceConnected) {
-        Serial.println("Connected - starting to send data");
-        oldDeviceConnected = true;
+    // Handle connection state changes (simplified)
+    if (deviceConnected && !oldDeviceConnected) {
+        // Just connected
+        oldDeviceConnected = deviceConnected;
         
         // Force reset LED state and start fresh pattern
         digitalWrite(LED_PIN, LOW);  // Start with LED OFF
         ledState = false;
         ledLastUpdate = 0; // Force immediate update
         currentLEDPattern = LED_CONNECTED;
-        Serial.println("Switching to CONNECTED LED pattern - should flash dimmed");
     }
     
-    if (!isConnected() && oldDeviceConnected) {
-        Serial.println("Disconnected - restarting advertising");
-        NimBLEDevice::startAdvertising();
-        oldDeviceConnected = false;
+    if (!deviceConnected && oldDeviceConnected) {
+        // Just disconnected
+        oldDeviceConnected = deviceConnected;
         currentLEDPattern = LED_ADVERTISING; // Switch to advertising LED pattern
     }
     
@@ -1081,15 +1112,14 @@ void loop() {
     updateBNO085();
     
     // Send quaternion report if connected
-    if (isConnected()) {
+    if (deviceConnected) {
         sendQuaternionReport();
         
-        // Add basic debug output every 2 seconds
+        // Add basic debug output every 30 seconds (increased from 10 seconds)
         static unsigned long lastDebugPrint = 0;
-        if (millis() - lastDebugPrint >= 2000) {
-            Serial.print("DEBUG: Connected="); Serial.print(isConnected());
+        if (millis() - lastDebugPrint >= 30000) {
+            Serial.print("DEBUG: Connected="); Serial.print(deviceConnected);
             Serial.print(", BNO085_available="); Serial.print(bno085_available);
-            Serial.print(", quaternionChar="); Serial.print(quaternionChar != nullptr ? "OK" : "NULL");
             Serial.print(", quaternion: W="); Serial.print(quaternion_w, 4);
             Serial.print(" X="); Serial.print(quaternion_x, 4);
             Serial.print(" Y="); Serial.print(quaternion_y, 4);
@@ -1098,19 +1128,39 @@ void loop() {
             lastDebugPrint = millis();
         }
     } else {
-        // Add debug output when not connected
+        // Add debug output when not connected - every 60 seconds (increased from 30 seconds)
         static unsigned long lastDebugPrint = 0;
-        if (millis() - lastDebugPrint >= 5000) { // Every 5 seconds when not connected
+        if (millis() - lastDebugPrint >= 60000) {
             Serial.println("DEBUG: Not connected, waiting for client...");
             lastDebugPrint = millis();
         }
     }
     
-    // Read switch states
-    readSwitches();
+    // Read switch states (optimized - read every 50ms instead of every 1ms)
+    static unsigned long lastSwitchRead = 0;
+    if (millis() - lastSwitchRead >= 50) { // Read every 50ms instead of every 1ms
+        readSwitches();
+        lastSwitchRead = millis();
+    }
     
-    // Small delay
-    delay(1);
+    // Only restart advertising if truly disconnected and not advertising
+    // Add some debugging and rate limiting to prevent spam
+    static unsigned long lastAdvertisingCheck = 0;
+    static unsigned long lastAdvertisingRestart = 0;
+    const unsigned long ADVERTISING_CHECK_INTERVAL = 1000; // Check every 1 second
+    const unsigned long ADVERTISING_RESTART_COOLDOWN = 5000; // Wait 5 seconds between restarts
+    
+    if (!deviceConnected && (millis() - lastAdvertisingCheck > ADVERTISING_CHECK_INTERVAL)) {
+        lastAdvertisingCheck = millis();
+        
+        bool isCurrentlyAdvertising = NimBLEDevice::getAdvertising()->isAdvertising();
+        
+        if (!isCurrentlyAdvertising && (millis() - lastAdvertisingRestart > ADVERTISING_RESTART_COOLDOWN)) {
+            Serial.println("Restarting advertising to reconnect...");
+            NimBLEDevice::startAdvertising();
+            lastAdvertisingRestart = millis();
+        }
+    }
 }
 
 // Function to convert quaternion to euler angles
@@ -1141,7 +1191,7 @@ void updateBNO085() {
     }
     
     static unsigned long lastPrint = 0;
-    const unsigned long PRINT_INTERVAL = 500; // Print every 500ms
+    const unsigned long PRINT_INTERVAL = 2000; // Print every 2 seconds (increased from 500ms)
 
     if (bno08x.wasReset()) {
         Serial.println("BNO085 was reset");
