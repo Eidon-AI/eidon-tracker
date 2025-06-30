@@ -5,8 +5,9 @@
 #include <NimBLEHIDDevice.h>
 #include <NimBLECharacteristic.h>
 #include "BNO085.h"
-#include "BLE_Callbacks.h"
-#include "HID_Descriptor.h"
+#include "BLE_Services/BLE_Callbacks.h"
+#include "BLE_Services/HID_Descriptor.h"
+#include "DeviceConfig.h"
 
 // Function declarations
 void sendQuaternionReport();
@@ -298,24 +299,22 @@ void sendQuaternionReport() {
     }
 }
 
-// Helper to generate unique BLE name
-static std::string generateUniqueName() {
-    NimBLEAddress addr = NimBLEDevice::getAddress();
-    std::string mac = addr.toString();
-    std::string suffix;
-    for (int i = mac.size() - 2; i >= 0 && suffix.size() < 4; --i) {
-        if (mac[i] != ':') suffix.insert(suffix.begin(), (char)toupper(mac[i]));
-    }
-    char name[32];
-    snprintf(name, sizeof(name), "Eidon Tracker-%s", suffix.c_str());
-    return std::string(name);
-}
-
 void setup() {
     Serial.begin(115200);
     delay(1000);
     
     Serial.println("\n\n----- Eidon Tracker Starting -----");
+    
+    // Initialize device configuration first
+    if (!deviceConfig.begin()) {
+        Serial.println("Failed to initialize device configuration!");
+        while (1) {
+            digitalWrite(LED_PIN, HIGH);
+            delay(100);
+            digitalWrite(LED_PIN, LOW);
+            delay(100);
+        }
+    }
     
     // Setup LED pin
     pinMode(LED_PIN, OUTPUT);
@@ -334,9 +333,9 @@ void setup() {
     // Initialize Bluetooth
     NimBLEDevice::init("");
     
-    // Generate unique device name
-    std::string deviceName = generateUniqueName();
-    NimBLEDevice::setDeviceName(deviceName);
+    // Generate unique device name based on role
+    String deviceName = deviceConfig.generateDeviceName();
+    NimBLEDevice::setDeviceName(deviceName.c_str());
     
     Serial.print("Advertising as: ");
     Serial.println(deviceName.c_str());
@@ -396,12 +395,13 @@ void setup() {
     );
     Serial.println("GATT: Device Info characteristic created");
     
-    // Set initial device info
+    // Set device info
     uint8_t deviceInfo[8] = {
         0x01, 0x00,  // Device ID
         0x01, 0x02,  // Firmware version 1.2
         100,         // Battery level
-        0, 0, 0      // Reserved
+        (uint8_t)deviceConfig.getRole(),  // Device role
+        0, 0          // Reserved
     };
     deviceInfoChar->setValue(deviceInfo, sizeof(deviceInfo));
     
@@ -422,7 +422,7 @@ void setup() {
     
     // Create scan response data
     NimBLEAdvertisementData scanResponse;
-    scanResponse.setName(deviceName);
+    scanResponse.setName(deviceName.c_str());
     pAdvertising->setScanResponseData(scanResponse);
     Serial.println("GATT: Scan response configured");
     
@@ -485,6 +485,9 @@ void loop() {
         if (millis() - lastDebugPrint >= 30000) {
             Serial.print("DEBUG: Connected="); Serial.print(deviceConnected);
             Serial.print(", BNO085_available="); Serial.print(imu.isAvailable());
+            Serial.print(", Role="); Serial.print(deviceConfig.getRoleName(deviceConfig.getRole()));
+            Serial.print(", Role_Assigned="); Serial.print(deviceConfig.isRoleAssigned() ? "YES" : "NO");
+            Serial.print(", Mode="); Serial.print(deviceConfig.isHubMode() ? "HUB" : "NODE");
             Serial.print(", quaternion: W="); Serial.print(quaternion_w, 4);
             Serial.print(" X="); Serial.print(quaternion_x, 4);
             Serial.print(" Y="); Serial.print(quaternion_y, 4);
@@ -496,7 +499,12 @@ void loop() {
         // Add debug output when not connected - every 60 seconds (increased from 30 seconds)
         static unsigned long lastDebugPrint = 0;
         if (millis() - lastDebugPrint >= 60000) {
-            Serial.println("DEBUG: Not connected, waiting for client...");
+            Serial.print("DEBUG: Not connected, waiting for client... Role: ");
+            Serial.print(deviceConfig.getRoleName(deviceConfig.getRole()));
+            Serial.print(", Assigned: ");
+            Serial.print(deviceConfig.isRoleAssigned() ? "YES" : "NO");
+            Serial.print(", Mode: ");
+            Serial.println(deviceConfig.isHubMode() ? "HUB" : "NODE");
             lastDebugPrint = millis();
         }
     }
