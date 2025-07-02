@@ -7,6 +7,8 @@
 #include "BNO085.h"
 #include "BLE_Services/BLE_Callbacks.h"
 #include "BLE_Services/HID_Descriptor.h"
+#include "BLE_Services/RoleConfig_Service.h"
+#include "BLE_Services/BLE_Polling_Service.h"
 #include "DeviceConfig.h"
 
 // Function declarations
@@ -14,6 +16,20 @@ void sendQuaternionReport();
 void updateLEDStatus();
 void startIMUResetPattern();
 bool isConnected();
+
+// Polling system functions (implemented in BLE_Polling_Service.cpp)
+void setupPollingSystem();
+void handleRoleChange(const std::string& value, bool success);
+
+// Polling manager instance (defined in BLE_Polling_Service.h)
+extern BLEPollingManager pollingManager;
+
+// Static callback instances to prevent memory deallocation issues
+static ServerCallbacks serverCallbacksInstance;
+static OutputReportCallbacks outputReportCallbacksInstance;
+static QuaternionCharCallbacks quaternionCallbacksInstance;
+static CalibrationCallbacks calibrationCallbacksInstance;
+// RoleConfig callbacks removed - using polling instead
 
 // BNO085 IMU instance
 BNO085 imu;
@@ -340,22 +356,22 @@ void setup() {
     Serial.print("Advertising as: ");
     Serial.println(deviceName.c_str());
     
-    // Configure security for reliable pairing - simplified for NimBLE 2.0+
-    NimBLEDevice::setSecurityAuth(true, true, true);
-    NimBLEDevice::setSecurityIOCap(BLE_HS_IO_NO_INPUT_OUTPUT);
+    // Enable proper security to fix write callbacks on encrypted connections
+    NimBLEDevice::setSecurityAuth(true, true, true);  // Enable authentication, encryption, and authorization
+    NimBLEDevice::setSecurityIOCap(BLE_HS_IO_NO_INPUT_OUTPUT);  // No input/output - Just Works pairing, no prompt
     
     // Set consistent power level
     NimBLEDevice::setPower(9); // Use integer value instead of ESP_PWR_LVL_P9
     
     // Create server
     pServer = NimBLEDevice::createServer();
-    pServer->setCallbacks(new ServerCallbacks());
+    pServer->setCallbacks(&serverCallbacksInstance);
     
     // Create HID device
     hid = new NimBLEHIDDevice(pServer);
     inputReport = hid->getInputReport(1);
     outputReport = hid->getOutputReport(1);
-    outputReport->setCallbacks(new OutputReportCallbacks());
+    outputReport->setCallbacks(&outputReportCallbacksInstance);
     
     // Configure HID device
     hid->setManufacturer("Eidon AI");
@@ -375,27 +391,20 @@ void setup() {
         NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
     );
     quaternionChar->setValue((uint8_t*)&gattQuaternionData, sizeof(gattQuaternionData));
-    Serial.println("GATT: Quaternion characteristic created");
-    
-    // Add callback to track subscription status
-    quaternionChar->setCallbacks(new QuaternionCharCallbacks());
+    quaternionChar->setCallbacks(&quaternionCallbacksInstance);
     
     // Configure Calibration characteristic
     calibrationChar = eidonService->createCharacteristic(
         CALIBRATION_CHAR_UUID,
         NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE
     );
-    calibrationChar->setCallbacks(new CalibrationCallbacks());
-    Serial.println("GATT: Calibration characteristic created");
+    calibrationChar->setCallbacks(&calibrationCallbacksInstance);
     
     // Configure Device Info characteristic
     deviceInfoChar = eidonService->createCharacteristic(
         DEVICE_INFO_CHAR_UUID,
         NIMBLE_PROPERTY::READ
     );
-    Serial.println("GATT: Device Info characteristic created");
-    
-    // Set device info
     uint8_t deviceInfo[8] = {
         0x01, 0x00,  // Device ID
         0x01, 0x02,  // Firmware version 1.2
@@ -407,14 +416,24 @@ void setup() {
     
     // Start custom service
     eidonService->start();
-    Serial.println("GATT: Eidon service started");
+    
+    // ---------- Role Configuration Service Setup -----------------------------
+    createRoleConfigService(pServer);
+    
+    // ---------- BLE Polling System Setup -----------------------------
+    setupPollingSystem();
+
+    // Add Role target to polling system
+    pollingManager.addTarget(roleConfigChar, 200, handleRoleChange, "Role");
+    
+    Serial.println("BLE Polling System setup complete");
     
     // Configure advertising
     NimBLEAdvertising* pAdvertising = NimBLEDevice::getAdvertising();
     pAdvertising->setAppearance(HID_GAMEPAD);
     pAdvertising->addServiceUUID(hid->getHidService()->getUUID());
     pAdvertising->addServiceUUID(eidonService->getUUID());
-    Serial.println("GATT: Added services to advertising");
+    pAdvertising->addServiceUUID(roleConfigService->getUUID());
     
     // Set conservative advertising intervals for stable connection
     pAdvertising->setMinInterval(160);  // 100ms minimum (more conservative)
@@ -424,17 +443,9 @@ void setup() {
     NimBLEAdvertisementData scanResponse;
     scanResponse.setName(deviceName.c_str());
     pAdvertising->setScanResponseData(scanResponse);
-    Serial.println("GATT: Scan response configured");
     
     // Start advertising
     pAdvertising->start();
-    Serial.println("GATT: Advertising started");
-    Serial.print("GATT: Device name: ");
-    Serial.println(deviceName.c_str());
-    Serial.print("GATT: Service UUID: ");
-    Serial.println(EIDON_SERVICE_UUID);
-    
-    Serial.println("Setup complete");
 }
 
 void loop() {
@@ -447,6 +458,7 @@ void loop() {
         deviceConnected = actuallyConnected;
         // Minimal logging to avoid delays
         if (deviceConnected) {
+            Serial.println("=== MAIN LOOP: Connection detected ===");
             Serial.println("Connected - starting to send data");
             // Force reset LED state and start fresh pattern
             digitalWrite(LED_PIN, LOW);  // Start with LED OFF
@@ -454,6 +466,7 @@ void loop() {
             ledLastUpdate = 0; // Force immediate update
             currentLEDPattern = LED_CONNECTED;
         } else {
+            Serial.println("=== MAIN LOOP: Disconnection detected ===");
             Serial.println("Disconnected - restarting advertising");
             NimBLEDevice::startAdvertising();
             currentLEDPattern = LED_ADVERTISING; // Switch to advertising LED pattern
@@ -461,7 +474,10 @@ void loop() {
     }
     
     // Read sensor data directly (polling-based instead of interrupt-driven)
-    imu.update();;
+    imu.update();
+    
+    // Update BLE polling system
+    pollingManager.update();
     
     // Send data if connected
     if (deviceConnected) {
@@ -479,22 +495,6 @@ void loop() {
         
         // Send quaternion report if connected
         sendQuaternionReport();
-        
-        // Add basic debug output every 30 seconds (increased from 10 seconds)
-        static unsigned long lastDebugPrint = 0;
-        if (millis() - lastDebugPrint >= 30000) {
-            Serial.print("DEBUG: Connected="); Serial.print(deviceConnected);
-            Serial.print(", BNO085_available="); Serial.print(imu.isAvailable());
-            Serial.print(", Role="); Serial.print(deviceConfig.getRoleName(deviceConfig.getRole()));
-            Serial.print(", Role_Assigned="); Serial.print(deviceConfig.isRoleAssigned() ? "YES" : "NO");
-            Serial.print(", Mode="); Serial.print(deviceConfig.isHubMode() ? "HUB" : "NODE");
-            Serial.print(", quaternion: W="); Serial.print(quaternion_w, 4);
-            Serial.print(" X="); Serial.print(quaternion_x, 4);
-            Serial.print(" Y="); Serial.print(quaternion_y, 4);
-            Serial.print(" Z="); Serial.print(quaternion_z, 4);
-            Serial.println();
-            lastDebugPrint = millis();
-        }
     } else {
         // Add debug output when not connected - every 60 seconds (increased from 30 seconds)
         static unsigned long lastDebugPrint = 0;

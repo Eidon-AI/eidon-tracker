@@ -29,17 +29,20 @@ public:
 // GATT Calibration characteristic write callback
 class CalibrationCallbacks : public NimBLECharacteristicCallbacks {
 public:
-    void onWrite(NimBLECharacteristic* chr);
+    void onWrite(NimBLECharacteristic* pChar, const std::string& value);
 };
 
 // GATT Quaternion characteristic callback
 class QuaternionCharCallbacks : public NimBLECharacteristicCallbacks {
 public:
     void onRead(NimBLECharacteristic* pChar);
-    void onWrite(NimBLECharacteristic* pChar);
+    void onWrite(NimBLECharacteristic* pChar, const std::string& value);
     void onNotify(NimBLECharacteristic* pChar);
     void onStatus(NimBLECharacteristic* pChar, int status, int code);
     void onSubscribe(NimBLECharacteristic* pChar, ble_gap_conn_desc* desc, uint16_t subValue);
 };
+
+// Role configuration polling system (no callbacks needed)
+// Polling will be implemented in main.cpp
 
 #endif // BLE_CALLBACKS_H 
