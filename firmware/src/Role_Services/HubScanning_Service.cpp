@@ -1,10 +1,8 @@
 #include "HubScanning_Service.h"
 #include <Arduino.h>
 
-// External dependencies (from main.cpp)
+// External dependencies
 extern DeviceConfig deviceConfig;
-extern ChildConnection childConnections[];
-extern int childConnectionCount;
 extern void connectToChild(const NimBLEAddress& address, DeviceRole childRole);
 
 // Global instance
@@ -93,15 +91,9 @@ bool HubScanningService::shouldScan() {
 
 // Check if we have all expected children connected
 bool HubScanningService::hasAllChildren() {
-    int connectedChildren = 0;
-    
-    for (int i = 0; i < childConnectionCount; i++) {
-        if (childConnections[i].connected) {
-            connectedChildren++;
-        }
-    }
-    
-    return (connectedChildren >= EXPECTED_CHILDREN);
+    // This will be updated to use the hub client service
+    // For now, return false to allow scanning
+    return false;
 }
 
 // Start scanning for child devices
@@ -158,13 +150,8 @@ void HubScanningService::processScanResults() {
                          deviceConfig.getRoleName(childRole));
             
             // Check if we already have this child connected
+            // This will be updated to use the hub client service
             bool alreadyConnected = false;
-            for (int j = 0; j < childConnectionCount; j++) {
-                if (childConnections[j].role == childRole && childConnections[j].connected) {
-                    alreadyConnected = true;
-                    break;
-                }
-            }
             
             if (!alreadyConnected && canAttemptConnection()) {
                 Serial.printf("HubScanning: Attempting connection to %s\n", device->getName().c_str());
