@@ -412,10 +412,14 @@ void handleRoleChange(const std::string& value, bool success) {
                 // 1. Update characteristic with full struct (state management)
                 updateRoleConfigCharacteristic();
                 
-                // 2. Provide LED feedback
+                // 2. Update advertising data with new role
+                updateAdvertisingData();
+                
+                // 3. Provide LED feedback
+                // TODO: Check LED feedback is working
                 startRoleChangeLEDPattern();
                 
-                // 3. Log final status
+                // 4. Log final status
                 Serial.print("Final status - Role: '");
                 Serial.print(deviceConfig.getRoleName(deviceConfig.getRole()));
                 Serial.print("', Assigned: ");
@@ -429,12 +433,12 @@ void handleRoleChange(const std::string& value, bool success) {
         } else {
             Serial.printf("Role Change: Invalid role value: %d\n", newRole);
         }
+    } else if (value.length() == 18) {
+        // Full struct read - this is normal, not a role change
+        // No action needed, just continue polling
     } else {
-        Serial.printf("Role Change: Unexpected value length: %d (expected 1)\n", value.length());
+        Serial.printf("Role Change: Unexpected value length: %d (expected 1 or 18)\n", value.length());
     }
-    
-    // Always validate state consistency after any role change attempt
-    validateRoleConfigState();
 }
 
 void handleCalibration(const std::string& value, bool success) {

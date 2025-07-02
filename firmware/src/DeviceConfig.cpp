@@ -185,18 +185,10 @@ String DeviceConfig::generateDeviceName() {
         }
     }
     
-    // Generate role-specific name
-    if (config.role == ROLE_UNKNOWN || !config.role_assigned) {
-        char name[32];
-        snprintf(name, sizeof(name), "Eidon-Tracker-%s", suffix.c_str());
-        return String(name);
-    } else {
-        String rolePrefix = getRoleName(config.role);
-        
-        char name[32];
-        snprintf(name, sizeof(name), "%s-Eidon-%s", rolePrefix.c_str(), suffix.c_str());
-        return String(name);
-    }
+    // Generate consistent device name (no role-based naming)
+    char name[32];
+    snprintf(name, sizeof(name), "Eidon-Tracker-%s", suffix.c_str());
+    return String(name);
 }
 
 // Global instance

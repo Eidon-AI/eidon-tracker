@@ -91,6 +91,9 @@ void handleCalibration(const std::string& value, bool success);
 void handleColorChange(const std::string& value, bool success);
 void validateRoleConfigState();
 
+// Advertising update function
+void updateAdvertisingData();
+
 // Setup function
 void setupPollingSystem();
 

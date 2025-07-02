@@ -16,6 +16,7 @@ void sendQuaternionReport();
 void updateLEDStatus();
 void startIMUResetPattern();
 bool isConnected();
+void updateAdvertisingData();
 
 // Polling system functions (implemented in BLE_Polling_Service.cpp)
 void setupPollingSystem();
@@ -184,6 +185,38 @@ NimBLECharacteristic* deviceInfoChar = nullptr;
 // Function to get current BLE connection state (similar to Bluefruit.connected())
 bool isConnected() {
     return deviceConnected; // Simple state tracking like reference code
+}
+
+// Function to update advertising data with current role information
+void updateAdvertisingData() {
+    NimBLEAdvertising* pAdvertising = NimBLEDevice::getAdvertising();
+    if (pAdvertising == nullptr) return;
+    
+    // Stop current advertising
+    pAdvertising->stop();
+    
+    // Update role information in manufacturer data
+    // Format: [Company ID Low, Company ID High, Role Data]
+    uint8_t manufacturerDataBytes[3];
+    manufacturerDataBytes[0] = VENDOR_ID & 0xFF;        // Company ID low byte (0xD0)
+    manufacturerDataBytes[1] = (VENDOR_ID >> 8) & 0xFF; // Company ID high byte (0xE1)
+    manufacturerDataBytes[2] = (uint8_t)deviceConfig.getRole(); // Role data
+    
+    NimBLEAdvertisementData manufacturerData;
+    manufacturerData.setManufacturerData(manufacturerDataBytes, 3);
+    pAdvertising->setAdvertisementData(manufacturerData);
+    
+    // Restart advertising with updated data
+    pAdvertising->start();
+    
+    Serial.printf("Advertising updated - Role: %s (0x%02X)\n", 
+                 deviceConfig.getRoleName(deviceConfig.getRole()),
+                 (uint8_t)deviceConfig.getRole());
+    Serial.print("Updated manufacturer data bytes: ");
+    for (int i = 0; i < manufacturerData.getPayload().size(); i++) {
+        Serial.printf("%02X ", manufacturerData.getPayload()[i]);
+    }
+    Serial.println();
 }
 
 void sendQuaternionReport() {
@@ -434,6 +467,28 @@ void setup() {
     pAdvertising->addServiceUUID(hid->getHidService()->getUUID());
     pAdvertising->addServiceUUID(eidonService->getUUID());
     pAdvertising->addServiceUUID(roleConfigService->getUUID());
+    
+    // Add role information to manufacturer data
+    // Format: [Company ID Low, Company ID High, Role Data]
+    uint8_t manufacturerDataBytes[3];
+    manufacturerDataBytes[0] = VENDOR_ID & 0xFF;        // Company ID low byte (0xD0)
+    manufacturerDataBytes[1] = (VENDOR_ID >> 8) & 0xFF; // Company ID high byte (0xE1)
+    manufacturerDataBytes[2] = (uint8_t)deviceConfig.getRole(); // Role data
+    
+    NimBLEAdvertisementData manufacturerData;
+    manufacturerData.setManufacturerData(manufacturerDataBytes, 3);
+    pAdvertising->setAdvertisementData(manufacturerData);
+    
+    // Debug logging for manufacturer data
+    Serial.printf("Advertising setup - Role: %s (0x%02X), Manufacturer data length: %d\n", 
+                 deviceConfig.getRoleName(deviceConfig.getRole()), 
+                 (uint8_t)deviceConfig.getRole(), 
+                 manufacturerData.getPayload().size());
+    Serial.print("Manufacturer data bytes: ");
+    for (int i = 0; i < manufacturerData.getPayload().size(); i++) {
+        Serial.printf("%02X ", manufacturerData.getPayload()[i]);
+    }
+    Serial.println();
     
     // Set conservative advertising intervals for stable connection
     pAdvertising->setMinInterval(160);  // 100ms minimum (more conservative)

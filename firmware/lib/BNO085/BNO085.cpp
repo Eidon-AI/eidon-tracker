@@ -24,13 +24,11 @@ const unsigned long UPDATE_INTERVAL = 1;
 
 // Debug print interval
 unsigned long lastPrint = 0;
-const unsigned long PRINT_INTERVAL = 2000; // Print every 2 seconds
+const unsigned long PRINT_INTERVAL = 5000; // Print every 5 seconds instead of 2
 
 // Function to scan I2C bus
 void BNO085::scanI2C() {
     Serial.println("Scanning I2C bus...");
-    Serial.print("SDA: GPIO"); Serial.print(I2C_SDA);
-    Serial.print(", SCL: GPIO"); Serial.println(I2C_SCL);
     
     int nDevices = 0;
     for (byte address = 1; address < 127; address++) {
@@ -44,11 +42,6 @@ void BNO085::scanI2C() {
             Serial.println(" !");
             nDevices++;
         }
-        else if (error == 4) {
-            Serial.print("Unknown error at address 0x");
-            if (address < 16) Serial.print("0");
-            Serial.println(address, HEX);
-        }
     }
     if (nDevices == 0) {
         Serial.println("No I2C devices found");
@@ -57,13 +50,10 @@ void BNO085::scanI2C() {
         Serial.print(nDevices);
         Serial.println(" device(s)");
     }
-    Serial.println("Scan complete\n");
 }
 
 // Function to test direct BNO085 communication
 bool BNO085::testCommunication() {
-    Serial.println("Testing direct BNO085 communication...");
-    
     // BNO085 uses SHTP (Sensor Hub Transport Protocol)
     // Try to read the SHTP header to see if we can communicate
     Wire.requestFrom(I2C_ADDR, 4); // Request 4 bytes (SHTP header)
@@ -74,30 +64,15 @@ bool BNO085::testCommunication() {
             header[i] = Wire.read();
         }
         
-        Serial.print("SHTP Header received: ");
-        for (int i = 0; i < 4; i++) {
-            if (header[i] < 16) Serial.print("0");
-            Serial.print(header[i], HEX);
-            Serial.print(" ");
-        }
-        Serial.println();
-        
         // Check if this looks like a valid SHTP header
         uint16_t length = (header[1] << 8) | header[0];
-        Serial.print("Packet length: ");
-        Serial.println(length);
         
         if (length > 0 && length < 1000) { // Reasonable packet length
-            Serial.println("Valid SHTP communication detected!");
             return true;
         } else {
-            Serial.println("SHTP header format unexpected");
             return false;
         }
     } else {
-        Serial.print("Only ");
-        Serial.print(Wire.available());
-        Serial.println(" bytes available from SHTP request");
         return false;
     }
 }
@@ -107,9 +82,7 @@ void BNO085::enableReports() {
     // Use GAME_ROTATION_VECTOR for fast quaternion updates (no magnetic north reference)
     // Reduce to 50Hz (20ms) for stability - prevents overwhelming I2C and BLE
     if (!bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 20000)) { // 20ms (50Hz) - stable rate
-        Serial.println("Could not enable rotation vector at 50Hz, trying 100Hz...");
         if (!bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 10000)) { // 10ms (100Hz) fallback
-            Serial.println("Could not enable rotation vector at 100Hz, trying 200Hz...");
             if (!bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 5000)) { // 5ms (200Hz) fallback
                 Serial.println("Could not enable rotation vector");
             } else {
@@ -119,7 +92,7 @@ void BNO085::enableReports() {
             Serial.println("Game rotation vector enabled at 100Hz");
         }
     } else {
-        Serial.println("Game rotation vector enabled at 50Hz (stable rate)");
+        Serial.println("Game rotation vector enabled at 50Hz");
     }
 
     // Enable Tap Detector (event-driven, report interval 0)
@@ -129,18 +102,13 @@ void BNO085::enableReports() {
 }
 
 // Function to initialize the BNO085 sensor
-bool BNO085::begin() {
-    Serial.println("Setting up I2C pins...");
-    Serial.print("SDA: GPIO"); Serial.print(I2C_SDA);
-    Serial.print(" (D9), SCL: GPIO"); Serial.print(I2C_SCL);
-    Serial.println(" (D10)");
-    
+bool BNO085::begin() {    
     // Initialize I2C with explicit pins for ESP32-C6
     Wire.setPins(I2C_SDA, I2C_SCL);
     Wire.begin();
     Wire.setClock(400000); // Set to 400kHz (standard fast mode) for stability
     
-    Serial.println("I2C initialized, testing basic communication...");
+    Serial.println("Initializing BNO085...");
     
     // Test basic I2C communication with retries
     int i2c_attempts = 0;
@@ -151,99 +119,63 @@ bool BNO085::begin() {
         byte error = Wire.endTransmission();
         
         if (error == 0) {
-            Serial.println("I2C communication successful!");
             i2c_success = true;
         } else {
             i2c_attempts++;
-            Serial.print("I2C attempt "); Serial.print(i2c_attempts);
-            Serial.print(" failed with error: "); Serial.println(error);
             if (i2c_attempts < 5) {
-                Serial.println("Retrying I2C in 500ms...");
                 delay(500);
             }
         }
     }
     
     if (!i2c_success) {
-        Serial.println("I2C communication failed after 5 attempts, giving up on BNO085");
+        Serial.println("BNO085: I2C communication failed");
         return false;
     }
-    
-    // Test direct BNO085 communication
-    if (testCommunication()) {
-        Serial.println("Direct BNO085 SHTP communication successful!");
-    } else {
-        Serial.println("Direct BNO085 SHTP communication failed!");
-        // Don't return here - still try the Adafruit library
-    }
-    
-    Serial.println("Initializing BNO085 with Adafruit library...");
-    
-    // Scan the I2C bus
-    scanI2C();
     
     // Try multiple initialization approaches with retries
     bool bno_initialized = false;
     int total_attempts = 0;
-    const int max_attempts = 15;
+    const int max_attempts = 10; // Reduced from 15
     
     while (!bno_initialized && total_attempts < max_attempts) {
         total_attempts++;
         
-        Serial.print("BNO085 initialization attempt "); 
-        Serial.print(total_attempts); 
-        Serial.print("/"); 
-        Serial.println(max_attempts);
-        
         // Try different initialization methods
-        if (total_attempts <= 5) {
-            // First 5 attempts: Try with explicit Wire object
-            Serial.println("  -> Trying with explicit Wire object...");
+        if (total_attempts <= 3) {
+            // First 3 attempts: Try with explicit Wire object
             if (bno08x.begin_I2C(I2C_ADDR, &Wire)) {
-                Serial.println("BNO085 initialized successfully with explicit Wire object!");
                 bno_initialized = true;
                 break;
             }
-        } else if (total_attempts <= 10) {
-            // Next 5 attempts: Try with default address
-            Serial.println("  -> Trying with default address...");
+        } else if (total_attempts <= 6) {
+            // Next 3 attempts: Try with default address
             if (bno08x.begin_I2C()) {
-                Serial.println("BNO085 initialized successfully with default address!");
                 bno_initialized = true;
                 break;
             }
         } else {
             // Final attempts: Try with different I2C speeds
-            if (total_attempts == 11) {
-                Serial.println("  -> Trying with 400kHz I2C clock...");
+            if (total_attempts == 7) {
                 Wire.setClock(400000);
-            } else if (total_attempts == 13) {
-                Serial.println("  -> Trying with 50kHz I2C clock...");
+            } else if (total_attempts == 9) {
                 Wire.setClock(50000);
             }
             
-            Serial.println("  -> Trying standard initialization...");
             if (bno08x.begin_I2C(I2C_ADDR)) {
-                Serial.println("BNO085 initialized successfully!");
                 bno_initialized = true;
                 break;
             }
         }
         
-        // Wait between attempts, with longer waits for later attempts
+        // Wait between attempts
         int delay_ms = (total_attempts <= 5) ? 500 : 1000;
-        Serial.print("  -> Failed, waiting "); Serial.print(delay_ms); Serial.println("ms...");
         delay(delay_ms);
         
-        // Rescan I2C bus every 5 attempts to verify device is still there
+        // Reset I2C if device is not responding (every 5 attempts)
         if (total_attempts % 5 == 0) {
-            Serial.println("  -> Rescanning I2C bus...");
-            scanI2C();
-            
-            // Reset I2C if device is not responding
             Wire.beginTransmission(I2C_ADDR);
             if (Wire.endTransmission() != 0) {
-                Serial.println("  -> Device not responding, reinitializing I2C...");
                 Wire.end();
                 delay(100);
                 Wire.setPins(I2C_SDA, I2C_SCL);
@@ -254,15 +186,11 @@ bool BNO085::begin() {
     }
     
     if (!bno_initialized) {
-        Serial.print("BNO085 failed to initialize after ");
-        Serial.print(max_attempts);
-        Serial.println(" attempts. Continuing without IMU...");
+        Serial.println("BNO085: Failed to initialize");
         return false;
     }
 
-    Serial.print("BNO085 successfully initialized on attempt ");
-    Serial.print(total_attempts);
-    Serial.println("!");
+    Serial.println("BNO085: Initialized successfully");
 
     // Enable the rotation vector report
     enableReports();
@@ -281,11 +209,9 @@ bool BNO085::isAvailable() {
 // Function to reset the BNO085 sensor
 bool BNO085::reset() {
     if (!bno085_available) {
-        Serial.println("Reset requested, but BNO085 is not available");
         return false;
     }
     
-    Serial.println("Resetting BNO085 sensor...");
     bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 0);
     delay(100);
     bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 1000);
@@ -300,7 +226,7 @@ void BNO085::update() {
     }
 
     if (bno08x.wasReset()) {
-        Serial.println("BNO085 was reset");
+        Serial.println("BNO085: Sensor reset detected");
         enableReports();
     }
     
@@ -316,18 +242,9 @@ void BNO085::update() {
             case SH2_TAP_DETECTOR: {
                 uint8_t f = sensorValue.un.tapDetector.flags;
                 bool isDouble = f & TAPDET_DOUBLE;
-                Serial.print(isDouble ? "Double" : "Single");
-                Serial.print(" tap detected on ");
-                if      (f & TAPDET_X)     Serial.println("-X side");
-                else if (f & TAPDET_X_POS) Serial.println("+X side");
-                else if (f & TAPDET_Y)     Serial.println("-Y side");
-                else if (f & TAPDET_Y_POS) Serial.println("+Y side");
-                else if (f & TAPDET_Z)     Serial.println("-Z side");
-                else if (f & TAPDET_Z_POS) Serial.println("+Z side");
-                else                       Serial.println("unknown side");
-
+                
                 if (isDouble) {
-                    Serial.println("Double tap detected");
+                    Serial.println("BNO085: Double tap detected");
                     bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 0);
                     bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 5000);
                 }
@@ -335,18 +252,13 @@ void BNO085::update() {
             }
         }
 
-        // Print quaternion values every PRINT_INTERVAL milliseconds
+        // Print quaternion values every PRINT_INTERVAL milliseconds (reduced frequency)
         if (millis() - lastPrint >= PRINT_INTERVAL) {
-            Serial.print("Quaternion - X: "); Serial.print(quaternion_x, 4);
+            Serial.print("BNO085 Quaternion - X: "); Serial.print(quaternion_x, 4);
             Serial.print(" Y: "); Serial.print(quaternion_y, 4);
             Serial.print(" Z: "); Serial.print(quaternion_z, 4);
             Serial.print(" W: "); Serial.print(quaternion_w, 4);
-            
-            // Also show magnitude to verify it's normalized (should be ~1.0)
-            float magnitude = sqrt(quaternion_x*quaternion_x + quaternion_y*quaternion_y + 
-                                 quaternion_z*quaternion_z + quaternion_w*quaternion_w);
-            Serial.print(" |Mag: "); Serial.print(magnitude, 4);
-            Serial.println("|");
+            Serial.println();
             
             lastPrint = millis();
         }
