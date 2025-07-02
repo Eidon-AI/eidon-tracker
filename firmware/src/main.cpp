@@ -9,9 +9,11 @@
 #include "BNO085.h"
 #include "BLE_Services/BLE_Callbacks.h"
 #include "BLE_Services/HID_Descriptor.h"
-#include "BLE_Services/RoleConfig_Service.h"
-#include "BLE_Services/BLE_Polling_Service.h"
+#include "Role_Services/RoleConfig_Service.h"
+#include "Role_Services/HubScanning_Service.h"
+#include "BLE_Services/BLE_Polling_Service.h" //TODO: Move this from BLE Services
 #include "DeviceConfig.h"
+#include "Role_Services/Hub_Structures.h"
 
 // Function declarations
 void sendQuaternionReport();
@@ -55,16 +57,7 @@ BNO085 imu;
 #define CALIBRATION_CHAR_UUID     "E1D00003-8B5A-3E5B-9E23-4F9B5C91BBDE"
 #define DEVICE_INFO_CHAR_UUID     "E1D00005-8B5A-3E5B-9E23-4F9B5C91BBDE"
 
-// Quaternion data structure for GATT (20 bytes)
-struct QuaternionData {
-    float w;
-    float x;
-    float y;
-    float z;
-    uint8_t switches;    // bit 0: isLeft, bit 1: isUpper
-    uint8_t reserved[3]; // padding to 20 bytes
-} __attribute__((packed));
-
+// QuaternionData structure is now defined in Role_Services/Hub_Structures.h
 QuaternionData gattQuaternionData;
 
 // HID report map - now 8 bytes total (8 bytes for quaternion, no switch states)
@@ -79,32 +72,10 @@ float quaternion_y = 0;
 float quaternion_z = 0;
 float quaternion_w = 1;
 
-// Hub client variables
-struct ChildConnection {
-    NimBLEClient* client;
-    NimBLEAddress address;
-    DeviceRole role;
-    bool connected;
-    bool dataAvailable;
-    QuaternionData lastData;
-    unsigned long lastDataTime;
-    unsigned long connectionAttempts;
-    unsigned long lastConnectionAttempt;
-};
-
+// Hub client variables (structures defined in Role_Services/Hub_Structures.h)
 static const int MAX_CHILDREN = 2;
 ChildConnection childConnections[MAX_CHILDREN];
 int childConnectionCount = 0;
-
-// Aggregated quaternion data for hub
-struct AggregatedQuaternionData {
-    QuaternionData hubData;
-    QuaternionData handData;
-    QuaternionData forearmData;
-    bool handConnected;
-    bool forearmConnected;
-    unsigned long timestamp;
-} __attribute__((packed));
 
 AggregatedQuaternionData aggregatedData;
 
@@ -693,6 +664,9 @@ void setup() {
     // ---------- Hub Client Setup -----------------------------
     setupHubClient();
     
+    // ---------- Hub Scanning Service Setup -----------------------------
+    setupHubScanningService();
+    
     // Configure advertising
     NimBLEAdvertising* pAdvertising = NimBLEDevice::getAdvertising();
     pAdvertising->setAppearance(HID_GAMEPAD);
@@ -765,6 +739,9 @@ void loop() {
     
     // Update BLE polling system
     pollingManager.update();
+    
+    // Update hub scanning service (only if we're a hub)
+    updateHubScanning();
     
     // Send data if connected
     if (deviceConnected) {

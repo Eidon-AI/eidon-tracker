@@ -3,7 +3,7 @@
 #include <NimBLEDevice.h>
 #include "DeviceConfig.h"
 #include "BNO085.h"
-#include "BLE_Services/RoleConfig_Service.h"
+#include "Role_Services/RoleConfig_Service.h"
 
 // External variables that handlers need access to
 extern BNO085 imu;
