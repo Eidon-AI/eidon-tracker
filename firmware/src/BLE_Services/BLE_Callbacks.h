@@ -1,7 +1,9 @@
 #ifndef BLE_CALLBACKS_H
 #define BLE_CALLBACKS_H
 
+#include <NimBLEDevice.h>
 #include <NimBLEServer.h>
+#include <NimBLEClient.h>
 #include <NimBLECharacteristic.h>
 #include <NimBLEHIDDevice.h>
 #include "BNO085.h"
@@ -40,6 +42,13 @@ public:
     void onNotify(NimBLECharacteristic* pChar);
     void onStatus(NimBLECharacteristic* pChar, int status, int code);
     void onSubscribe(NimBLECharacteristic* pChar, ble_gap_conn_desc* desc, uint16_t subValue);
+};
+
+// Hub Client callbacks for child connections
+class HubClientCallbacks : public NimBLEClientCallbacks {
+public:
+    void onConnect(NimBLEClient* pClient);
+    void onDisconnect(NimBLEClient* pClient);
 };
 
 // Role configuration polling system (no callbacks needed)

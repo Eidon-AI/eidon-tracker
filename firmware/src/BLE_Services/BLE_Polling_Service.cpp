@@ -415,7 +415,12 @@ void handleRoleChange(const std::string& value, bool success) {
                 // 2. Update advertising data with new role
                 updateAdvertisingData();
                 
-                // 3. Provide LED feedback
+                // 3. Start child discovery if hub role assigned
+                if (deviceConfig.isHubMode()) {
+                    startChildDiscovery();
+                }
+                
+                // 4. Provide LED feedback
                 // TODO: Check LED feedback is working
                 startRoleChangeLEDPattern();
                 
@@ -518,4 +523,10 @@ void setupPollingSystem() {
     pollingManager.setDebugMode(true);
     
     Serial.println("BLE Polling System setup complete");
+}
+
+// Hub client function implementation
+void startChildDiscovery() {
+    // This function is implemented in main.cpp
+    // This is just a placeholder for the polling service
 } 

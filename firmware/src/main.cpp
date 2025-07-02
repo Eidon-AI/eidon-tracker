@@ -4,6 +4,8 @@
 #include <NimBLEUtils.h>
 #include <NimBLEHIDDevice.h>
 #include <NimBLECharacteristic.h>
+#include <NimBLEClient.h>
+#include <NimBLEScan.h>
 #include "BNO085.h"
 #include "BLE_Services/BLE_Callbacks.h"
 #include "BLE_Services/HID_Descriptor.h"
@@ -18,6 +20,13 @@ void startIMUResetPattern();
 bool isConnected();
 void updateAdvertisingData();
 
+// Hub client function declarations
+void setupHubClient();
+void connectToChild(const NimBLEAddress& address, DeviceRole childRole);
+void disconnectFromChild(DeviceRole childRole);
+void updateChildData();
+bool isChildConnected(DeviceRole childRole);
+
 // Polling system functions (implemented in BLE_Polling_Service.cpp)
 void setupPollingSystem();
 void handleRoleChange(const std::string& value, bool success);
@@ -30,6 +39,7 @@ static ServerCallbacks serverCallbacksInstance;
 static OutputReportCallbacks outputReportCallbacksInstance;
 static QuaternionCharCallbacks quaternionCallbacksInstance;
 static CalibrationCallbacks calibrationCallbacksInstance;
+static HubClientCallbacks hubClientCallbacksInstance;
 // RoleConfig callbacks removed - using polling instead
 
 // BNO085 IMU instance
@@ -68,6 +78,35 @@ float quaternion_x = 0;
 float quaternion_y = 0;
 float quaternion_z = 0;
 float quaternion_w = 1;
+
+// Hub client variables
+struct ChildConnection {
+    NimBLEClient* client;
+    NimBLEAddress address;
+    DeviceRole role;
+    bool connected;
+    bool dataAvailable;
+    QuaternionData lastData;
+    unsigned long lastDataTime;
+    unsigned long connectionAttempts;
+    unsigned long lastConnectionAttempt;
+};
+
+static const int MAX_CHILDREN = 2;
+ChildConnection childConnections[MAX_CHILDREN];
+int childConnectionCount = 0;
+
+// Aggregated quaternion data for hub
+struct AggregatedQuaternionData {
+    QuaternionData hubData;
+    QuaternionData handData;
+    QuaternionData forearmData;
+    bool handConnected;
+    bool forearmConnected;
+    unsigned long timestamp;
+} __attribute__((packed));
+
+AggregatedQuaternionData aggregatedData;
 
 // Update interval (milliseconds)
 const unsigned long UPDATE_INTERVAL = 1;
@@ -238,6 +277,11 @@ void sendQuaternionReport() {
     quaternion_y = qy_sensor;
     quaternion_z = qz_sensor;
     
+    // Update child data if in hub mode
+    if (deviceConfig.isHubMode()) {
+        updateChildData();
+    }
+    
     // Send via HID if connected
     if (isConnected()) {
         // Only send quaternion data if BNO085 is available
@@ -286,12 +330,23 @@ void sendQuaternionReport() {
             }
             
             // Also send via GATT service
-            gattQuaternionData.w = corrected_w;
-            gattQuaternionData.x = corrected_x;
-            gattQuaternionData.y = corrected_y;
-            gattQuaternionData.z = corrected_z;
-            gattQuaternionData.switches = 0;
-            memset(gattQuaternionData.reserved, 0, sizeof(gattQuaternionData.reserved));
+            if (deviceConfig.isHubMode()) {
+                // Send aggregated data for hub
+                gattQuaternionData.w = aggregatedData.hubData.w;
+                gattQuaternionData.x = aggregatedData.hubData.x;
+                gattQuaternionData.y = aggregatedData.hubData.y;
+                gattQuaternionData.z = aggregatedData.hubData.z;
+                gattQuaternionData.switches = 0;
+                memset(gattQuaternionData.reserved, 0, sizeof(gattQuaternionData.reserved));
+            } else {
+                // Send individual quaternion data for non-hub devices
+                gattQuaternionData.w = corrected_w;
+                gattQuaternionData.x = corrected_x;
+                gattQuaternionData.y = corrected_y;
+                gattQuaternionData.z = corrected_z;
+                gattQuaternionData.switches = 0;
+                memset(gattQuaternionData.reserved, 0, sizeof(gattQuaternionData.reserved));
+            }
             
             // Send GATT notification with rate limiting
             if (quaternionChar != nullptr) {
@@ -346,6 +401,180 @@ void sendQuaternionReport() {
         
         // LED is now controlled by updateLEDStatus() in the main loop
     }
+}
+
+// ============================================================================
+// Hub Client Implementation
+// ============================================================================
+
+void setupHubClient() {
+    if (!deviceConfig.isHubMode()) {
+        return; // Not a hub, no need to setup client
+    }
+    
+    Serial.println("Setting up Hub Client...");
+    
+    // Initialize child connections
+    for (int i = 0; i < MAX_CHILDREN; i++) {
+        childConnections[i].client = nullptr;
+        childConnections[i].connected = false;
+        childConnections[i].dataAvailable = false;
+        childConnections[i].connectionAttempts = 0;
+        childConnections[i].lastConnectionAttempt = 0;
+    }
+    
+    // Initialize aggregated data
+    memset(&aggregatedData, 0, sizeof(aggregatedData));
+    aggregatedData.handConnected = false;
+    aggregatedData.forearmConnected = false;
+    
+    Serial.println("Hub Client setup complete");
+}
+
+void connectToChild(const NimBLEAddress& address, DeviceRole childRole) {
+    if (!deviceConfig.isHubMode()) {
+        return;
+    }
+    
+    Serial.printf("Connecting to child %s at %s...\n", 
+                 deviceConfig.getRoleName(childRole), address.toString().c_str());
+    
+    // Find or create child connection slot
+    int slotIndex = -1;
+    for (int i = 0; i < childConnectionCount; i++) {
+        if (childConnections[i].role == childRole) {
+            slotIndex = i;
+            break;
+        }
+    }
+    
+    if (slotIndex == -1 && childConnectionCount < MAX_CHILDREN) {
+        slotIndex = childConnectionCount++;
+    }
+    
+    if (slotIndex == -1) {
+        Serial.println("No available slots for child connection");
+        return;
+    }
+    
+    ChildConnection& child = childConnections[slotIndex];
+    
+    // Create client if needed
+    if (child.client == nullptr) {
+        child.client = NimBLEDevice::createClient();
+        if (child.client == nullptr) {
+            Serial.println("Failed to create client");
+            return;
+        }
+        // Set callbacks for connect/disconnect events
+        child.client->setClientCallbacks(&hubClientCallbacksInstance);
+    }
+    
+    // Connect to child
+    if (child.client->connect(address)) {
+        Serial.printf("Connected to child %s\n", deviceConfig.getRoleName(childRole));
+        child.connected = true;
+        child.address = address;
+        child.role = childRole;
+        child.connectionAttempts = 0;
+        
+        // Discover services and characteristics
+        if (child.client->discoverAttributes()) {
+            // Find quaternion characteristic
+            NimBLERemoteCharacteristic* quatChar = child.client->getService(EIDON_SERVICE_UUID)
+                ->getCharacteristic(QUATERNION_CHAR_UUID);
+            
+            if (quatChar != nullptr) {
+                // Subscribe to notifications
+                if (quatChar->subscribe(true, [childRole](NimBLERemoteCharacteristic* pChar, uint8_t* data, size_t length, bool isNotify) {
+                    // Handle child quaternion data
+                    if (length == sizeof(QuaternionData)) {
+                        QuaternionData* quatData = (QuaternionData*)data;
+                        
+                        // Update child data
+                        for (int i = 0; i < childConnectionCount; i++) {
+                            if (childConnections[i].role == childRole) {
+                                childConnections[i].lastData = *quatData;
+                                childConnections[i].dataAvailable = true;
+                                childConnections[i].lastDataTime = millis();
+                                break;
+                            }
+                        }
+                    }
+                })) {
+                    Serial.printf("Subscribed to quaternion data from %s\n", deviceConfig.getRoleName(childRole));
+                } else {
+                    Serial.printf("Failed to subscribe to quaternion data from %s\n", deviceConfig.getRoleName(childRole));
+                }
+            } else {
+                Serial.printf("Quaternion characteristic not found on %s\n", deviceConfig.getRoleName(childRole));
+            }
+        } else {
+            Serial.printf("Failed to discover services on %s\n", deviceConfig.getRoleName(childRole));
+        }
+    } else {
+        Serial.printf("Failed to connect to child %s\n", deviceConfig.getRoleName(childRole));
+        child.connected = false;
+    }
+}
+
+void disconnectFromChild(DeviceRole childRole) {
+    for (int i = 0; i < childConnectionCount; i++) {
+        if (childConnections[i].role == childRole) {
+            ChildConnection& child = childConnections[i];
+            if (child.client != nullptr && child.connected) {
+                child.client->disconnect();
+                child.connected = false;
+                child.dataAvailable = false;
+                Serial.printf("Disconnected from child %s\n", deviceConfig.getRoleName(childRole));
+            }
+            break;
+        }
+    }
+}
+
+void updateChildData() {
+    if (!deviceConfig.isHubMode()) {
+        return;
+    }
+    
+    // Update aggregated data
+    aggregatedData.timestamp = millis();
+    
+    // Update hub data
+    aggregatedData.hubData.w = quaternion_w;
+    aggregatedData.hubData.x = quaternion_x;
+    aggregatedData.hubData.y = quaternion_y;
+    aggregatedData.hubData.z = quaternion_z;
+    aggregatedData.hubData.switches = 0;
+    memset(aggregatedData.hubData.reserved, 0, sizeof(aggregatedData.hubData.reserved));
+    
+    // Update child data
+    aggregatedData.handConnected = false;
+    aggregatedData.forearmConnected = false;
+    
+    for (int i = 0; i < childConnectionCount; i++) {
+        ChildConnection& child = childConnections[i];
+        
+        if (child.connected && child.dataAvailable) {
+            if (child.role == ROLE_LEFT_HAND || child.role == ROLE_RIGHT_HAND) {
+                aggregatedData.handData = child.lastData;
+                aggregatedData.handConnected = true;
+            } else if (child.role == ROLE_LEFT_FOREARM || child.role == ROLE_RIGHT_FOREARM) {
+                aggregatedData.forearmData = child.lastData;
+                aggregatedData.forearmConnected = true;
+            }
+        }
+    }
+}
+
+bool isChildConnected(DeviceRole childRole) {
+    for (int i = 0; i < childConnectionCount; i++) {
+        if (childConnections[i].role == childRole && childConnections[i].connected) {
+            return true;
+        }
+    }
+    return false;
 }
 
 void setup() {
@@ -460,6 +689,9 @@ void setup() {
     pollingManager.addTarget(roleConfigChar, 200, handleRoleChange, "Role");
     
     Serial.println("BLE Polling System setup complete");
+    
+    // ---------- Hub Client Setup -----------------------------
+    setupHubClient();
     
     // Configure advertising
     NimBLEAdvertising* pAdvertising = NimBLEDevice::getAdvertising();

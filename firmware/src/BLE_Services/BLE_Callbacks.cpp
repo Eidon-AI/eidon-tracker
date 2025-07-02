@@ -52,4 +52,15 @@ void QuaternionCharCallbacks::onSubscribe(NimBLECharacteristic* pChar, ble_gap_c
     quaternionSubscribed = (subValue != 0);
 }
 
+// Hub Client callbacks implementation
+void HubClientCallbacks::onConnect(NimBLEClient* pClient) {
+    Serial.println("=== HUB CLIENT: Child connected ===");
+    Serial.printf("Connected to child at address: %s\n", pClient->getPeerAddress().toString().c_str());
+}
+
+void HubClientCallbacks::onDisconnect(NimBLEClient* pClient) {
+    Serial.println("=== HUB CLIENT: Child disconnected ===");
+    Serial.printf("Disconnected from child at address: %s\n", pClient->getPeerAddress().toString().c_str());
+}
+
 // Role configuration callbacks removed - using polling system instead 
