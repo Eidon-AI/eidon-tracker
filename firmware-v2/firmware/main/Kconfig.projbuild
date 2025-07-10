@@ -1,0 +1,40 @@
+menu "Eidon Device Configuration"
+    config EXAMPLE_SSP_ENABLED
+        bool "Secure Simple Pairing"
+        depends on BT_CLASSIC_ENABLED
+        default y
+        help
+            This enables the Secure Simple Pairing. If disable this option,
+            Bluedroid will only support Legacy Pairing
+
+    choice EXAMPLE_HID_DEVICE_ROLE
+        prompt "Eidon Device Type"
+        default EXAMPLE_TRACKER_ENABLE
+        help
+            Select the type of Eidon device
+            - Tracker: Basic orientation sensor
+            - Glove: Extended sensor array (future)
+
+        config EXAMPLE_TRACKER_ENABLE
+            bool "Eidon Tracker"
+            help
+                Basic orientation tracking device with IMU sensor
+
+        config EXAMPLE_GLOVE_ENABLE
+            bool "Eidon Glove"
+            help
+                Extended sensor array device (currently same as Tracker)
+    endchoice
+
+    config HID_DEVICE_ROLE
+        int
+        default 1 if EXAMPLE_TRACKER_ENABLE
+        default 2 if EXAMPLE_GLOVE_ENABLE
+
+    config IMU_DEBUG_LOGGING
+        bool "Enable IMU debug logging"
+        default n
+        help
+            Enable detailed debug logging for IMU communication.
+            This will show SPI/I2C transactions, INT pin status, and sensor events.
+endmenu
