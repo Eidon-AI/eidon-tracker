@@ -3,7 +3,7 @@
 A complete Bluetooth IMU tracking system featuring custom hardware, 3D printed enclosure, and web-based applications. The Eidon Tracker transmits real-time quaternion orientation data over Bluetooth HID, making it perfect for motion capture, gaming, and interactive applications.
 
 <div align="center">
-  <img src="images/eidon-tracker-closed.png" alt="Eidon Tracker - Closed" width="360px" />
+  <img src="tracker/images/eidon-tracker-closed.png" alt="Eidon Tracker - Closed" width="360px" />
 </div>
 
 ## Features
@@ -19,7 +19,7 @@ A complete Bluetooth IMU tracking system featuring custom hardware, 3D printed e
 ## Bill of Materials (BOM)
 
 <div align="center">
-  <img src="images/eidon-tracker-opened.png" alt="Eidon Tracker - Open" width="45%" />
+  <img src="tracker/images/eidon-tracker-opened.png" alt="Eidon Tracker - Open" width="45%" />
 </div>
 
 ### Required Components

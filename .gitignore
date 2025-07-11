@@ -3,8 +3,10 @@
 !.vscode/settings.json
 !.vscode/extensions.json
 
-# PlatformIO build output
-.pio/
-
 # macOS
 .DS_Store
+
+# ESP-IDF generated files
+firmware/build/
+firmware/sdkconfig
+firmware/sdkconfig.old
