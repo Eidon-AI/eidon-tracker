@@ -3,7 +3,7 @@
 A complete Bluetooth IMU tracking system featuring custom hardware, 3D printed enclosure, and web-based applications. The Eidon Tracker transmits real-time quaternion orientation data over Bluetooth HID, making it perfect for motion capture, gaming, and interactive applications.
 
 <div align="center">
-  <img src="tracker/images/eidon-tracker-closed.png" alt="Eidon Tracker - Closed" width="360px" />
+  <img src="images/eidon-tracker-closed.png" alt="Eidon Tracker - Closed" width="360px" />
 </div>
 
 ## Features
@@ -19,18 +19,18 @@ A complete Bluetooth IMU tracking system featuring custom hardware, 3D printed e
 ## Bill of Materials (BOM)
 
 <div align="center">
-  <img src="tracker/images/eidon-tracker-opened.png" alt="Eidon Tracker - Open" width="45%" />
+  <img src="images/eidon-tracker-opened.png" alt="Eidon Tracker - Open" width="45%" />
 </div>
 
 ### Required Components
 
 | Component | Quantity | Description | Purchase Link |
 |-----------|----------|-------------|---------------|
-| [Seeed XIAO nRF52840 Sense](https://www.seeedstudio.com/XIAO-nRF52840-Sense-p-5256.html) | 1 | Main microcontroller with built-in BLE | [Amazon](https://amzn.to/4kR0hSP) |
+| [Seeed XIAO ESP32-C6](https://www.seeedstudio.com/Seeed-XIAO-ESP32C6-p-5884.html) | 1 | Main microcontroller with built-in BLE 5 and WiFi 6 | [Seeed Studio](https://www.seeedstudio.com/Seeed-XIAO-ESP32C6-p-5884.html) |
 | BNO085 IMU Breakout | 1 | 9-DOF Absolute Orientation Sensor | [Amazon](https://amzn.to/4mKZSTC) |
 | LiPo Battery (3.7V) | 1 | 250mAh recommended | [Amazon](https://amzn.to/4kpmNSK) |
 | Toggle Switches (6mm) | 2 | For power and position config | [Amazon](https://amzn.to/3ZfAECM) |
-| 30 AWG Wires | 4x ~5cm | Female-to-female, ~20cm | [Amazon](https://amzn.to/4kB8Z7V) |
+| 30 AWG Wires | 7x ~5cm | Female-to-female, ~20cm | [Amazon](https://amzn.to/4kB8Z7V) |
 
 ### 3D Printing Materials
 
@@ -52,22 +52,26 @@ A complete Bluetooth IMU tracking system featuring custom hardware, 3D printed e
 
 ### Wiring Diagram
 
-Connect the BNO085 to the XIAO nRF52840 Sense:
+Connect the BNO085 to the XIAO ESP32-C6 using SPI interface:
 
-| BNO085 Pin | XIAO Pin | Function |
-|------------|----------|----------|
-| VIN | 3V3 | Power (3.3V) |
-| GND | GND | Ground |
-| SDA | D9 | IMU I2C Data |
-| SCL | D10 | IMU I2C Clock |
-| INT | D8 | IMU Interrupt (optional) |
+| BNO085 Pin | XIAO ESP32-C6 Pin | GPIO | Function |
+|------------|-------------------|------|----------|
+| VIN | 3V3 | - | Power (3.3V) |
+| GND | GND | - | Ground |
+| CS | D1 | GPIO17 | SPI Chip Select |
+| SCK/SCL | D2 | GPIO19 | SPI Clock |
+| MOSI/DI | D3 | GPIO18 | SPI Master Out |
+| MISO/SDA | D4 | GPIO20 | SPI Master In |
+| INT | D5 | GPIO22 | Interrupt |
+| RST | D6 | GPIO23 | Reset |
+| WAK | D0 | GPIO2 | Wake (optional) |
 
 ### Switch Connections
 
 | Switch | Output Pin | Input Pin | Function |
 |--------|------------|-----------|----------|
-| Left/Right | D5 | D6 | Horizontal orientation |
-| Upper/Lower | D0 | D1 | Vertical orientation |
+| Left/Right | D7 | D8 | Horizontal orientation |
+| Upper/Lower | D9 | D10 | Vertical orientation |
 
 ### 3D Printing
 
@@ -85,10 +89,29 @@ Print the following files from the `cad/` directory:
 
 ## Software Setup
 
-### PlatformIO Installation
+### ESP-IDF Installation
 
-1. Install [Visual Studio Code](https://code.visualstudio.com/)
-2. Install the [PlatformIO IDE extension](https://platformio.org/install/ide?install=vscode)
+1. Install ESP-IDF v6.0 or later:
+   ```bash
+   # macOS/Linux
+   mkdir -p ~/esp
+   cd ~/esp
+   git clone -b v6.0 --recursive https://github.com/espressif/esp-idf.git
+   cd esp-idf
+   ./install.sh esp32c6
+   . ./export.sh
+   ```
+
+   For Windows, follow the [ESP-IDF Windows Installer guide](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/get-started/windows-setup.html)
+
+2. Install build dependencies:
+   ```bash
+   # Ubuntu/Debian
+   sudo apt-get install git wget flex bison gperf python3 python3-pip python3-venv cmake ninja-build ccache libffi-dev libssl-dev dfu-util libusb-1.0-0
+   
+   # macOS
+   brew install cmake ninja dfu-util
+   ```
 
 ### Building and Uploading Firmware
 
@@ -98,22 +121,36 @@ Print the following files from the `cad/` directory:
    cd eidon-tracker
    ```
 
-2. Open the project in VSCode with PlatformIO
-
-3. Connect your XIAO nRF52840 Sense via USB
-
-4. Build and upload:
+2. Initialize submodules:
    ```bash
-   pio run --target upload
+   git submodule update --init --recursive
+   ```
+
+3. Build the firmware:
+   ```bash
+   make build
+   # or
+   cd firmware
+   . ~/esp-idf/export.sh
+   idf.py build
+   ```
+
+4. Connect your XIAO ESP32-C6 via USB
+
+5. Flash the firmware:
+   ```bash
+   make flash
+   # or with monitor
+   make flash-monitor
    ```
 
 ### Dependencies
 
-The following libraries are automatically managed by PlatformIO:
+The firmware uses the following ESP-IDF components:
 
-- **Adafruit BNO08x** (v1.2.3+) - IMU sensor driver
-- **Adafruit BluefruitLE nRF52** - Bluetooth functionality  
-- **Arduino Framework** - Core functionality
+- **bno08x_driver** - BNO085 SPI driver (included as submodule)
+- **ESP-IDF Bluetooth Stack** - BLE functionality
+- **FreeRTOS** - Real-time operating system
 
 ## Web Applications
 
@@ -205,10 +242,12 @@ The BNO085 sensor requires calibration for optimal performance:
 
 ```
 eidon-tracker/
-├── firmware/               # PlatformIO firmware project
-│   ├── src/main.cpp       # Main firmware source
-│   ├── platformio.ini     # PlatformIO configuration
-│   └── lib/               # Custom libraries
+├── firmware/              # ESP-IDF firmware project
+│   ├── main/             # Main application source
+│   ├── components/       # Custom components
+│   │   └── bno08x_driver/ # BNO085 SPI driver submodule
+│   ├── CMakeLists.txt    # CMake configuration
+│   └── sdkconfig.defaults # Default configuration
 ├── web/                   # Web applications
 │   ├── index.html         # 3D orientation visualizer
 │   └── script.js          # Shared JavaScript libraries
@@ -217,17 +256,34 @@ eidon-tracker/
 │   ├── *.stl              # STL files for printing
 │   └── *.gcode            # Pre-sliced files
 ├── images/                # Product photos
+├── Makefile               # Root build automation
 └── README.md              # This file
 ```
 
 ### Firmware Development
 
-The firmware is built on the Arduino framework with PlatformIO. Key components:
+The firmware is built on ESP-IDF v6.0 with FreeRTOS. Key components:
 
 - **HID Report Descriptor**: Custom HID device with quaternion data
-- **Bluetooth Stack**: Adafruit Bluefruit nRF52 library
-- **IMU Driver**: Adafruit BNO08x library
+- **Bluetooth Stack**: ESP-IDF BLE implementation
+- **SPI IMU Driver**: High-speed BNO08x driver for reliable communication
 - **Battery Management**: Built-in XIAO charging and monitoring
+
+### Build Commands
+
+The root Makefile provides convenient commands:
+
+```bash
+make build              # Build the firmware
+make flash              # Flash the firmware to device
+make monitor            # Open serial monitor
+make clean              # Clean build files
+make fullclean          # Full clean (remove all build artifacts)
+make menuconfig         # Open ESP-IDF configuration menu
+make flash-monitor      # Flash and then monitor
+make build-flash        # Build and flash
+make build-flash-monitor # Build, flash, and monitor
+```
 
 ### Adding New Web Applications
 
@@ -248,13 +304,14 @@ The firmware is built on the Arduino framework with PlatformIO. Key components:
 
 - **Poor tracking accuracy**: Ensure proper IMU calibration
 - **Drift over time**: Recalibrate magnetometer away from metal objects
-- **Erratic behavior**: Check wiring connections and power supply
+- **Erratic behavior**: Check SPI wiring connections and signal integrity
 
 ### Build Issues
 
-- **Platform not found**: Ensure Seeed nRF52 platform is properly installed
-- **Library conflicts**: Clean build environment with `pio run --target clean`
-- **Upload fails**: Double-tap reset button to enter DFU mode
+- **Target mismatch**: Run `make fullclean` then `make build` to ensure ESP32-C6 target
+- **Submodule missing**: Run `git submodule update --init --recursive`
+- **ESP-IDF not found**: Ensure you've sourced `~/esp-idf/export.sh`
+- **Upload fails**: Hold BOOT button while connecting USB, then release
 
 ## Contributing
 
