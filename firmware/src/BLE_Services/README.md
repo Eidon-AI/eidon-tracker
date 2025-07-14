@@ -7,9 +7,9 @@ This folder contains all BLE-related service definitions, callbacks, and polling
 ### BLE Callbacks
 - **BLE_Callbacks.h/cpp** - Callback classes for BLE events
   - `ServerCallbacks` - Connection/disconnection events
-  - `OutputReportCallbacks` - HID output report handling
   - `QuaternionCharCallbacks` - Quaternion characteristic events
   - `CalibrationCallbacks` - IMU calibration commands (legacy - being replaced by polling)
+  - `HubClientCallbacks` - Child device connection events
 
 ### BLE Polling Service
 - **BLE_Polling_Service.h/cpp** - Centralized polling system for BLE characteristics
@@ -17,11 +17,6 @@ This folder contains all BLE-related service definitions, callbacks, and polling
   - Handles Role changes, Calibration requests, and Color changes
   - Provides statistics, error handling, and dynamic configuration
   - Supports battery and performance modes
-
-### HID Service
-- **HID_Descriptor.h/cpp** - HID report descriptor for quaternion data transmission
-  - Defines the HID report format (8 bytes: 4 × 16-bit quaternion values)
-  - Used for HID device communication with hosts
 
 ### Role Configuration Service
 - **RoleConfig_Service.h/cpp** - Device role configuration service
@@ -81,12 +76,12 @@ All BLE components are included in `main.cpp`:
 ```cpp
 #include "BLE_Services/BLE_Callbacks.h"
 #include "BLE_Services/BLE_Polling_Service.h"
-#include "BLE_Services/HID_Descriptor.h"
 #include "BLE_Services/RoleConfig_Service.h"
 ```
 
-The services provide two different ways to transmit quaternion data:
-1. **HID**: Standard HID device protocol for compatibility
-2. **GATT**: Custom service for direct quaternion access and device control
+The services provide quaternion data transmission via custom GATT service:
+- **GATT**: Custom service for direct quaternion access and device control
+- **Role Configuration**: Device role assignment and management
+- **Hub Functionality**: Child device connection and data aggregation
 
 The polling system handles critical device interactions reliably, while callbacks handle connection events and quaternion subscriptions. 

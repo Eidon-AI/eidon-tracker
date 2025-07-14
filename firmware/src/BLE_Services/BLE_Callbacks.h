@@ -5,7 +5,6 @@
 #include <NimBLEServer.h>
 #include <NimBLEClient.h>
 #include <NimBLECharacteristic.h>
-#include <NimBLEHIDDevice.h>
 #include "BNO085.h"
 
 // Forward declarations
@@ -22,11 +21,7 @@ public:
     void onAuthenticationComplete(NimBLEConnInfo& connInfo);
 };
 
-// Output report callback
-class OutputReportCallbacks : public NimBLECharacteristicCallbacks {
-public:
-    void onWrite(NimBLECharacteristic* pChar, const std::string& value);
-};
+
 
 // GATT Calibration characteristic write callback
 class CalibrationCallbacks : public NimBLECharacteristicCallbacks {

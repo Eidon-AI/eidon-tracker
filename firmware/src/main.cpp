@@ -2,13 +2,11 @@
 #include <NimBLEDevice.h>
 #include <NimBLEServer.h>
 #include <NimBLEUtils.h>
-#include <NimBLEHIDDevice.h>
 #include <NimBLECharacteristic.h>
 #include <NimBLEClient.h>
 #include <NimBLEScan.h>
 #include "BNO085.h"
 #include "BLE_Services/BLE_Callbacks.h"
-#include "BLE_Services/HID_Descriptor.h"
 #include "Role_Services/RoleConfig_Service.h"
 #include "Role_Services/HubScanning_Service.h"
 #include "Role_Services/HubClient_Service.h"
@@ -34,7 +32,6 @@ extern BLEPollingManager pollingManager;
 
 // Static callback instances to prevent memory deallocation issues
 static ServerCallbacks serverCallbacksInstance;
-static OutputReportCallbacks outputReportCallbacksInstance;
 static QuaternionCharCallbacks quaternionCallbacksInstance;
 static CalibrationCallbacks calibrationCallbacksInstance;
 // HubClientCallbacks moved to HubClient_Service.cpp
@@ -43,24 +40,18 @@ static CalibrationCallbacks calibrationCallbacksInstance;
 // BNO085 IMU instance
 BNO085 imu;
 
-// Vendor and Product IDs
-#define VENDOR_ID  0xE1D0 // Eidon AI vendor ID
-#define PRODUCT_ID 0x0002 // Eidon Tracker product ID
-
 // Custom GATT Service UUIDs
 #define EIDON_SERVICE_UUID        "E1D00001-8B5A-3E5B-9E23-4F9B5C91BBDE"
 #define QUATERNION_CHAR_UUID      "E1D00002-8B5A-3E5B-9E23-4F9B5C91BBDE"
 #define CALIBRATION_CHAR_UUID     "E1D00003-8B5A-3E5B-9E23-4F9B5C91BBDE"
 #define DEVICE_INFO_CHAR_UUID     "E1D00005-8B5A-3E5B-9E23-4F9B5C91BBDE"
 
+// New characteristics for hub devices only (child data)
+#define HAND_QUATERNION_CHAR_UUID     "E1D00008-8B5A-3E5B-9E23-4F9B5C91BBDE"
+#define FOREARM_QUATERNION_CHAR_UUID  "E1D00009-8B5A-3E5B-9E23-4F9B5C91BBDE"
+
 // QuaternionData structure is now defined in Role_Services/Hub_Structures.h
 QuaternionData gattQuaternionData;
-
-// HID report map - now 8 bytes total (8 bytes for quaternion, no switch states)
-uint8_t report_data[8] = {0};
-
-// Add output report buffer
-uint8_t output_report[1] = {0};
 
 // Global quaternion variables (for backward compatibility)
 float quaternion_x = 0;
@@ -171,15 +162,16 @@ void startIMUResetPattern() {
 
 // BLE objects
 NimBLEServer* pServer = nullptr;
-NimBLEHIDDevice* hid = nullptr;
-NimBLECharacteristic* inputReport = nullptr;
-NimBLECharacteristic* outputReport = nullptr;
 
 // Custom GATT Service
 NimBLEService* eidonService = nullptr;
 NimBLECharacteristic* quaternionChar = nullptr;
 NimBLECharacteristic* calibrationChar = nullptr;
 NimBLECharacteristic* deviceInfoChar = nullptr;
+
+// New characteristics for hub devices only (child data)
+NimBLECharacteristic* handQuaternionChar = nullptr;
+NimBLECharacteristic* forearmQuaternionChar = nullptr;
 
 // Function to get current BLE connection state (similar to Bluefruit.connected())
 bool isConnected() {
@@ -197,8 +189,8 @@ void updateAdvertisingData() {
     // Update role information in manufacturer data
     // Format: [Company ID Low, Company ID High, Role Data]
     uint8_t manufacturerDataBytes[3];
-    manufacturerDataBytes[0] = VENDOR_ID & 0xFF;        // Company ID low byte (0xD0)
-    manufacturerDataBytes[1] = (VENDOR_ID >> 8) & 0xFF; // Company ID high byte (0xE1)
+    manufacturerDataBytes[0] = 0xD0;        // Company ID low byte (0xD0)
+    manufacturerDataBytes[1] = 0xE1;        // Company ID high byte (0xE1)
     manufacturerDataBytes[2] = (uint8_t)deviceConfig.getRole(); // Role data
     
     NimBLEAdvertisementData manufacturerData;
@@ -242,54 +234,11 @@ void sendQuaternionReport() {
         updateChildData();
     }
     
-    // Send via HID if connected
+    // Send via GATT service if connected
     if (isConnected()) {
         // Only send quaternion data if BNO085 is available
         if (imu.isAvailable()) {
-            // Map corrected quaternion values (-1 to 1) to unsigned HID range (0 to 65535)
-            uint16_t x = (uint16_t)((corrected_x + 1.0f) * 32767.5f);
-            uint16_t y = (uint16_t)((corrected_y + 1.0f) * 32767.5f);
-            uint16_t z = (uint16_t)((corrected_z + 1.0f) * 32767.5f);
-            uint16_t w = (uint16_t)((corrected_w + 1.0f) * 32767.5f);
-            
-            // Create HID report - store 16-bit values in little-endian format
-            report_data[0] = x & 0xFF;
-            report_data[1] = (x >> 8) & 0xFF;
-            report_data[2] = y & 0xFF;
-            report_data[3] = (y >> 8) & 0xFF;
-            report_data[4] = z & 0xFF;
-            report_data[5] = (z >> 8) & 0xFF;
-            report_data[6] = w & 0xFF;
-            report_data[7] = (w >> 8) & 0xFF;
-            
-            // Send HID report with error handling
-            if (inputReport != nullptr) {
-                inputReport->setValue(report_data, sizeof(report_data));
-                if (inputReport->notify()) {
-                    // Successful transmission
-                    static unsigned long successCount = 0;
-                    successCount++;
-                    
-                    // Print success rate occasionally
-                    static unsigned long lastSuccessReport = 0;
-                    if (millis() - lastSuccessReport >= 10000) { // Every 10 seconds instead of 5
-                        Serial.print("Successful HID transmissions: ");
-                        Serial.println(successCount);
-                        lastSuccessReport = millis();
-                    }
-                } else {
-                    // Failed to send notification
-                    Serial.println("Warning: Failed to send HID notification");
-                    static unsigned long failCount = 0;
-                    failCount++;
-                    if (failCount % 10 == 0) {
-                        Serial.print("Failed HID transmissions: ");
-                        Serial.println(failCount);
-                    }
-                }
-            }
-            
-            // Also send via GATT service
+            // Send via GATT service
             if (deviceConfig.isHubMode()) {
                 // Send aggregated data for hub
                 AggregatedQuaternionData* agg = getAggregatedData();
@@ -297,16 +246,12 @@ void sendQuaternionReport() {
                 gattQuaternionData.x = agg->hubData.x;
                 gattQuaternionData.y = agg->hubData.y;
                 gattQuaternionData.z = agg->hubData.z;
-                gattQuaternionData.switches = 0;
-                memset(gattQuaternionData.reserved, 0, sizeof(gattQuaternionData.reserved));
             } else {
                 // Send individual quaternion data for non-hub devices
                 gattQuaternionData.w = corrected_w;
                 gattQuaternionData.x = corrected_x;
                 gattQuaternionData.y = corrected_y;
                 gattQuaternionData.z = corrected_z;
-                gattQuaternionData.switches = 0;
-                memset(gattQuaternionData.reserved, 0, sizeof(gattQuaternionData.reserved));
             }
             
             // Send GATT notification with rate limiting
@@ -333,22 +278,53 @@ void sendQuaternionReport() {
             } else {
                 Serial.println("GATT: quaternionChar is null!");
             }
-        } else {
-            // Send zero quaternion when BNO085 is not available
-            memset(report_data, 0, sizeof(report_data));
             
-            if (inputReport != nullptr) {
-                inputReport->setValue(report_data, sizeof(report_data));
-                inputReport->notify();
+            // Send child data through new characteristics if in hub mode
+            if (deviceConfig.isHubMode() && handQuaternionChar != nullptr && forearmQuaternionChar != nullptr) {
+                AggregatedQuaternionData* agg = getAggregatedData();
+                unsigned long currentTime = millis();
+                
+                // Send hand quaternion data
+                if (agg->handConnected) {
+                    QuaternionData handData = agg->handData;
+                    handQuaternionChar->notify((uint8_t*)&handData, sizeof(handData));
+                    
+                    static unsigned long lastHandDebugPrint = 0;
+                    if (currentTime - lastHandDebugPrint >= 10000) {
+                        Serial.printf("Hub: Hand data sent - W=%.4f X=%.4f Y=%.4f Z=%.4f\n", 
+                                     handData.w, handData.x, handData.y, handData.z);
+                        lastHandDebugPrint = currentTime;
+                    }
+                }
+                
+                // Send forearm quaternion data
+                if (agg->forearmConnected) {
+                    QuaternionData forearmData = agg->forearmData;
+                    forearmQuaternionChar->notify((uint8_t*)&forearmData, sizeof(forearmData));
+                    
+                    static unsigned long lastForearmDebugPrint = 0;
+                    if (currentTime - lastForearmDebugPrint >= 10000) {
+                        Serial.printf("Hub: Forearm data sent - W=%.4f X=%.4f Y=%.4f Z=%.4f\n", 
+                                     forearmData.w, forearmData.x, forearmData.y, forearmData.z);
+                        lastForearmDebugPrint = currentTime;
+                    }
+                }
+                
+                // Log aggregated status periodically
+                static unsigned long lastAggregatedStatus = 0;
+                if (currentTime - lastAggregatedStatus >= 5000) { // Every 5 seconds
+                    Serial.printf("Hub: Aggregated data - Hand: %s, Forearm: %s\n",
+                                 agg->handConnected ? "YES" : "NO",
+                                 agg->forearmConnected ? "YES" : "NO");
+                    lastAggregatedStatus = currentTime;
+                }
             }
-            
-            // Also send zero quaternion via GATT
+        } else {
+            // Send zero quaternion via GATT when BNO085 is not available
             gattQuaternionData.w = 1.0f;  // Identity quaternion
             gattQuaternionData.x = 0.0f;
             gattQuaternionData.y = 0.0f;
             gattQuaternionData.z = 0.0f;
-            gattQuaternionData.switches = 0;
-            memset(gattQuaternionData.reserved, 0, sizeof(gattQuaternionData.reserved));
             
             if (quaternionChar != nullptr) {
                 quaternionChar->notify((uint8_t*)&gattQuaternionData, sizeof(gattQuaternionData));
@@ -398,7 +374,7 @@ void setup() {
     // Initialize Bluetooth
     NimBLEDevice::init("");
     
-    // Generate unique device name based on role
+    // Set device name for advertising
     String deviceName = deviceConfig.generateDeviceName();
     NimBLEDevice::setDeviceName(deviceName.c_str());
     
@@ -415,21 +391,6 @@ void setup() {
     // Create server
     pServer = NimBLEDevice::createServer();
     pServer->setCallbacks(&serverCallbacksInstance);
-    
-    // Create HID device
-    hid = new NimBLEHIDDevice(pServer);
-    inputReport = hid->getInputReport(1);
-    outputReport = hid->getOutputReport(1);
-    outputReport->setCallbacks(&outputReportCallbacksInstance);
-    
-    // Configure HID device
-    hid->setManufacturer("Eidon AI");
-    hid->setPnp(0x02, VENDOR_ID, PRODUCT_ID, 0x0110);
-    hid->setHidInfo(0x00, 0x01);
-    hid->setReportMap((uint8_t*)hid_report_descriptor, hid_report_descriptor_size);
-    
-    // Start HID services
-    hid->startServices();
     
     // ---------- Custom GATT Service Setup -----------------------------
     eidonService = pServer->createService(EIDON_SERVICE_UUID);
@@ -463,6 +424,25 @@ void setup() {
     };
     deviceInfoChar->setValue(deviceInfo, sizeof(deviceInfo));
     
+    // Add new characteristics for hub devices only (child data)
+    if (deviceConfig.isHubMode()) {
+        // Configure Hand Quaternion characteristic
+        handQuaternionChar = eidonService->createCharacteristic(
+            HAND_QUATERNION_CHAR_UUID,
+            NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
+        );
+        handQuaternionChar->setValue((uint8_t*)&gattQuaternionData, sizeof(gattQuaternionData));
+        Serial.println("GATT: Hand quaternion characteristic created for hub");
+        
+        // Configure Forearm Quaternion characteristic
+        forearmQuaternionChar = eidonService->createCharacteristic(
+            FOREARM_QUATERNION_CHAR_UUID,
+            NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
+        );
+        forearmQuaternionChar->setValue((uint8_t*)&gattQuaternionData, sizeof(gattQuaternionData));
+        Serial.println("GATT: Forearm quaternion characteristic created for hub");
+    }
+    
     // Start custom service
     eidonService->start();
     
@@ -485,21 +465,22 @@ void setup() {
     
     // Configure advertising
     NimBLEAdvertising* pAdvertising = NimBLEDevice::getAdvertising();
-    pAdvertising->setAppearance(HID_GAMEPAD);
-    pAdvertising->addServiceUUID(hid->getHidService()->getUUID());
     pAdvertising->addServiceUUID(eidonService->getUUID());
     pAdvertising->addServiceUUID(roleConfigService->getUUID());
     
     // Add role information to manufacturer data
     // Format: [Company ID Low, Company ID High, Role Data]
     uint8_t manufacturerDataBytes[3];
-    manufacturerDataBytes[0] = VENDOR_ID & 0xFF;        // Company ID low byte (0xD0)
-    manufacturerDataBytes[1] = (VENDOR_ID >> 8) & 0xFF; // Company ID high byte (0xE1)
+    manufacturerDataBytes[0] = 0xD0;        // Company ID low byte (0xD0)
+    manufacturerDataBytes[1] = 0xE1;        // Company ID high byte (0xE1)
     manufacturerDataBytes[2] = (uint8_t)deviceConfig.getRole(); // Role data
     
     NimBLEAdvertisementData manufacturerData;
     manufacturerData.setManufacturerData(manufacturerDataBytes, 3);
     pAdvertising->setAdvertisementData(manufacturerData);
+    
+    // Set device name in main advertising data (not just scan response)
+    pAdvertising->setName(deviceName.c_str());
     
     // Debug logging for manufacturer data
     Serial.printf("Advertising setup - Role: %s (0x%02X), Manufacturer data length: %d\n", 
@@ -516,7 +497,7 @@ void setup() {
     pAdvertising->setMinInterval(160);  // 100ms minimum (more conservative)
     pAdvertising->setMaxInterval(320);  // 200ms maximum (more conservative)
     
-    // Create scan response data
+    // Create scan response data (additional data for active scanning)
     NimBLEAdvertisementData scanResponse;
     scanResponse.setName(deviceName.c_str());
     pAdvertising->setScanResponseData(scanResponse);
@@ -558,6 +539,11 @@ void loop() {
     
     // Update hub scanning service (only if we're a hub)
     updateHubScanning();
+    
+    // Update hub client service (only if we're a hub)
+    if (deviceConfig.isHubMode()) {
+        updateHubClientService();
+    }
     
     // Send data if connected
     if (deviceConnected) {

@@ -74,6 +74,27 @@ void HubClientService::update() {
     
     // Update aggregated data
     updateAggregatedData();
+    
+    // Log connection status and data flow (every 5 seconds)
+    static unsigned long lastDebugTime = 0;
+    if (millis() - lastDebugTime > 5000) {
+        lastDebugTime = millis();
+        
+        // Count connected children and data availability
+        int connectedCount = 0;
+        int dataAvailableCount = 0;
+        for (int i = 0; i < childConnectionCount; i++) {
+            if (childConnections[i].connected) {
+                connectedCount++;
+                if (childConnections[i].dataAvailable) {
+                    dataAvailableCount++;
+                }
+            }
+        }
+        
+        Serial.printf("HubClient: %d/%d children connected, %d sending data\n", 
+                     connectedCount, MAX_CHILDREN, dataAvailableCount);
+    }
 }
 
 // Find existing child slot by role

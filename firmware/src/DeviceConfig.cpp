@@ -178,10 +178,20 @@ String DeviceConfig::generateDeviceName() {
     String mac = addr.toString().c_str();
     String suffix;
     
-    // Extract last 4 characters from MAC (excluding colons)
-    for (int i = mac.length() - 1; i >= 0 && suffix.length() < 4; --i) {
-        if (mac[i] != ':') {
-            suffix = String((char)toupper(mac[i])) + suffix;
+    // Check if MAC address is valid
+    if (mac.length() < 6) {
+        suffix = "XXXX"; // Fallback suffix
+    } else {
+        // Extract last 4 characters from MAC (excluding colons)
+        for (int i = mac.length() - 1; i >= 0 && suffix.length() < 4; --i) {
+            if (mac[i] != ':') {
+                suffix = String((char)toupper(mac[i])) + suffix;
+            }
+        }
+        
+        // Ensure we have a valid suffix
+        if (suffix.length() < 4) {
+            suffix = "XXXX";
         }
     }
     

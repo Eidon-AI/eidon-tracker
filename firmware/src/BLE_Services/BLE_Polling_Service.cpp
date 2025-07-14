@@ -415,16 +415,37 @@ void handleRoleChange(const std::string& value, bool success) {
                 // 2. Update advertising data with new role
                 updateAdvertisingData();
                 
-                // 3. Start child discovery if hub role assigned
+                // 3. Handle child behavior - disconnect from phone when CHILD role assigned
+                if (deviceConfig.isNodeMode() && (newRole == ROLE_LEFT_HAND || newRole == ROLE_RIGHT_HAND || 
+                                                 newRole == ROLE_LEFT_FOREARM || newRole == ROLE_RIGHT_FOREARM)) {
+                    Serial.println("=== CHILD BEHAVIOR: Child role assigned ===");
+                    Serial.println("Child device will now disconnect from phone and accept hub connections");
+                    
+                    // Disconnect from current phone connection if connected
+                    if (deviceConnected) {
+                        Serial.println("Child: Disconnecting from phone...");
+                        // Force disconnect by stopping advertising and restarting with updated data
+                        NimBLEDevice::getAdvertising()->stop();
+                        delay(100); // Brief delay to ensure disconnect
+                        updateAdvertisingData(); // Restart advertising with updated role information
+                        Serial.println("Child: Disconnected from phone, now advertising for hub connection");
+                    }
+                    
+                    // Child devices should continue advertising normally
+                    // They will accept connections from both phones and hubs
+                    // The hub will be the one doing the seeking and connecting
+                }
+                
+                // 4. Start child discovery if hub role assigned
                 if (deviceConfig.isHubMode()) {
                     startChildDiscovery();
                 }
                 
-                // 4. Provide LED feedback
+                // 5. Provide LED feedback
                 // TODO: Check LED feedback is working
                 startRoleChangeLEDPattern();
                 
-                // 4. Log final status
+                // 6. Log final status
                 Serial.print("Final status - Role: '");
                 Serial.print(deviceConfig.getRoleName(deviceConfig.getRole()));
                 Serial.print("', Assigned: ");

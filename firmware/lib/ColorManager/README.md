@@ -7,7 +7,7 @@ A comprehensive color management library for ESP32 with BLE integration, persist
 - **RGB Color Support**: Full RGB color management with 8-bit precision
 - **Persistent Storage**: Automatic saving and loading of colors using ESP32 Preferences
 - **BLE Integration**: Built-in BLE characteristic management for color updates
-- **HID Feature Reports**: Support for HID feature reports with proper report ID handling
+- **GATT Service Support**: Custom GATT characteristics for color control
 - **Utility Functions**: Color printing, hex conversion, and validation
 
 ## Installation
@@ -70,8 +70,8 @@ void setup() {
     colorChar = pServer->createService("color-service")
         ->createCharacteristic("color", NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE);
     
-    // Create feature report characteristic
-    featureReport = pServer->createService("hid-service")
+    // Create feature report characteristic (legacy support)
+    featureReport = pServer->createService("feature-service")
         ->createCharacteristic("feature-report", NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE);
     
     // Connect color manager to BLE characteristics
@@ -130,7 +130,7 @@ Saves the current color to persistent storage. Returns `true` if successful.
 Connects the color manager to a BLE characteristic for color updates.
 
 #### `void setFeatureReport(NimBLECharacteristic* characteristic)`
-Connects the color manager to a HID feature report characteristic.
+Connects the color manager to a feature report characteristic (legacy support).
 
 #### `void updateBLECharacteristics()`
 Updates all connected BLE characteristics with the current color.
@@ -166,7 +166,7 @@ Handles GATT color characteristic write operations.
 
 ### ColorManager::FeatureReportCallbacks
 
-Handles HID feature report read/write operations with proper report ID handling.
+Handles feature report read/write operations (legacy support).
 
 ## Storage
 

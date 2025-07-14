@@ -5,14 +5,12 @@
 #include <NimBLEClient.h>
 #include "DeviceConfig.h"
 
-// Quaternion data structure for GATT (20 bytes)
+// Quaternion data structure for GATT (16 bytes)
 struct QuaternionData {
     float w;
     float x;
     float y;
     float z;
-    uint8_t switches;    // bit 0: isLeft, bit 1: isUpper
-    uint8_t reserved[3]; // padding to 20 bytes
 } __attribute__((packed));
 
 // Hub client connection structure

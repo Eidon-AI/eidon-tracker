@@ -30,18 +30,7 @@ void ServerCallbacks::onMTUChange(uint16_t MTU, ble_gap_conn_desc* desc) {}
 void ServerCallbacks::onPassKeyDisplay(uint32_t pass_key) {}
 void ServerCallbacks::onAuthenticationComplete(NimBLEConnInfo& connInfo) {}
 
-// Output report callback implementation
-void OutputReportCallbacks::onWrite(NimBLECharacteristic* pChar, const std::string& value) {
-    if (!value.empty()) {
-        uint8_t cmd = static_cast<uint8_t>(value[0]);
-        if (cmd == 0x01) {
-            if (imu.isAvailable()) {
-                imu.reset();
-                startIMUResetPattern();
-            }
-        }
-    }
-}
+
 
 // GATT Quaternion characteristic callback implementation
 void QuaternionCharCallbacks::onRead(NimBLECharacteristic* pChar) {}

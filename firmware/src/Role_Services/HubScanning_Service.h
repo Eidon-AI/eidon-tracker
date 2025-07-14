@@ -30,6 +30,7 @@ private:
     bool shouldScan();
     bool hasAllChildren();
     bool isChildDevice(const NimBLEAdvertisedDevice* device);
+    bool isPairableChildDevice(DeviceRole childRole, DeviceRole hubRole);
     DeviceRole getChildRoleFromDevice(const NimBLEAdvertisedDevice* device);
     void processScanResults();
     void attemptChildConnections();
