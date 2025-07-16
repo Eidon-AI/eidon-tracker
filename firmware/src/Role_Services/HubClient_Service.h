@@ -45,6 +45,7 @@ public:
     
     // Data management
     void updateChildData();
+    void updateHubQuaternionData(float w, float x, float y, float z);
     AggregatedQuaternionData* getAggregatedData() { return &aggregatedData; }
     
     // Access to child connections for external use
@@ -61,6 +62,7 @@ void updateHubClientService();
 void connectToChild(const NimBLEAddress& address, DeviceRole childRole);
 void disconnectFromChild(DeviceRole childRole);
 void updateChildData();
+void updateHubQuaternionData(float w, float x, float y, float z);
 bool isChildConnected(DeviceRole childRole);
 AggregatedQuaternionData* getAggregatedData();
 

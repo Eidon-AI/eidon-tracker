@@ -231,6 +231,10 @@ void sendQuaternionReport() {
     
     // Update child data if in hub mode
     if (deviceConfig.isHubMode()) {
+        // Update hub's own quaternion data in aggregated structure
+        updateHubQuaternionData(corrected_w, corrected_x, corrected_y, corrected_z);
+        
+        // Update child data
         updateChildData();
     }
     
@@ -267,10 +271,12 @@ void sendQuaternionReport() {
                         Serial.print("GATT: Quaternion notification sent, result=");
                         Serial.print(notifyResult);
                         Serial.print(", subscribed="); Serial.print(quaternionSubscribed ? "YES" : "NO");
-                        Serial.print(", data: W="); Serial.print(corrected_w, 4);
-                        Serial.print(" X="); Serial.print(corrected_x, 4);
-                        Serial.print(" Y="); Serial.print(corrected_y, 4);
-                        Serial.print(" Z="); Serial.print(corrected_z, 4);
+                        Serial.print(", packet_size="); Serial.print(sizeof(gattQuaternionData));
+                        Serial.print(" bytes, mode="); Serial.print(deviceConfig.isHubMode() ? "HUB" : "NODE");
+                        Serial.print(", data: W="); Serial.print(gattQuaternionData.w, 4);
+                        Serial.print(" X="); Serial.print(gattQuaternionData.x, 4);
+                        Serial.print(" Y="); Serial.print(gattQuaternionData.y, 4);
+                        Serial.print(" Z="); Serial.print(gattQuaternionData.z, 4);
                         Serial.println();
                         lastDebugPrint = currentTime;
                     }
@@ -291,8 +297,8 @@ void sendQuaternionReport() {
                     
                     static unsigned long lastHandDebugPrint = 0;
                     if (currentTime - lastHandDebugPrint >= 10000) {
-                        Serial.printf("Hub: Hand data sent - W=%.4f X=%.4f Y=%.4f Z=%.4f\n", 
-                                     handData.w, handData.x, handData.y, handData.z);
+                        Serial.printf("Hub: Hand data sent - packet_size=%d bytes, W=%.4f X=%.4f Y=%.4f Z=%.4f\n", 
+                                     sizeof(handData), handData.w, handData.x, handData.y, handData.z);
                         lastHandDebugPrint = currentTime;
                     }
                 }
@@ -304,8 +310,8 @@ void sendQuaternionReport() {
                     
                     static unsigned long lastForearmDebugPrint = 0;
                     if (currentTime - lastForearmDebugPrint >= 10000) {
-                        Serial.printf("Hub: Forearm data sent - W=%.4f X=%.4f Y=%.4f Z=%.4f\n", 
-                                     forearmData.w, forearmData.x, forearmData.y, forearmData.z);
+                        Serial.printf("Hub: Forearm data sent - packet_size=%d bytes, W=%.4f X=%.4f Y=%.4f Z=%.4f\n", 
+                                     sizeof(forearmData), forearmData.w, forearmData.x, forearmData.y, forearmData.z);
                         lastForearmDebugPrint = currentTime;
                     }
                 }

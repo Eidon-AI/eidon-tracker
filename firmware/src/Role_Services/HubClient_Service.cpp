@@ -236,6 +236,18 @@ void HubClientService::updateChildData() {
     updateAggregatedData();
 }
 
+// Update hub's own quaternion data with current IMU readings
+void HubClientService::updateHubQuaternionData(float w, float x, float y, float z) {
+    if (!deviceConfig.isHubMode()) {
+        return;
+    }
+    
+    aggregatedData.hubData.w = w;
+    aggregatedData.hubData.x = x;
+    aggregatedData.hubData.y = y;
+    aggregatedData.hubData.z = z;
+}
+
 // Update aggregated data with current child information
 void HubClientService::updateAggregatedData() {
     aggregatedData.timestamp = millis();
@@ -258,6 +270,9 @@ void HubClientService::updateAggregatedData() {
             }
         }
     }
+    
+    // Update hub's own quaternion data (called from main.cpp with current IMU data)
+    // This is handled by updateHubQuaternionData() function
 }
 
 // Setup function for integration with main.cpp
@@ -281,6 +296,10 @@ void disconnectFromChild(DeviceRole childRole) {
 
 void updateChildData() {
     hubClientService.updateChildData();
+}
+
+void updateHubQuaternionData(float w, float x, float y, float z) {
+    hubClientService.updateHubQuaternionData(w, x, y, z);
 }
 
 bool isChildConnected(DeviceRole childRole) {
