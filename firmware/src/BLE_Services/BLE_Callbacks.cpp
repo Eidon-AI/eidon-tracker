@@ -14,15 +14,18 @@ extern NimBLECharacteristic* calibrationChar;
 // Server callbacks implementation
 void ServerCallbacks::onConnect(NimBLEServer* pServer) {
     deviceConnected = true;
+    Serial.println("=== PHONE CONNECTED ===");
     if (NimBLEDevice::getAdvertising()->isAdvertising()) {
         NimBLEDevice::getAdvertising()->stop();
     }
     NimBLEConnInfo connInfo = pServer->getPeerInfo(0);
     pServer->updateConnParams(connInfo.getConnHandle(), 12, 24, 0, 400);
+    Serial.printf("Phone connection established, peer count: %d\n", pServer->getConnectedCount());
 }
 
 void ServerCallbacks::onDisconnect(NimBLEServer* pServer) {
     deviceConnected = false;
+    Serial.println("=== PHONE DISCONNECTED ===");
     NimBLEDevice::startAdvertising();
 }
 

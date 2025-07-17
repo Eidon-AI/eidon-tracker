@@ -8,8 +8,8 @@
 #include "Hub_Structures.h"
 
 // Scanning configuration
-#define SCAN_INTERVAL_MS 1000        // How often to scan (1 second)
-#define SCAN_DURATION_MS 500         // How long each scan lasts (500ms)
+#define SCAN_INTERVAL_MS 10000        // How often to scan (10 seconds - much less aggressive)
+#define SCAN_DURATION_MS 5000        // How long each scan lasts (5 seconds - much longer scan)
 #define MAX_SCAN_RESULTS 10          // Maximum number of scan results to process
 #define CHILD_CONNECTION_TIMEOUT_MS 5000  // Timeout for connection attempts
 
@@ -57,5 +57,6 @@ extern HubScanningService hubScanningService;
 // Function declarations for integration with main.cpp
 void setupHubScanningService();
 void updateHubScanning();
+void resetHubScanningConnections();
 
 #endif // HUB_SCANNING_SERVICE_H 

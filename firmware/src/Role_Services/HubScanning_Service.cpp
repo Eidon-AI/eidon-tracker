@@ -37,6 +37,8 @@ void HubScanningService::begin() {
         return;
     }
     
+    Serial.printf("HubScanning: Initializing scanning service for hub role: %s\n", 
+                 deviceConfig.getRoleName(deviceConfig.getRole()));
     Serial.println("HubScanning: Initializing scanning service...");
     
     // Create scan instance
@@ -47,8 +49,6 @@ void HubScanningService::begin() {
     }
     
     // Configure scanning parameters
-    pScan->setInterval(SCAN_INTERVAL_MS);
-    pScan->setWindow(SCAN_DURATION_MS);
     pScan->setActiveScan(true);
     pScan->setMaxResults(MAX_SCAN_RESULTS);
     
@@ -213,23 +213,82 @@ void HubScanningService::processScanResults() {
             if (!alreadyConnected && canAttemptConnection()) {
                 Serial.printf("HubScanning: Attempting connection to %s (Role: %s)\n", 
                              device->getName().c_str(), deviceConfig.getRoleName(childRole));
+                
+                // Log BLE stack status before connection attempt
+                Serial.printf("HubScanning: BLE stack status - Server connections: %d\n", 
+                             NimBLEDevice::getServer()->getConnectedCount());
+                
                 connectToChild(device->getAddress(), childRole);
                 lastConnectionAttempt = millis();
                 connectionAttempts++;
             } else if (alreadyConnected) {
-                // Don't log this - too verbose
+                Serial.printf("HubScanning: Child %s already connected\n", deviceConfig.getRoleName(childRole));
             } else if (!canAttemptConnection()) {
-                // Don't log this - too verbose
+                Serial.printf("HubScanning: Cannot attempt connection to %s (rate limited or max attempts)\n", 
+                             device->getName().c_str());
+            }
+        } else {
+            // Debug: Log why device is not considered a child
+            if (device->haveManufacturerData()) {
+                std::string manufacturerData = device->getManufacturerData();
+                if (manufacturerData.length() >= 3) {
+                    uint8_t companyIdLow = manufacturerData[0];
+                    uint8_t companyIdHigh = manufacturerData[1];
+                    uint16_t companyId = (companyIdHigh << 8) | companyIdLow;
+                    uint8_t roleByte = manufacturerData[2];
+                    
+                    if (companyId == 0xE1D0) {
+                        DeviceRole role = (DeviceRole)roleByte;
+                        DeviceRole hubRole = deviceConfig.getRole();
+                        bool isPairable = isPairableChildDevice(role, hubRole);
+                        
+                        Serial.printf("HubScanning: Found Eidon device %s (Role: %s) - Pairable: %s\n", 
+                                     device->getName().c_str(), deviceConfig.getRoleName(role), 
+                                     isPairable ? "YES" : "NO");
+                    }
+                }
             }
         }
     }
     
-    // Only log scan summary if we found pairable children or if this is a periodic update
-    static unsigned long lastScanSummary = 0;
-    if (pairableChildrenFound > 0 || (millis() - lastScanSummary > 10000)) { // Every 10 seconds
-        Serial.printf("HubScanning: Found %d total devices, %d Eidon devices, %d pairable children\n", 
-                     resultCount, eidonDevicesFound, pairableChildrenFound);
-        lastScanSummary = millis();
+    // Log scan results every scan
+    Serial.printf("HubScanning: Found %d total devices, %d Eidon devices, %d pairable children\n", 
+                 resultCount, eidonDevicesFound, pairableChildrenFound);
+    
+    // Log all devices found (every scan)
+    Serial.println("HubScanning: Devices found:");
+    for (int i = 0; i < resultCount && i < MAX_SCAN_RESULTS; i++) {
+        const NimBLEAdvertisedDevice* device = results.getDevice(i);
+        std::string deviceNameStr = device->getName();
+        String deviceName = String(deviceNameStr.c_str());
+        if (deviceName.length() == 0) {
+            deviceName = "Unknown";
+        }
+        Serial.printf("  %d: %s (RSSI: %d)", i, deviceName.c_str(), device->getRSSI());
+        
+        if (device->haveManufacturerData()) {
+            std::string manufacturerData = device->getManufacturerData();
+            Serial.printf(" - Manufacturer data: ");
+            for (size_t j = 0; j < manufacturerData.length() && j < 5; j++) {
+                Serial.printf("%02X ", (uint8_t)manufacturerData[j]);
+            }
+            
+            // Check if this could be an Eidon device
+            if (manufacturerData.length() >= 3) {
+                uint8_t companyIdLow = manufacturerData[0];
+                uint8_t companyIdHigh = manufacturerData[1];
+                uint16_t companyId = (companyIdHigh << 8) | companyIdLow;
+                Serial.printf(" -> Company ID: 0x%04X", companyId);
+                
+                if (companyId == 0xE1D0) {
+                    uint8_t roleByte = manufacturerData[2];
+                    Serial.printf(" (EIDON - Role: %d)", roleByte);
+                }
+            }
+        } else {
+            Serial.print(" - No manufacturer data");
+        }
+        Serial.println();
     }
     
     // Clear scan results
@@ -240,14 +299,23 @@ void HubScanningService::processScanResults() {
 bool HubScanningService::isPairableChildDevice(DeviceRole childRole, DeviceRole hubRole) {
     // LEFT_HUB can only pair with LEFT_HAND and LEFT_FOREARM
     if (hubRole == ROLE_LEFT_HUB) {
-        return (childRole == ROLE_LEFT_HAND || childRole == ROLE_LEFT_FOREARM);
+        bool pairable = (childRole == ROLE_LEFT_HAND || childRole == ROLE_LEFT_FOREARM);
+        if (pairable) {
+            Serial.printf("HubScanning: LEFT_HUB can pair with %s\n", deviceConfig.getRoleName(childRole));
+        }
+        return pairable;
     }
     
     // RIGHT_HUB can only pair with RIGHT_HAND and RIGHT_FOREARM
     if (hubRole == ROLE_RIGHT_HUB) {
-        return (childRole == ROLE_RIGHT_HAND || childRole == ROLE_RIGHT_FOREARM);
+        bool pairable = (childRole == ROLE_RIGHT_HAND || childRole == ROLE_RIGHT_FOREARM);
+        if (pairable) {
+            Serial.printf("HubScanning: RIGHT_HUB can pair with %s\n", deviceConfig.getRoleName(childRole));
+        }
+        return pairable;
     }
     
+    Serial.printf("HubScanning: Hub role %s is not a valid hub role\n", deviceConfig.getRoleName(hubRole));
     return false; // Not a hub role
 }
 
@@ -335,17 +403,39 @@ DeviceRole HubScanningService::getChildRoleFromDevice(const NimBLEAdvertisedDevi
 bool HubScanningService::canAttemptConnection() {
     // Limit connection attempts to prevent spam
     if (connectionAttempts >= 5) {
+        Serial.printf("HubScanning: Max connection attempts reached (%d)\n", connectionAttempts);
         return false;
     }
     
     // Rate limit connection attempts
-    return (millis() - lastConnectionAttempt > CHILD_CONNECTION_TIMEOUT_MS);
+    bool canConnect = (millis() - lastConnectionAttempt > CHILD_CONNECTION_TIMEOUT_MS);
+    if (!canConnect) {
+        Serial.printf("HubScanning: Rate limited - %lu ms since last attempt\n", 
+                     millis() - lastConnectionAttempt);
+    }
+    
+    return canConnect;
 }
 
 // Reset connection attempt counter
 void HubScanningService::resetConnectionAttempts() {
     connectionAttempts = 0;
     lastConnectionAttempt = 0;
+    Serial.println("HubScanning: Connection attempts reset");
+    
+    // Also reset any existing child connections to force fresh connection attempts
+    for (int i = 0; i < hubClientService.getChildConnectionCount(); i++) {
+        ChildConnection* connections = hubClientService.getChildConnections();
+        if (connections[i].connected) {
+            Serial.printf("HubScanning: Resetting connection to child %s\n", 
+                         deviceConfig.getRoleName(connections[i].role));
+            connections[i].connected = false;
+            connections[i].dataAvailable = false;
+            if (connections[i].client != nullptr) {
+                connections[i].client->disconnect();
+            }
+        }
+    }
 }
 
 // Setup function for integration with main.cpp
@@ -356,4 +446,9 @@ void setupHubScanningService() {
 // Update function for integration with main.cpp
 void updateHubScanning() {
     hubScanningService.update();
+}
+
+// Reset function for integration with main.cpp
+void resetHubScanningConnections() {
+    hubScanningService.resetConnectionAttempts();
 } 

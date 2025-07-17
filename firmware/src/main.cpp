@@ -260,69 +260,23 @@ void sendQuaternionReport() {
             
             // Send GATT notification with rate limiting
             if (quaternionChar != nullptr) {
-                // Rate limit notifications to prevent overwhelming the BLE stack
-                unsigned long currentTime = millis();
-                if (currentTime - lastNotificationTime >= BLE_NOTIFICATION_INTERVAL) {
-                    bool notifyResult = quaternionChar->notify((uint8_t*)&gattQuaternionData, sizeof(gattQuaternionData));
-                    lastNotificationTime = currentTime;
-                    
-                    static unsigned long lastDebugPrint = 0;
-                    if (currentTime - lastDebugPrint >= 10000) { // Print every 10 seconds (increased from 5 seconds)
-                        Serial.print("GATT: Quaternion notification sent, result=");
-                        Serial.print(notifyResult);
-                        Serial.print(", subscribed="); Serial.print(quaternionSubscribed ? "YES" : "NO");
-                        Serial.print(", packet_size="); Serial.print(sizeof(gattQuaternionData));
-                        Serial.print(" bytes, mode="); Serial.print(deviceConfig.isHubMode() ? "HUB" : "NODE");
-                        Serial.print(", data: W="); Serial.print(gattQuaternionData.w, 4);
-                        Serial.print(" X="); Serial.print(gattQuaternionData.x, 4);
-                        Serial.print(" Y="); Serial.print(gattQuaternionData.y, 4);
-                        Serial.print(" Z="); Serial.print(gattQuaternionData.z, 4);
-                        Serial.println();
-                        lastDebugPrint = currentTime;
-                    }
-                }
-            } else {
-                Serial.println("GATT: quaternionChar is null!");
+                quaternionChar->notify((uint8_t*)&gattQuaternionData, sizeof(gattQuaternionData));
             }
             
-            // Send child data through new characteristics if in hub mode
+            // Send child data via separate characteristics (hub only)
             if (deviceConfig.isHubMode() && handQuaternionChar != nullptr && forearmQuaternionChar != nullptr) {
                 AggregatedQuaternionData* agg = getAggregatedData();
-                unsigned long currentTime = millis();
                 
                 // Send hand quaternion data
                 if (agg->handConnected) {
                     QuaternionData handData = agg->handData;
                     handQuaternionChar->notify((uint8_t*)&handData, sizeof(handData));
-                    
-                    static unsigned long lastHandDebugPrint = 0;
-                    if (currentTime - lastHandDebugPrint >= 10000) {
-                        Serial.printf("Hub: Hand data sent - packet_size=%d bytes, W=%.4f X=%.4f Y=%.4f Z=%.4f\n", 
-                                     sizeof(handData), handData.w, handData.x, handData.y, handData.z);
-                        lastHandDebugPrint = currentTime;
-                    }
                 }
                 
                 // Send forearm quaternion data
                 if (agg->forearmConnected) {
                     QuaternionData forearmData = agg->forearmData;
                     forearmQuaternionChar->notify((uint8_t*)&forearmData, sizeof(forearmData));
-                    
-                    static unsigned long lastForearmDebugPrint = 0;
-                    if (currentTime - lastForearmDebugPrint >= 10000) {
-                        Serial.printf("Hub: Forearm data sent - packet_size=%d bytes, W=%.4f X=%.4f Y=%.4f Z=%.4f\n", 
-                                     sizeof(forearmData), forearmData.w, forearmData.x, forearmData.y, forearmData.z);
-                        lastForearmDebugPrint = currentTime;
-                    }
-                }
-                
-                // Log aggregated status periodically
-                static unsigned long lastAggregatedStatus = 0;
-                if (currentTime - lastAggregatedStatus >= 5000) { // Every 5 seconds
-                    Serial.printf("Hub: Aggregated data - Hand: %s, Forearm: %s\n",
-                                 agg->handConnected ? "YES" : "NO",
-                                 agg->forearmConnected ? "YES" : "NO");
-                    lastAggregatedStatus = currentTime;
                 }
             }
         } else {
@@ -334,11 +288,6 @@ void sendQuaternionReport() {
             
             if (quaternionChar != nullptr) {
                 quaternionChar->notify((uint8_t*)&gattQuaternionData, sizeof(gattQuaternionData));
-                static unsigned long lastDebugPrint = 0;
-                if (millis() - lastDebugPrint >= 5000) { // Increased from 1 second
-                    Serial.println("GATT: Sent zero quaternion (BNO085 not available)");
-                    lastDebugPrint = millis();
-                }
             }
         }
         
@@ -468,6 +417,11 @@ void setup() {
     
     // ---------- Hub Scanning Service Setup -----------------------------
     setupHubScanningService();
+    
+    // Reset any stale connections after firmware upload
+    if (deviceConfig.isHubMode()) {
+        resetHubScanningConnections();
+    }
     
     // Configure advertising
     NimBLEAdvertising* pAdvertising = NimBLEDevice::getAdvertising();

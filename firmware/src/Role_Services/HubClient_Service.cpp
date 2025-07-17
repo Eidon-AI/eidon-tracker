@@ -72,12 +72,12 @@ void HubClientService::update() {
         return; // Not a hub, no client functionality needed
     }
     
-    // Update aggregated data
-    updateAggregatedData();
+    // Note: updateAggregatedData() is called from updateChildData() in main loop
+    // to avoid redundant calls and ensure proper timing
     
-    // Log connection status and data flow (every 5 seconds)
+    // Log connection status and data flow (every 10 seconds)
     static unsigned long lastDebugTime = 0;
-    if (millis() - lastDebugTime > 5000) {
+    if (millis() - lastDebugTime > 10000) {
         lastDebugTime = millis();
         
         // Count connected children and data availability
@@ -148,35 +148,80 @@ void HubClientService::connectToChild(const NimBLEAddress& address, DeviceRole c
         child.client->setClientCallbacks(&hubClientCallbacksInstance);
     }
     
+    // Add delay before connection attempt to avoid timing issues
+    delay(100);
+    
     // Connect to child
-    if (child.client->connect(address)) {
-        Serial.printf("HubClient: Connected to child %s\n", deviceConfig.getRoleName(childRole));
+    Serial.printf("HubClient: Attempting BLE connection to %s...\n", address.toString().c_str());
+    
+    // Add some connection parameters for debugging
+    child.client->setConnectionParams(12, 24, 0, 400); // min interval, max interval, latency, timeout
+    
+    bool connectResult = child.client->connect(address);
+    Serial.printf("HubClient: BLE connect() returned: %s\n", connectResult ? "SUCCESS" : "FAILED");
+    
+    if (connectResult) {
+        Serial.printf("HubClient: BLE connection successful to child %s\n", deviceConfig.getRoleName(childRole));
         child.connected = true;
         child.address = address;
         child.role = childRole;
         child.connectionAttempts = 0;
         
         // Discover services and characteristics
+        Serial.printf("HubClient: Discovering services on child %s...\n", deviceConfig.getRoleName(childRole));
         if (child.client->discoverAttributes()) {
+            Serial.printf("HubClient: Service discovery successful for child %s\n", deviceConfig.getRoleName(childRole));
             // Find quaternion characteristic
             NimBLERemoteService* service = child.client->getService(EIDON_SERVICE_UUID);
             if (service != nullptr) {
+                Serial.printf("HubClient: Found Eidon service on child %s\n", deviceConfig.getRoleName(childRole));
                 NimBLERemoteCharacteristic* quatChar = service->getCharacteristic(QUATERNION_CHAR_UUID);
                 
                 if (quatChar != nullptr) {
+                    Serial.printf("HubClient: Found quaternion characteristic on child %s\n", deviceConfig.getRoleName(childRole));
+                    
+                    // Check if characteristic supports notifications
+                    if (quatChar->canNotify()) {
+                        Serial.printf("HubClient: Characteristic supports notifications for %s\n", deviceConfig.getRoleName(childRole));
+                    } else {
+                        Serial.printf("HubClient: WARNING - Characteristic does NOT support notifications for %s\n", deviceConfig.getRoleName(childRole));
+                    }
+                    
                     // Subscribe to notifications
                     if (quatChar->subscribe(true, [childRole](NimBLERemoteCharacteristic* pChar, uint8_t* data, size_t length, bool isNotify) {
                         // Handle child quaternion data
                         if (length == sizeof(QuaternionData)) {
                             QuaternionData* quatData = (QuaternionData*)data;
                             
-                            // Update child data
+                            // Log received child data (every 5 seconds to avoid spam)
+                            static unsigned long lastChildDataLog = 0;
+                            if (millis() - lastChildDataLog >= 5000) {
+                                Serial.printf("HubClient: Received from %s - W=%.4f X=%.4f Y=%.4f Z=%.4f\n", 
+                                             deviceConfig.getRoleName(childRole),
+                                             quatData->w, quatData->x, quatData->y, quatData->z);
+                                lastChildDataLog = millis();
+                            }
+                            
+                            // Update child data immediately
                             for (int i = 0; i < hubClientService.getChildConnectionCount(); i++) {
                                 ChildConnection* connections = hubClientService.getChildConnections();
                                 if (connections[i].role == childRole) {
+                                    // First update the child connection data
                                     connections[i].lastData = *quatData;
                                     connections[i].dataAvailable = true;
                                     connections[i].lastDataTime = millis();
+                                    
+                                    // Then update aggregated data structure
+                                    AggregatedQuaternionData* agg = hubClientService.getAggregatedData();
+                                    if (childRole == ROLE_LEFT_HAND || childRole == ROLE_RIGHT_HAND) {
+                                        agg->handData = *quatData;
+                                        agg->handConnected = true;
+                                    } else if (childRole == ROLE_LEFT_FOREARM || childRole == ROLE_RIGHT_FOREARM) {
+                                        agg->forearmData = *quatData;
+                                        agg->forearmConnected = true;
+                                    }
+                                    agg->timestamp = millis();
+                                    
                                     break;
                                 }
                             }
@@ -184,7 +229,7 @@ void HubClientService::connectToChild(const NimBLEAddress& address, DeviceRole c
                     })) {
                         Serial.printf("HubClient: Subscribed to quaternion data from %s\n", deviceConfig.getRoleName(childRole));
                     } else {
-                        Serial.printf("HubClient: Failed to subscribe to quaternion data from %s\n", deviceConfig.getRoleName(childRole));
+                        Serial.printf("HubClient: FAILED to subscribe to quaternion data from %s\n", deviceConfig.getRoleName(childRole));
                     }
                 } else {
                     Serial.printf("HubClient: Quaternion characteristic not found on %s\n", deviceConfig.getRoleName(childRole));
@@ -196,8 +241,12 @@ void HubClientService::connectToChild(const NimBLEAddress& address, DeviceRole c
             Serial.printf("HubClient: Failed to discover services on %s\n", deviceConfig.getRoleName(childRole));
         }
     } else {
-        Serial.printf("HubClient: Failed to connect to child %s\n", deviceConfig.getRoleName(childRole));
+        Serial.printf("HubClient: BLE connection failed to child %s\n", deviceConfig.getRoleName(childRole));
         child.connected = false;
+        
+        // Log additional debug info
+        Serial.printf("HubClient: Current BLE connection count: %d\n", NimBLEDevice::getServer()->getConnectedCount());
+        Serial.printf("HubClient: BLE stack status check...\n");
     }
 }
 
