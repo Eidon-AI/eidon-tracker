@@ -5,6 +5,15 @@
 #include "BNO085.h"
 #include "Role_Services/RoleConfig_Service.h"
 
+// Forward declarations
+class BNO085;
+class DeviceConfig;
+class ColorManager;
+
+// ESP-NOW function declarations (for child devices)
+extern bool initializeESPNowSender();
+extern void updateESPNowHubMacAddress();
+
 // External variables that handlers need access to
 extern BNO085 imu;
 extern DeviceConfig deviceConfig;
@@ -447,8 +456,14 @@ void handleRoleChange(const std::string& value, bool success) {
                     Serial.println("=== CHILD BEHAVIOR: Child role assigned ===");
                     Serial.println("Child device will now disconnect from phone and accept hub connections");
                     
-                    // TODO: Initialize ESP-NOW communication with assigned hub
-                    Serial.println("TODO: Initialize ESP-NOW communication with assigned hub");
+                    // Initialize ESP-NOW communication with assigned hub
+                    Serial.println("Initializing ESP-NOW communication with assigned hub...");
+                    if (initializeESPNowSender()) {
+                        Serial.println("ESP-NOW sender initialized successfully!");
+                        updateESPNowHubMacAddress();
+                    } else {
+                        Serial.println("Failed to initialize ESP-NOW sender.");
+                    }
                     
                     // Disconnect from current phone connection if connected
                     if (deviceConnected) {
@@ -463,11 +478,6 @@ void handleRoleChange(const std::string& value, bool success) {
                     // Child devices should continue advertising normally
                     // They will accept connections from both phones and hubs
                     // The hub will be the one doing the seeking and connecting
-                }
-                
-                // 4. Start child discovery if hub role assigned
-                if (deviceConfig.isHubMode()) {
-                    startChildDiscovery();
                 }
                 
                 // 5. Provide LED feedback
@@ -534,11 +544,6 @@ void handleRoleChange(const std::string& value, bool success) {
                     // Child devices should continue advertising normally
                     // They will accept connections from both phones and hubs
                     // The hub will be the one doing the seeking and connecting
-                }
-                
-                // 4. Start child discovery if hub role assigned
-                if (deviceConfig.isHubMode()) {
-                    startChildDiscovery();
                 }
                 
                 // 5. Provide LED feedback
@@ -641,10 +646,4 @@ void setupPollingSystem() {
     pollingManager.setDebugMode(true);
     
     Serial.println("BLE Polling System setup complete");
-}
-
-// Hub client function implementation
-void startChildDiscovery() {
-    // This function is implemented in main.cpp
-    // This is just a placeholder for the polling service
 } 

@@ -94,9 +94,6 @@ void validateRoleConfigState();
 // Advertising update function
 void updateAdvertisingData();
 
-// Hub client functions
-void startChildDiscovery();
-
 // Setup function
 void setupPollingSystem();
 

@@ -1,26 +1,26 @@
 #include "HubClient_Service.h"
-#include "BLE_Services/BLE_Callbacks.h"
 #include <Arduino.h>
 
 // External dependencies
 extern DeviceConfig deviceConfig;
 
-// Static callback instance for hub client
-static HubClientCallbacks hubClientCallbacksInstance;
-
 // Global instance
 HubClientService hubClientService;
 
+// ESP-NOW callback function
+void onESPNowDataRecv(const esp_now_recv_info_t* esp_now_info, const uint8_t* data, int dataLen) {
+    hubClientService.processESPNowPacket(esp_now_info->src_addr, data, dataLen);
+}
+
 // Constructor
 HubClientService::HubClientService() 
-    : childConnectionCount(0) {
-    // Initialize child connections
+    : childDeviceCount(0), espNowInitialized(false) {
+    // Initialize child devices
     for (int i = 0; i < MAX_CHILDREN; i++) {
-        childConnections[i].client = nullptr;
-        childConnections[i].connected = false;
-        childConnections[i].dataAvailable = false;
-        childConnections[i].connectionAttempts = 0;
-        childConnections[i].lastConnectionAttempt = 0;
+        memset(childDevices[i].macAddress, 0, sizeof(childDevices[i].macAddress));
+        childDevices[i].role = ROLE_UNKNOWN;
+        childDevices[i].dataAvailable = false;
+        childDevices[i].consecutiveFailures = 0;
     }
     
     // Initialize aggregated data
@@ -31,31 +31,60 @@ HubClientService::HubClientService()
 
 // Destructor
 HubClientService::~HubClientService() {
-    // Disconnect all children
-    for (int i = 0; i < childConnectionCount; i++) {
-        if (childConnections[i].client != nullptr) {
-            childConnections[i].client->disconnect();
-        }
+    // Clean up ESP-NOW if initialized
+    if (espNowInitialized) {
+        esp_now_del_peer(0); // Remove all peers
     }
+}
+
+// Initialize ESP-NOW receiver
+bool HubClientService::initializeESPNow() {
+    if (espNowInitialized) {
+        return true; // Already initialized
+    }
+    
+    // Initialize ESP-NOW
+    if (esp_now_init() != ESP_OK) {
+        Serial.println("HubClient: Failed to initialize ESP-NOW");
+        return false;
+    }
+    
+    // Set ESP-NOW role to receiver
+    if (esp_now_set_pmk((uint8_t*)"pmk1234567890123") != ESP_OK) {
+        Serial.println("HubClient: Failed to set ESP-NOW PMK");
+        return false;
+    }
+    
+    // Register callback function
+    esp_now_register_recv_cb(onESPNowDataRecv);
+    
+    espNowInitialized = true;
+    Serial.println("HubClient: ESP-NOW receiver initialized successfully");
+    return true;
 }
 
 // Initialize the hub client service
 void HubClientService::begin() {
     if (!deviceConfig.isHubMode()) {
-        Serial.println("HubClient: Not a hub, client service disabled");
+        Serial.println("HubClient: Not a hub, ESP-NOW receiver service disabled");
         return;
     }
     
-    Serial.println("HubClient: Initializing hub client service...");
+    Serial.println("HubClient: Initializing ESP-NOW receiver service...");
     
-    // Reset child connections
-    childConnectionCount = 0;
+    // Initialize ESP-NOW
+    if (!initializeESPNow()) {
+        Serial.println("HubClient: Failed to initialize ESP-NOW");
+        return;
+    }
+    
+    // Reset child devices
+    childDeviceCount = 0;
     for (int i = 0; i < MAX_CHILDREN; i++) {
-        childConnections[i].client = nullptr;
-        childConnections[i].connected = false;
-        childConnections[i].dataAvailable = false;
-        childConnections[i].connectionAttempts = 0;
-        childConnections[i].lastConnectionAttempt = 0;
+        memset(childDevices[i].macAddress, 0, sizeof(childDevices[i].macAddress));
+        childDevices[i].role = ROLE_UNKNOWN;
+        childDevices[i].dataAvailable = false;
+        childDevices[i].consecutiveFailures = 0;
     }
     
     // Initialize aggregated data
@@ -63,44 +92,100 @@ void HubClientService::begin() {
     aggregatedData.handConnected = false;
     aggregatedData.forearmConnected = false;
     
-    Serial.println("HubClient: Service initialized successfully");
+    Serial.println("HubClient: ESP-NOW receiver service initialized successfully");
 }
 
 // Main update function
 void HubClientService::update() {
-    if (!deviceConfig.isHubMode()) {
-        return; // Not a hub, no client functionality needed
+    if (!deviceConfig.isHubMode() || !espNowInitialized) {
+        return; // Not a hub or ESP-NOW not initialized
     }
     
-    // Note: syncConnectionStatus() is called from updateChildData() in main loop
-    // to synchronize connection flags with actual child connection state
+    // Check for stale child data (timeout handling)
+    unsigned long currentTime = millis();
+    for (int i = 0; i < childDeviceCount; i++) {
+        if (childDevices[i].dataAvailable && 
+            (currentTime - childDevices[i].lastDataTime) > CHILD_DATA_TIMEOUT_MS) {
+            Serial.printf("HubClient: Child %s data timeout, marking as disconnected\n", 
+                         deviceConfig.getRoleName(childDevices[i].role));
+            childDevices[i].dataAvailable = false;
+            childDevices[i].consecutiveFailures++;
+        }
+    }
     
     // Log connection status (every 10 seconds)
     static unsigned long lastDebugTime = 0;
-    if (millis() - lastDebugTime > 10000) {
-        lastDebugTime = millis();
+    if (currentTime - lastDebugTime > 10000) {
+        lastDebugTime = currentTime;
         
         // Count connected children and data availability
         int connectedCount = 0;
         int dataAvailableCount = 0;
-        for (int i = 0; i < childConnectionCount; i++) {
-            if (childConnections[i].connected) {
+        for (int i = 0; i < childDeviceCount; i++) {
+            if (childDevices[i].dataAvailable) {
                 connectedCount++;
-                if (childConnections[i].dataAvailable) {
-                    dataAvailableCount++;
-                }
+                dataAvailableCount++;
             }
         }
         
-        Serial.printf("HubClient: %d/%d children connected, %d sending data\n", 
+        Serial.printf("HubClient: %d/%d children connected via ESP-NOW, %d sending data\n", 
                      connectedCount, MAX_CHILDREN, dataAvailableCount);
+    }
+}
+
+// Process incoming ESP-NOW packet
+void HubClientService::processESPNowPacket(const uint8_t* macAddr, const uint8_t* data, int dataLen) {
+    if (dataLen != sizeof(ESPNowQuaternionPacket)) {
+        Serial.printf("HubClient: Invalid ESP-NOW packet size: %d (expected %d)\n", 
+                     dataLen, sizeof(ESPNowQuaternionPacket));
+        return;
+    }
+    
+    ESPNowQuaternionPacket* packet = (ESPNowQuaternionPacket*)data;
+    DeviceRole senderRole = (DeviceRole)packet->senderRole;
+    
+    // Validate sender role
+    if (senderRole != ROLE_LEFT_HAND && senderRole != ROLE_RIGHT_HAND &&
+        senderRole != ROLE_LEFT_FOREARM && senderRole != ROLE_RIGHT_FOREARM) {
+        Serial.printf("HubClient: Invalid sender role in ESP-NOW packet: %d\n", senderRole);
+        return;
+    }
+    
+    // Find or create child device slot
+    int slotIndex = findChildSlot(senderRole);
+    if (slotIndex == -1) {
+        slotIndex = createChildSlot();
+    }
+    
+    if (slotIndex == -1) {
+        Serial.println("HubClient: No available slots for child device");
+        return;
+    }
+    
+    // Update child device data
+    ESPNowChildDevice& child = childDevices[slotIndex];
+    memcpy(child.macAddress, macAddr, sizeof(child.macAddress));
+    child.role = senderRole;
+    child.lastData = packet->quaternion;
+    child.dataAvailable = true;
+    child.lastDataTime = millis();
+    child.consecutiveFailures = 0;
+    
+    // Log received data (every 5 seconds to avoid spam)
+    static unsigned long lastDataLog = 0;
+    if (millis() - lastDataLog >= 5000) {
+        Serial.printf("HubClient: ESP-NOW data from %s - W=%.4f X=%.4f Y=%.4f Z=%.4f\n", 
+                     deviceConfig.getRoleName(senderRole),
+                     packet->quaternion.w, packet->quaternion.x, 
+                     packet->quaternion.y, packet->quaternion.z);
+        lastDataLog = millis();
     }
 }
 
 // Find existing child slot by role
 int HubClientService::findChildSlot(DeviceRole childRole) {
-    for (int i = 0; i < childConnectionCount; i++) {
-        if (childConnections[i].role == childRole) {
+    for (int i = 0; i < childDeviceCount; i++) {
+        if (childDevices[i].role == childRole) {
             return i;
         }
     }
@@ -109,185 +194,62 @@ int HubClientService::findChildSlot(DeviceRole childRole) {
 
 // Create new child slot
 int HubClientService::createChildSlot() {
-    if (childConnectionCount < MAX_CHILDREN) {
-        return childConnectionCount++;
+    if (childDeviceCount < MAX_CHILDREN) {
+        return childDeviceCount++;
     }
     return -1; // No available slots
 }
 
-// Connect to a child device
-void HubClientService::connectToChild(const NimBLEAddress& address, DeviceRole childRole) {
+// Register a child device (for future reference)
+void HubClientService::registerChildDevice(const uint8_t* macAddress, DeviceRole childRole) {
     if (!deviceConfig.isHubMode()) {
         return;
     }
     
-    Serial.printf("HubClient: Connecting to child %s at %s...\n", 
-                 deviceConfig.getRoleName(childRole), address.toString().c_str());
+    Serial.printf("HubClient: Registering child %s with MAC %02X:%02X:%02X:%02X:%02X:%02X\n", 
+                 deviceConfig.getRoleName(childRole),
+                 macAddress[0], macAddress[1], macAddress[2], 
+                 macAddress[3], macAddress[4], macAddress[5]);
     
-    // Find or create child connection slot
+    // Find or create child device slot
     int slotIndex = findChildSlot(childRole);
     if (slotIndex == -1) {
         slotIndex = createChildSlot();
     }
     
     if (slotIndex == -1) {
-        Serial.println("HubClient: No available slots for child connection");
+        Serial.println("HubClient: No available slots for child registration");
         return;
     }
     
-    ChildConnection& child = childConnections[slotIndex];
-    
-    // Create client if needed
-    if (child.client == nullptr) {
-        child.client = NimBLEDevice::createClient();
-        if (child.client == nullptr) {
-            Serial.println("HubClient: Failed to create client");
-            return;
-        }
-        // Set callbacks for connect/disconnect events
-        child.client->setClientCallbacks(&hubClientCallbacksInstance);
-    }
-    
-    // Add delay before connection attempt to avoid timing issues
-    delay(100);
-    
-    // Connect to child
-    Serial.printf("HubClient: Attempting BLE connection to %s...\n", address.toString().c_str());
-    
-    // Add some connection parameters for debugging
-    child.client->setConnectionParams(12, 24, 0, 400); // min interval, max interval, latency, timeout
-    
-    bool connectResult = child.client->connect(address);
-    Serial.printf("HubClient: BLE connect() returned: %s\n", connectResult ? "SUCCESS" : "FAILED");
-    
-    if (connectResult) {
-        Serial.printf("HubClient: BLE connection successful to child %s\n", deviceConfig.getRoleName(childRole));
-        child.connected = true;
-        child.address = address;
-        child.role = childRole;
-        child.connectionAttempts = 0;
-        
-        // Discover services and characteristics
-        Serial.printf("HubClient: Discovering services on child %s...\n", deviceConfig.getRoleName(childRole));
-        if (child.client->discoverAttributes()) {
-            Serial.printf("HubClient: Service discovery successful for child %s\n", deviceConfig.getRoleName(childRole));
-            // Find quaternion characteristic
-            NimBLERemoteService* service = child.client->getService(EIDON_SERVICE_UUID);
-            if (service != nullptr) {
-                Serial.printf("HubClient: Found Eidon service on child %s\n", deviceConfig.getRoleName(childRole));
-                NimBLERemoteCharacteristic* quatChar = service->getCharacteristic(QUATERNION_CHAR_UUID);
-                
-                if (quatChar != nullptr) {
-                    Serial.printf("HubClient: Found quaternion characteristic on child %s\n", deviceConfig.getRoleName(childRole));
-                    
-                    // Check if characteristic supports notifications
-                    if (quatChar->canNotify()) {
-                        Serial.printf("HubClient: Characteristic supports notifications for %s\n", deviceConfig.getRoleName(childRole));
-                    } else {
-                        Serial.printf("HubClient: WARNING - Characteristic does NOT support notifications for %s\n", deviceConfig.getRoleName(childRole));
-                    }
-                    
-                    // Subscribe to notifications
-                    Serial.printf("HubClient: Attempting to subscribe to notifications from %s...\n", deviceConfig.getRoleName(childRole));
-                    if (quatChar->subscribe(true, [childRole](NimBLERemoteCharacteristic* pChar, uint8_t* data, size_t length, bool isNotify) {
-                        // Handle child quaternion data
-                        if (length == sizeof(QuaternionData)) {
-                            QuaternionData* quatData = (QuaternionData*)data;
-                            
-                            // Log received child data (every 5 seconds to avoid spam)
-                            static unsigned long lastChildDataLog = 0;
-                            if (millis() - lastChildDataLog >= 5000) {
-                                Serial.printf("HubClient: Received from %s - W=%.4f X=%.4f Y=%.4f Z=%.4f\n", 
-                                             deviceConfig.getRoleName(childRole),
-                                             quatData->w, quatData->x, quatData->y, quatData->z);
-                                lastChildDataLog = millis();
-                            }
-                            
-                            // Debug: Log when we update the aggregated structure
-                            static unsigned long lastUpdateLog = 0;
-                            if (millis() - lastUpdateLog >= 5000) {
-                                Serial.printf("HubClient: Updating aggregated structure for %s\n", 
-                                             deviceConfig.getRoleName(childRole));
-                                lastUpdateLog = millis();
-                            }
-                            
-
-                            
-                            // Update child data immediately
-                            for (int i = 0; i < hubClientService.getChildConnectionCount(); i++) {
-                                ChildConnection* connections = hubClientService.getChildConnections();
-                                if (connections[i].role == childRole) {
-                                    // First update the child connection data
-                                    connections[i].lastData = *quatData;
-                                    connections[i].dataAvailable = true;
-                                    connections[i].lastDataTime = millis();
-                                    
-                                    // Then update aggregated data structure
-                                    AggregatedQuaternionData* agg = hubClientService.getAggregatedData();
-                                    if (childRole == ROLE_LEFT_HAND || childRole == ROLE_RIGHT_HAND) {
-                                        agg->handData = *quatData;
-                                        agg->handConnected = true;
-                                    } else if (childRole == ROLE_LEFT_FOREARM || childRole == ROLE_RIGHT_FOREARM) {
-                                        agg->forearmData = *quatData;
-                                        agg->forearmConnected = true;
-                                    }
-                                    agg->timestamp = millis();
-                                    
-                                    break;
-                                }
-                            }
-                        }
-                    })) {
-                        Serial.printf("HubClient: Subscribed to quaternion data from %s\n", deviceConfig.getRoleName(childRole));
-                    } else {
-                        Serial.printf("HubClient: FAILED to subscribe to quaternion data from %s\n", deviceConfig.getRoleName(childRole));
-                    }
-                } else {
-                    Serial.printf("HubClient: Quaternion characteristic not found on %s\n", deviceConfig.getRoleName(childRole));
-                }
-            } else {
-                Serial.printf("HubClient: Eidon service not found on %s\n", deviceConfig.getRoleName(childRole));
-            }
-        } else {
-            Serial.printf("HubClient: Failed to discover services on %s\n", deviceConfig.getRoleName(childRole));
-            
-            // Debug: Check what services are available without discovery
-            std::vector<NimBLERemoteService*> services = child.client->getServices();
-            Serial.printf("HubClient: Services available without discovery: %d\n", services.size());
-            for (auto& svc : services) {
-                Serial.printf("  Service UUID: %s\n", svc->getUUID().toString().c_str());
-            }
-        }
-    } else {
-        Serial.printf("HubClient: BLE connection failed to child %s\n", deviceConfig.getRoleName(childRole));
-        child.connected = false;
-        
-        // Log additional debug info
-        Serial.printf("HubClient: Current BLE connection count: %d\n", NimBLEDevice::getServer()->getConnectedCount());
-        Serial.printf("HubClient: BLE stack status check...\n");
-    }
+    // Update child device info
+    ESPNowChildDevice& child = childDevices[slotIndex];
+    memcpy(child.macAddress, macAddress, sizeof(child.macAddress));
+    child.role = childRole;
+    child.dataAvailable = false;
+    child.consecutiveFailures = 0;
 }
 
-// Disconnect from a child device
-void HubClientService::disconnectFromChild(DeviceRole childRole) {
-    for (int i = 0; i < childConnectionCount; i++) {
-        if (childConnections[i].role == childRole) {
-            ChildConnection& child = childConnections[i];
-            if (child.client != nullptr && child.connected) {
-                child.client->disconnect();
-                child.connected = false;
-                child.dataAvailable = false;
-                Serial.printf("HubClient: Disconnected from child %s\n", deviceConfig.getRoleName(childRole));
+// Unregister a child device
+void HubClientService::unregisterChildDevice(DeviceRole childRole) {
+    for (int i = 0; i < childDeviceCount; i++) {
+        if (childDevices[i].role == childRole) {
+            Serial.printf("HubClient: Unregistering child %s\n", deviceConfig.getRoleName(childRole));
+            
+            // Shift remaining devices to fill the gap
+            for (int j = i; j < childDeviceCount - 1; j++) {
+                childDevices[j] = childDevices[j + 1];
             }
+            childDeviceCount--;
             break;
         }
     }
 }
 
-// Check if a child is connected
+// Check if a child is connected (has recent data)
 bool HubClientService::isChildConnected(DeviceRole childRole) {
-    for (int i = 0; i < childConnectionCount; i++) {
-        if (childConnections[i].role == childRole && childConnections[i].connected) {
+    for (int i = 0; i < childDeviceCount; i++) {
+        if (childDevices[i].role == childRole && childDevices[i].dataAvailable) {
             return true;
         }
     }
@@ -315,7 +277,7 @@ void HubClientService::updateHubQuaternionData(float w, float x, float y, float 
     aggregatedData.hubData.z = z;
 }
 
-// Synchronize connection status with actual child connection state
+// Synchronize connection status with actual child data state
 void HubClientService::syncConnectionStatus() {
     // Update timestamp for data freshness tracking
     aggregatedData.timestamp = millis();
@@ -324,14 +286,16 @@ void HubClientService::syncConnectionStatus() {
     aggregatedData.handConnected = false;
     aggregatedData.forearmConnected = false;
     
-    // Iterate through all child connections to determine actual status
-    for (int i = 0; i < childConnectionCount; i++) {
-        ChildConnection& child = childConnections[i];
+    // Iterate through all child devices to determine actual status
+    for (int i = 0; i < childDeviceCount; i++) {
+        ESPNowChildDevice& child = childDevices[i];
         
-        if (child.connected && child.dataAvailable) {
+        if (child.dataAvailable) {
             if (child.role == ROLE_LEFT_HAND || child.role == ROLE_RIGHT_HAND) {
+                aggregatedData.handData = child.lastData;
                 aggregatedData.handConnected = true;
             } else if (child.role == ROLE_LEFT_FOREARM || child.role == ROLE_RIGHT_FOREARM) {
+                aggregatedData.forearmData = child.lastData;
                 aggregatedData.forearmConnected = true;
             }
         }
@@ -349,12 +313,12 @@ void updateHubClientService() {
 }
 
 // Wrapper functions for main.cpp compatibility
-void connectToChild(const NimBLEAddress& address, DeviceRole childRole) {
-    hubClientService.connectToChild(address, childRole);
+void registerChildDevice(const uint8_t* macAddress, DeviceRole childRole) {
+    hubClientService.registerChildDevice(macAddress, childRole);
 }
 
-void disconnectFromChild(DeviceRole childRole) {
-    hubClientService.disconnectFromChild(childRole);
+void unregisterChildDevice(DeviceRole childRole) {
+    hubClientService.unregisterChildDevice(childRole);
 }
 
 void updateChildData() {

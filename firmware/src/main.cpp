@@ -3,13 +3,11 @@
 #include <NimBLEServer.h>
 #include <NimBLEUtils.h>
 #include <NimBLECharacteristic.h>
-#include <NimBLEClient.h>
-#include <NimBLEScan.h>
 #include <WiFi.h>
+#include <esp_now.h>
 #include "BNO085.h"
 #include "BLE_Services/BLE_Callbacks.h"
 #include "Role_Services/RoleConfig_Service.h"
-#include "Role_Services/HubScanning_Service.h"
 #include "Role_Services/HubClient_Service.h"
 #include "BLE_Services/BLE_Polling_Service.h" //TODO: Move this from BLE Services
 #include "DeviceConfig.h"
@@ -21,6 +19,11 @@ void updateLEDStatus();
 void startIMUResetPattern();
 bool isConnected();
 void updateAdvertisingData();
+
+// ESP-NOW sender functions for child devices
+bool initializeESPNowSender();
+void sendESPNowQuaternionData();
+void updateESPNowHubMacAddress();
 
 // Hub client functions are now in Role_Services/HubClient_Service.h
 
@@ -74,6 +77,13 @@ unsigned long lastTransmission = 0;
 
 // Track subscription status
 bool quaternionSubscribed = false;
+
+// ESP-NOW sender variables for child devices
+bool espNowInitialized = false;
+uint8_t hubMacAddress[6];
+bool hubMacAssigned = false;
+unsigned long lastESPNowTransmission = 0;
+const unsigned long ESP_NOW_INTERVAL = 20; // 50Hz (20ms interval)
 
 // LED pin - changed from 5 to 2 to avoid conflict with switch pin
 #define LED_PIN 2
@@ -325,6 +335,90 @@ void sendQuaternionReport() {
     }
 }
 
+// ESP-NOW sender functions for child devices
+bool initializeESPNowSender() {
+    if (espNowInitialized) {
+        return true; // Already initialized
+    }
+    
+    // Initialize ESP-NOW
+    if (esp_now_init() != ESP_OK) {
+        Serial.println("ESP-NOW: Failed to initialize ESP-NOW");
+        return false;
+    }
+    
+    // Set ESP-NOW role to sender
+    if (esp_now_set_pmk((uint8_t*)"pmk1234567890123") != ESP_OK) {
+        Serial.println("ESP-NOW: Failed to set ESP-NOW PMK");
+        return false;
+    }
+    
+    espNowInitialized = true;
+    Serial.println("ESP-NOW: Sender initialized successfully");
+    return true;
+}
+
+void updateESPNowHubMacAddress() {
+    // Check if we have a hub MAC address assigned
+    if (deviceConfig.isHubMacAssigned()) {
+        deviceConfig.getHubMacAddress(hubMacAddress);
+        hubMacAssigned = true;
+        Serial.printf("ESP-NOW: Hub MAC address updated: %02X:%02X:%02X:%02X:%02X:%02X\n",
+                     hubMacAddress[0], hubMacAddress[1], hubMacAddress[2], 
+                     hubMacAddress[3], hubMacAddress[4], hubMacAddress[5]);
+    } else {
+        hubMacAssigned = false;
+        Serial.println("ESP-NOW: No hub MAC address assigned");
+    }
+}
+
+void sendESPNowQuaternionData() {
+    if (!espNowInitialized || !hubMacAssigned) {
+        return; // Not ready to send
+    }
+    
+    // Rate limiting
+    if (millis() - lastESPNowTransmission < ESP_NOW_INTERVAL) {
+        return;
+    }
+    
+    // Get current quaternion data from IMU
+    float qw_sensor, qx_sensor, qy_sensor, qz_sensor;
+    imu.getQuaternion(qw_sensor, qx_sensor, qy_sensor, qz_sensor);
+    
+    // Apply 180-degree rotation around Z-axis to correct for IMU mounting
+    float corrected_w = qw_sensor;
+    float corrected_x = -qx_sensor;
+    float corrected_y = -qy_sensor;
+    float corrected_z = qz_sensor;
+    
+    // Create ESP-NOW packet
+    ESPNowQuaternionPacket packet;
+    packet.senderRole = (uint8_t)deviceConfig.getRole();
+    packet.quaternion.w = corrected_w;
+    packet.quaternion.x = corrected_x;
+    packet.quaternion.y = corrected_y;
+    packet.quaternion.z = corrected_z;
+    
+    // Send packet to hub
+    esp_err_t result = esp_now_send(hubMacAddress, (uint8_t*)&packet, sizeof(packet));
+    
+    if (result == ESP_OK) {
+        lastESPNowTransmission = millis();
+        
+        // Log sent data (every 5 seconds to avoid spam)
+        static unsigned long lastLogTime = 0;
+        if (millis() - lastLogTime >= 5000) {
+            Serial.printf("ESP-NOW: Sent to hub - Role: %s, W=%.4f X=%.4f Y=%.4f Z=%.4f\n",
+                         deviceConfig.getRoleName(deviceConfig.getRole()),
+                         corrected_w, corrected_x, corrected_y, corrected_z);
+            lastLogTime = millis();
+        }
+    } else {
+        Serial.printf("ESP-NOW: Failed to send data, error: %d\n", result);
+    }
+}
+
 void setup() {
     Serial.begin(115200);
     delay(1000);
@@ -458,14 +552,6 @@ void setup() {
     // ---------- Hub Client Setup -----------------------------
     setupHubClientService();
     
-    // ---------- Hub Scanning Service Setup -----------------------------
-    setupHubScanningService();
-    
-    // Reset any stale connections after firmware upload
-    if (deviceConfig.isHubMode()) {
-        resetHubScanningConnections();
-    }
-    
     // Configure advertising
     NimBLEAdvertising* pAdvertising = NimBLEDevice::getAdvertising();
     pAdvertising->addServiceUUID(eidonService->getUUID());
@@ -518,7 +604,14 @@ void setup() {
             deviceConfig.getHubMacAddress(hubMac);
             Serial.printf("Child device startup: Found stored hub MAC address %02X:%02X:%02X:%02X:%02X:%02X\n",
                          hubMac[0], hubMac[1], hubMac[2], hubMac[3], hubMac[4], hubMac[5]);
-            Serial.println("TODO: Initialize ESP-NOW communication with assigned hub");
+            
+            // Initialize ESP-NOW sender for child device
+            if (initializeESPNowSender()) {
+                updateESPNowHubMacAddress();
+                Serial.println("Child device: ESP-NOW sender initialized and ready to broadcast");
+            } else {
+                Serial.println("Child device: Failed to initialize ESP-NOW sender");
+            }
         } else {
             Serial.println("Child device startup: No hub MAC address assigned");
         }
@@ -556,9 +649,6 @@ void loop() {
     // Update BLE polling system
     pollingManager.update();
     
-    // Update hub scanning service (only if we're a hub)
-    updateHubScanning();
-    
     // Update hub client service (only if we're a hub)
     if (deviceConfig.isHubMode()) {
         updateHubClientService();
@@ -592,6 +682,14 @@ void loop() {
             Serial.println(deviceConfig.isHubMode() ? "HUB" : "NODE");
             lastDebugPrint = millis();
         }
+    }
+    
+    // Send ESP-NOW data for child devices (regardless of BLE connection)
+    if (deviceConfig.isNodeMode() && (deviceConfig.getRole() == ROLE_LEFT_HAND || 
+                                      deviceConfig.getRole() == ROLE_RIGHT_HAND ||
+                                      deviceConfig.getRole() == ROLE_LEFT_FOREARM || 
+                                      deviceConfig.getRole() == ROLE_RIGHT_FOREARM)) {
+        sendESPNowQuaternionData();
     }
     
     // Only restart advertising if truly disconnected and not advertising

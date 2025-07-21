@@ -1,29 +1,24 @@
 #ifndef HUB_CLIENT_SERVICE_H
 #define HUB_CLIENT_SERVICE_H
 
-#include <NimBLEDevice.h>
-#include <NimBLEClient.h>
+#include <Arduino.h>
+#include <esp_now.h>
+#include <WiFi.h>
 #include "DeviceConfig.h"
 #include "Hub_Structures.h"
 
-// Hub client configuration
+// Hub ESP-NOW receiver configuration
 #define MAX_CHILDREN 2
-#define CHILD_CONNECTION_TIMEOUT_MS 5000
+#define ESP_NOW_CHANNEL 1
+#define CHILD_DATA_TIMEOUT_MS 5000  // Consider child disconnected if no data for 5 seconds
 
-// Service and characteristic UUIDs
-#define EIDON_SERVICE_UUID        "E1D00001-8B5A-3E5B-9E23-4F9B5C91BBDE"
-#define QUATERNION_CHAR_UUID      "E1D00002-8B5A-3E5B-9E23-4F9B5C91BBDE"
-
-// New characteristics for hub devices only (child data)
-#define HAND_QUATERNION_CHAR_UUID     "E1D00008-8B5A-3E5B-9E23-4F9B5C91BBDE"
-#define FOREARM_QUATERNION_CHAR_UUID  "E1D00009-8B5A-3E5B-9E23-4F9B5C91BBDE"
-
-// Hub client service class
+// ESP-NOW receiver service class
 class HubClientService {
 private:
-    ChildConnection childConnections[MAX_CHILDREN];
-    int childConnectionCount;
+    ESPNowChildDevice childDevices[MAX_CHILDREN];
+    int childDeviceCount;
     AggregatedQuaternionData aggregatedData;
+    bool espNowInitialized;
     
     // Helper functions
     int findChildSlot(DeviceRole childRole);
@@ -38,19 +33,21 @@ public:
     void begin();
     void update();
     
-    // Connection management
-    void connectToChild(const NimBLEAddress& address, DeviceRole childRole);
-    void disconnectFromChild(DeviceRole childRole);
+    // ESP-NOW management
+    bool initializeESPNow();
+    void registerChildDevice(const uint8_t* macAddress, DeviceRole childRole);
+    void unregisterChildDevice(DeviceRole childRole);
     bool isChildConnected(DeviceRole childRole);
+    void processESPNowPacket(const uint8_t* macAddr, const uint8_t* data, int dataLen);
     
     // Data management
     void updateChildData();
     void updateHubQuaternionData(float w, float x, float y, float z);
     AggregatedQuaternionData* getAggregatedData() { return &aggregatedData; }
     
-    // Access to child connections for external use
-    ChildConnection* getChildConnections() { return childConnections; }
-    int getChildConnectionCount() const { return childConnectionCount; }
+    // Access to child devices for external use
+    ESPNowChildDevice* getChildDevices() { return childDevices; }
+    int getChildDeviceCount() const { return childDeviceCount; }
 };
 
 // Global instance
@@ -59,11 +56,14 @@ extern HubClientService hubClientService;
 // Function declarations for integration with main.cpp
 void setupHubClientService();
 void updateHubClientService();
-void connectToChild(const NimBLEAddress& address, DeviceRole childRole);
-void disconnectFromChild(DeviceRole childRole);
+void registerChildDevice(const uint8_t* macAddress, DeviceRole childRole);
+void unregisterChildDevice(DeviceRole childRole);
 void updateChildData();
 void updateHubQuaternionData(float w, float x, float y, float z);
 bool isChildConnected(DeviceRole childRole);
 AggregatedQuaternionData* getAggregatedData();
+
+// ESP-NOW callback function declaration
+void onESPNowDataRecv(const uint8_t* macAddr, const uint8_t* data, int dataLen);
 
 #endif // HUB_CLIENT_SERVICE_H 
