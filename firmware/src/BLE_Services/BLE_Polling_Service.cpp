@@ -364,15 +364,25 @@ void validateRoleConfigState() {
     
     std::string currentValue = roleConfigChar->getValue();
     DeviceRole actualRole = deviceConfig.getRole();
-    bool isAssigned = deviceConfig.isRoleAssigned();
     
     // Check if characteristic matches device state
     bool needsUpdate = false;
     
-    if (currentValue.length() == 18) {
+    if (currentValue.length() == sizeof(RoleConfigData)) {
         // Full struct - check if it matches current state
         RoleConfigData* data = (RoleConfigData*)currentValue.data();
-        if (data->role != (uint8_t)actualRole || data->assigned != (isAssigned ? 1 : 0)) {
+        if (data->role != (uint8_t)actualRole) {
+            needsUpdate = true;
+        }
+        
+        // Check if hub MAC address matches
+        if (deviceConfig.isHubMacAssigned()) {
+            uint8_t storedMac[6];
+            deviceConfig.getHubMacAddress(storedMac);
+            if (memcmp(data->hubMacAddress, storedMac, 6) != 0) {
+                needsUpdate = true;
+            }
+        } else if (!deviceConfig.isAllZerosMacAddress(data->hubMacAddress)) {
             needsUpdate = true;
         }
     } else if (currentValue.length() != 1) {
@@ -392,18 +402,108 @@ void handleRoleChange(const std::string& value, bool success) {
         return;
     }
     
-    // Handle single-byte role assignment (client writes role value)
-    if (value.length() == 1) {
-        uint8_t newRole = (uint8_t)value[0];
+    // Handle enhanced role assignment (client writes full RoleConfigData structure)
+    if (value.length() == sizeof(RoleConfigData)) {
+        RoleConfigData* data = (RoleConfigData*)value.data();
+        uint8_t newRole = data->role;
         
         // Validate role value
         if (newRole <= 6) {
-            Serial.println("=== ROLE CHANGE DETECTED ===");
+            Serial.println("=== ENHANCED ROLE CHANGE DETECTED ===");
             Serial.print("Role changed to: ");
             Serial.print(newRole);
             Serial.print(" (");
             Serial.print(deviceConfig.getRoleName((DeviceRole)newRole));
             Serial.println(")");
+            
+            // Validate and set hub MAC address if provided
+            if (!deviceConfig.isAllZerosMacAddress(data->hubMacAddress)) {
+                if (deviceConfig.isValidMacAddress(data->hubMacAddress)) {
+                    Serial.printf("Hub MAC address provided: %02X:%02X:%02X:%02X:%02X:%02X\n",
+                                 data->hubMacAddress[0], data->hubMacAddress[1], data->hubMacAddress[2],
+                                 data->hubMacAddress[3], data->hubMacAddress[4], data->hubMacAddress[5]);
+                    deviceConfig.setHubMacAddress(data->hubMacAddress);
+                } else {
+                    Serial.println("Invalid hub MAC address provided, ignoring");
+                }
+            } else {
+                Serial.println("No hub MAC address provided (all zeros)");
+                deviceConfig.clearHubMacAddress();
+            }
+            
+            // Apply the role change
+            if (deviceConfig.setRole((DeviceRole)newRole)) {
+                Serial.println("Role change applied successfully!");
+                
+                // 1. Update characteristic with full struct (state management)
+                updateRoleConfigCharacteristic();
+                
+                // 2. Update advertising data with new role
+                updateAdvertisingData();
+                
+                // 3. Handle child behavior - disconnect from phone when CHILD role assigned
+                if (deviceConfig.isNodeMode() && (newRole == ROLE_LEFT_HAND || newRole == ROLE_RIGHT_HAND || 
+                                                 newRole == ROLE_LEFT_FOREARM || newRole == ROLE_RIGHT_FOREARM)) {
+                    Serial.println("=== CHILD BEHAVIOR: Child role assigned ===");
+                    Serial.println("Child device will now disconnect from phone and accept hub connections");
+                    
+                    // TODO: Initialize ESP-NOW communication with assigned hub
+                    Serial.println("TODO: Initialize ESP-NOW communication with assigned hub");
+                    
+                    // Disconnect from current phone connection if connected
+                    if (deviceConnected) {
+                        Serial.println("Child: Disconnecting from phone...");
+                        // Force disconnect by stopping advertising and restarting with updated data
+                        NimBLEDevice::getAdvertising()->stop();
+                        delay(100); // Brief delay to ensure disconnect
+                        updateAdvertisingData(); // Restart advertising with updated role information
+                        Serial.println("Child: Disconnected from phone, now advertising for hub connection");
+                    }
+                    
+                    // Child devices should continue advertising normally
+                    // They will accept connections from both phones and hubs
+                    // The hub will be the one doing the seeking and connecting
+                }
+                
+                // 4. Start child discovery if hub role assigned
+                if (deviceConfig.isHubMode()) {
+                    startChildDiscovery();
+                }
+                
+                // 5. Provide LED feedback
+                // TODO: Check LED feedback is working
+                startRoleChangeLEDPattern();
+                
+                // 6. Log final status
+                Serial.print("Final status - Role: '");
+                Serial.print(deviceConfig.getRoleName(deviceConfig.getRole()));
+                Serial.print("', Assigned: ");
+                Serial.print(deviceConfig.isRoleAssigned() ? "YES" : "NO");
+                Serial.print(", Mode: ");
+                Serial.println(deviceConfig.isHubMode() ? "HUB" : "NODE");
+                
+            } else {
+                Serial.println("Failed to apply role change!");
+            }
+        } else {
+            Serial.printf("Invalid role value: %d\n", newRole);
+        }
+    }
+    // Handle single-byte role assignment (backward compatibility)
+    else if (value.length() == 1) {
+        uint8_t newRole = (uint8_t)value[0];
+        
+        // Validate role value
+        if (newRole <= 6) {
+            Serial.println("=== LEGACY ROLE CHANGE DETECTED ===");
+            Serial.print("Role changed to: ");
+            Serial.print(newRole);
+            Serial.print(" (");
+            Serial.print(deviceConfig.getRoleName((DeviceRole)newRole));
+            Serial.println(")");
+            
+            // Clear hub MAC address for legacy role assignment
+            deviceConfig.clearHubMacAddress();
             
             // Apply the role change
             if (deviceConfig.setRole((DeviceRole)newRole)) {
@@ -457,13 +557,10 @@ void handleRoleChange(const std::string& value, bool success) {
                 Serial.println("Failed to apply role change!");
             }
         } else {
-            Serial.printf("Role Change: Invalid role value: %d\n", newRole);
+            Serial.printf("Invalid role value: %d\n", newRole);
         }
-    } else if (value.length() == 18) {
-        // Full struct read - this is normal, not a role change
-        // No action needed, just continue polling
     } else {
-        Serial.printf("Role Change: Unexpected value length: %d (expected 1 or 18)\n", value.length());
+        Serial.printf("Unexpected role config data length: %d\n", value.length());
     }
 }
 

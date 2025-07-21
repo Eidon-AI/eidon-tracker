@@ -1,5 +1,5 @@
 #include "DeviceConfig.h"
-#include <NimBLEDevice.h>
+#include <WiFi.h>
 
 // Static member initialization
 Preferences DeviceConfig::prefs;
@@ -7,199 +7,241 @@ DeviceConfigData DeviceConfig::config;
 bool DeviceConfig::initialized = false;
 
 // Configuration keys
-const char* DeviceConfig::CONFIG_NAMESPACE = "device_config";
+const char* DeviceConfig::CONFIG_NAMESPACE = "eidon_config";
 const char* DeviceConfig::ROLE_KEY = "role";
-const char* DeviceConfig::ROLE_ASSIGNED_KEY = "role_assigned";
+const char* DeviceConfig::HUB_MAC_KEY = "hub_mac";
 
-// Role name mapping
-static const char* ROLE_NAMES[] = {
-    "L_HAND",
-    "R_HAND", 
-    "L_FOREARM",
-    "R_FOREARM",
-    "L_HUB",
-    "R_HUB",
-    "CHEST",
-    "UNKNOWN"
-};
+// Global instance
+DeviceConfig deviceConfig;
 
 bool DeviceConfig::begin() {
     if (initialized) {
         return true;
     }
     
-    Serial.println("Initializing Device Configuration Manager...");
-    
     // Initialize preferences
     if (!prefs.begin(CONFIG_NAMESPACE, false)) {
-        Serial.println("Failed to initialize preferences for device config");
+        Serial.println("DeviceConfig: Failed to initialize preferences");
         return false;
     }
     
     // Load configuration
     if (!loadConfig()) {
-        Serial.println("No saved configuration found, using defaults");
-        // Set default configuration
+        Serial.println("DeviceConfig: Failed to load configuration, using defaults");
+        // Initialize with defaults
         config.role = ROLE_UNKNOWN;
-        config.role_assigned = false;
+        memset(config.hubMacAddress, 0, sizeof(config.hubMacAddress));
         
         // Save default configuration
         saveConfig();
     }
     
     initialized = true;
-    
-    Serial.print("Device Configuration loaded - Role: ");
-    Serial.print(getRoleName(config.role));
-    Serial.print(", Assigned: ");
-    Serial.print(config.role_assigned ? "YES" : "NO");
-    Serial.print(", Mode: ");
-    Serial.println(isHubMode() ? "HUB" : "NODE");
-    
+    Serial.println("DeviceConfig: Initialized successfully");
     return true;
 }
 
 DeviceRole DeviceConfig::getRole() {
-    if (!initialized) {
-        begin();
-    }
     return config.role;
 }
 
 bool DeviceConfig::setRole(DeviceRole role) {
-    if (!initialized) {
-        begin();
-    }
-    
     if (!isValidRole(role)) {
-        Serial.println("Invalid device role");
+        Serial.printf("DeviceConfig: Invalid role %d\n", (int)role);
         return false;
     }
     
-    DeviceRole oldRole = config.role;
     config.role = role;
-    config.role_assigned = true;
     
-    // Save to preferences
-    if (saveConfig()) {
-        Serial.print("Device role changed from ");
-        Serial.print(getRoleName(oldRole));
-        Serial.print(" to ");
-        Serial.println(getRoleName(role));
-        return true;
-    } else {
-        Serial.println("Failed to save device role");
-        return false;
-    }
+    Serial.printf("DeviceConfig: Role set to %s (%d)\n", getRoleName(role), (int)role);
+    return saveConfig();
 }
 
 bool DeviceConfig::isRoleAssigned() {
-    if (!initialized) {
-        begin();
-    }
-    return config.role_assigned;
+    return (config.role != ROLE_UNKNOWN);
 }
 
 const char* DeviceConfig::getRoleName(DeviceRole role) {
-    if (role == ROLE_UNKNOWN) {
-        return ROLE_NAMES[7]; // "UNKNOWN"
+    switch (role) {
+        case ROLE_LEFT_HAND: return "Left Hand";
+        case ROLE_RIGHT_HAND: return "Right Hand";
+        case ROLE_LEFT_FOREARM: return "Left Forearm";
+        case ROLE_RIGHT_FOREARM: return "Right Forearm";
+        case ROLE_LEFT_HUB: return "Left Hub";
+        case ROLE_RIGHT_HUB: return "Right Hub";
+        case ROLE_CHEST: return "Chest";
+        case ROLE_UNKNOWN: return "Unknown";
+        default: return "Invalid";
     }
-    if (role >= 0 && role <= 6) {
-        return ROLE_NAMES[role];
-    }
-    return ROLE_NAMES[7]; // "UNKNOWN"
 }
 
 bool DeviceConfig::isHubMode() {
-    if (!initialized) {
-        begin();
-    }
-    // Hub mode is LEFT_HUB or RIGHT_HUB
     return (config.role == ROLE_LEFT_HUB || config.role == ROLE_RIGHT_HUB);
 }
 
 bool DeviceConfig::isNodeMode() {
-    if (!initialized) {
-        begin();
-    }
-    // Node mode is any assigned role that's not a hub
-    return (config.role != ROLE_UNKNOWN && !isHubMode());
+    return (config.role == ROLE_LEFT_HAND || config.role == ROLE_RIGHT_HAND ||
+            config.role == ROLE_LEFT_FOREARM || config.role == ROLE_RIGHT_FOREARM);
 }
 
-bool DeviceConfig::isValidRole(DeviceRole role) {
-    return (role >= ROLE_LEFT_HAND && role <= ROLE_CHEST) || (role == ROLE_UNKNOWN);
+// Hub MAC address management functions
+bool DeviceConfig::setHubMacAddress(const uint8_t* macAddress) {
+    if (macAddress == nullptr) {
+        Serial.println("DeviceConfig: Invalid MAC address pointer");
+        return false;
+    }
+    
+    // Copy MAC address
+    memcpy(config.hubMacAddress, macAddress, sizeof(config.hubMacAddress));
+    
+    Serial.printf("DeviceConfig: Hub MAC address set to %02X:%02X:%02X:%02X:%02X:%02X\n",
+                 macAddress[0], macAddress[1], macAddress[2], 
+                 macAddress[3], macAddress[4], macAddress[5]);
+    
+    return saveConfig();
+}
+
+bool DeviceConfig::getHubMacAddress(uint8_t* macAddress) {
+    if (macAddress == nullptr) {
+        Serial.println("DeviceConfig: Invalid MAC address pointer");
+        return false;
+    }
+    
+    if (isAllZerosMacAddress(config.hubMacAddress)) {
+        Serial.println("DeviceConfig: No hub MAC address assigned");
+        return false;
+    }
+    
+    memcpy(macAddress, config.hubMacAddress, sizeof(config.hubMacAddress));
+    return true;
+}
+
+bool DeviceConfig::isHubMacAssigned() {
+    return !isAllZerosMacAddress(config.hubMacAddress);
+}
+
+bool DeviceConfig::clearHubMacAddress() {
+    memset(config.hubMacAddress, 0, sizeof(config.hubMacAddress));
+    
+    Serial.println("DeviceConfig: Hub MAC address cleared");
+    return saveConfig();
+}
+
+bool DeviceConfig::isAllZerosMacAddress(const uint8_t* macAddress) {
+    if (macAddress == nullptr) {
+        return true;
+    }
+    
+    for (int i = 0; i < 6; i++) {
+        if (macAddress[i] != 0x00) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool DeviceConfig::isValidMacAddress(const uint8_t* macAddress) {
+    if (macAddress == nullptr) {
+        return false;
+    }
+    
+    // Check if MAC address is all zeros (unassigned) - this is valid
+    if (isAllZerosMacAddress(macAddress)) {
+        return true;
+    }
+    
+    // Check for broadcast MAC (FF:FF:FF:FF:FF:FF) - not valid for hub
+    bool allFF = true;
+    for (int i = 0; i < 6; i++) {
+        if (macAddress[i] != 0xFF) {
+            allFF = false;
+            break;
+        }
+    }
+    
+    if (allFF) {
+        Serial.println("DeviceConfig: Broadcast MAC address not valid for hub");
+        return false;
+    }
+    
+    // Check for locally administered MAC (bit 1 of first byte set)
+    if ((macAddress[0] & 0x02) != 0) {
+        Serial.println("DeviceConfig: Locally administered MAC address not valid for hub");
+        return false;
+    }
+    
+    return true;
 }
 
 bool DeviceConfig::saveConfig() {
-    if (!prefs.putUChar(ROLE_KEY, (uint8_t)config.role)) {
-        Serial.println("Failed to save device role");
+    if (!initialized) {
+        Serial.println("DeviceConfig: Not initialized, cannot save");
         return false;
     }
     
-    if (!prefs.putBool(ROLE_ASSIGNED_KEY, config.role_assigned)) {
-        Serial.println("Failed to save role assigned flag");
-        return false;
-    }
+    // Save role configuration
+    prefs.putUChar(ROLE_KEY, (uint8_t)config.role);
     
-    Serial.println("Device configuration saved successfully");
+    // Save hub MAC address configuration
+    prefs.putBytes(HUB_MAC_KEY, config.hubMacAddress, sizeof(config.hubMacAddress));
+    
+    Serial.println("DeviceConfig: Configuration saved successfully");
     return true;
 }
 
 bool DeviceConfig::loadConfig() {
-    // Load role
-    uint8_t roleValue = prefs.getUChar(ROLE_KEY, 255);
-    config.role = (DeviceRole)roleValue;
+    if (!initialized) {
+        Serial.println("DeviceConfig: Not initialized, cannot load");
+        return false;
+    }
     
-    // Load role assigned flag
-    config.role_assigned = prefs.getBool(ROLE_ASSIGNED_KEY, false);
+    // Load role configuration
+    config.role = (DeviceRole)prefs.getUChar(ROLE_KEY, ROLE_UNKNOWN);
     
-    Serial.println("Device configuration loaded successfully");
+    // Load hub MAC address configuration
+    size_t macSize = prefs.getBytes(HUB_MAC_KEY, config.hubMacAddress, sizeof(config.hubMacAddress));
+    if (macSize != sizeof(config.hubMacAddress)) {
+        // Initialize with zeros if not found
+        memset(config.hubMacAddress, 0, sizeof(config.hubMacAddress));
+    }
+    
+    Serial.printf("DeviceConfig: Configuration loaded - Role: %s, Hub MAC: %s\n",
+                 getRoleName(config.role),
+                 isHubMacAssigned() ? "ASSIGNED" : "NOT ASSIGNED");
+    
     return true;
 }
 
 bool DeviceConfig::resetConfig() {
-    if (!prefs.clear()) {
-        Serial.println("Failed to clear device configuration");
+    if (!initialized) {
+        Serial.println("DeviceConfig: Not initialized, cannot reset");
         return false;
     }
     
-    initialized = false;
-    Serial.println("Device configuration reset successfully");
+    // Clear all preferences
+    prefs.clear();
+    
+    // Reset to defaults
+    config.role = ROLE_UNKNOWN;
+    memset(config.hubMacAddress, 0, sizeof(config.hubMacAddress));
+    
+    Serial.println("DeviceConfig: Configuration reset to defaults");
     return true;
 }
 
 String DeviceConfig::generateDeviceName() {
-    if (!initialized) {
-        begin();
-    }
+    String baseName = "Eidon";
     
-    // Get MAC address for unique suffix
-    NimBLEAddress addr = NimBLEDevice::getAddress();
-    String mac = addr.toString().c_str();
-    String suffix;
-    
-    // Check if MAC address is valid
-    if (mac.length() < 6) {
-        suffix = "XXXX"; // Fallback suffix
+    if (config.role != ROLE_UNKNOWN) {
+        baseName += "-";
+        baseName += getRoleName(config.role);
     } else {
-        // Extract last 4 characters from MAC (excluding colons)
-        for (int i = mac.length() - 1; i >= 0 && suffix.length() < 4; --i) {
-            if (mac[i] != ':') {
-                suffix = String((char)toupper(mac[i])) + suffix;
-            }
-        }
-        
-        // Ensure we have a valid suffix
-        if (suffix.length() < 4) {
-            suffix = "XXXX";
-        }
+        baseName += "-Unknown";
     }
     
-    // Generate consistent device name (no role-based naming)
-    char name[32];
-    snprintf(name, sizeof(name), "Eidon-Tracker-%s", suffix.c_str());
-    return String(name);
+    return baseName;
 }
 
-// Global instance
-DeviceConfig deviceConfig; 
+bool DeviceConfig::isValidRole(DeviceRole role) {
+    return (role >= ROLE_LEFT_HAND && role <= ROLE_RIGHT_HUB) || role == ROLE_CHEST || role == ROLE_UNKNOWN;
+} 

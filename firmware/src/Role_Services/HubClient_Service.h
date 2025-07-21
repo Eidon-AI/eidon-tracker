@@ -28,7 +28,7 @@ private:
     // Helper functions
     int findChildSlot(DeviceRole childRole);
     int createChildSlot();
-    void updateAggregatedData();
+    void syncConnectionStatus();
     
 public:
     HubClientService();

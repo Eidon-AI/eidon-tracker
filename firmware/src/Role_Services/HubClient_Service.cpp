@@ -72,10 +72,10 @@ void HubClientService::update() {
         return; // Not a hub, no client functionality needed
     }
     
-    // Note: updateAggregatedData() is called from updateChildData() in main loop
-    // to avoid redundant calls and ensure proper timing
+    // Note: syncConnectionStatus() is called from updateChildData() in main loop
+    // to synchronize connection flags with actual child connection state
     
-    // Log connection status and data flow (every 10 seconds)
+    // Log connection status (every 10 seconds)
     static unsigned long lastDebugTime = 0;
     if (millis() - lastDebugTime > 10000) {
         lastDebugTime = millis();
@@ -188,6 +188,7 @@ void HubClientService::connectToChild(const NimBLEAddress& address, DeviceRole c
                     }
                     
                     // Subscribe to notifications
+                    Serial.printf("HubClient: Attempting to subscribe to notifications from %s...\n", deviceConfig.getRoleName(childRole));
                     if (quatChar->subscribe(true, [childRole](NimBLERemoteCharacteristic* pChar, uint8_t* data, size_t length, bool isNotify) {
                         // Handle child quaternion data
                         if (length == sizeof(QuaternionData)) {
@@ -201,6 +202,16 @@ void HubClientService::connectToChild(const NimBLEAddress& address, DeviceRole c
                                              quatData->w, quatData->x, quatData->y, quatData->z);
                                 lastChildDataLog = millis();
                             }
+                            
+                            // Debug: Log when we update the aggregated structure
+                            static unsigned long lastUpdateLog = 0;
+                            if (millis() - lastUpdateLog >= 5000) {
+                                Serial.printf("HubClient: Updating aggregated structure for %s\n", 
+                                             deviceConfig.getRoleName(childRole));
+                                lastUpdateLog = millis();
+                            }
+                            
+
                             
                             // Update child data immediately
                             for (int i = 0; i < hubClientService.getChildConnectionCount(); i++) {
@@ -239,6 +250,13 @@ void HubClientService::connectToChild(const NimBLEAddress& address, DeviceRole c
             }
         } else {
             Serial.printf("HubClient: Failed to discover services on %s\n", deviceConfig.getRoleName(childRole));
+            
+            // Debug: Check what services are available without discovery
+            std::vector<NimBLERemoteService*> services = child.client->getServices();
+            Serial.printf("HubClient: Services available without discovery: %d\n", services.size());
+            for (auto& svc : services) {
+                Serial.printf("  Service UUID: %s\n", svc->getUUID().toString().c_str());
+            }
         }
     } else {
         Serial.printf("HubClient: BLE connection failed to child %s\n", deviceConfig.getRoleName(childRole));
@@ -282,7 +300,7 @@ void HubClientService::updateChildData() {
         return;
     }
     
-    updateAggregatedData();
+    syncConnectionStatus();
 }
 
 // Update hub's own quaternion data with current IMU readings
@@ -297,31 +315,27 @@ void HubClientService::updateHubQuaternionData(float w, float x, float y, float 
     aggregatedData.hubData.z = z;
 }
 
-// Update aggregated data with current child information
-void HubClientService::updateAggregatedData() {
+// Synchronize connection status with actual child connection state
+void HubClientService::syncConnectionStatus() {
+    // Update timestamp for data freshness tracking
     aggregatedData.timestamp = millis();
     
-    // Reset connection flags
+    // Reset connection flags - we'll set them based on actual child status
     aggregatedData.handConnected = false;
     aggregatedData.forearmConnected = false;
     
-    // Update child data
+    // Iterate through all child connections to determine actual status
     for (int i = 0; i < childConnectionCount; i++) {
         ChildConnection& child = childConnections[i];
         
         if (child.connected && child.dataAvailable) {
             if (child.role == ROLE_LEFT_HAND || child.role == ROLE_RIGHT_HAND) {
-                aggregatedData.handData = child.lastData;
                 aggregatedData.handConnected = true;
             } else if (child.role == ROLE_LEFT_FOREARM || child.role == ROLE_RIGHT_FOREARM) {
-                aggregatedData.forearmData = child.lastData;
                 aggregatedData.forearmConnected = true;
             }
         }
     }
-    
-    // Update hub's own quaternion data (called from main.cpp with current IMU data)
-    // This is handled by updateHubQuaternionData() function
 }
 
 // Setup function for integration with main.cpp

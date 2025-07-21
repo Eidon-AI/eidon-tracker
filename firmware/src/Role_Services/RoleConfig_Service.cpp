@@ -51,7 +51,13 @@ void updateRoleConfigCharacteristic() {
     roleConfigData.role = (uint8_t)currentRole;
     strncpy(roleConfigData.roleName, deviceConfig.getRoleName(currentRole), sizeof(roleConfigData.roleName) - 1);
     roleConfigData.roleName[sizeof(roleConfigData.roleName) - 1] = '\0'; // Ensure null termination
-    roleConfigData.assigned = isAssigned ? 1 : 0;
+    
+    // Copy hub MAC address from device config
+    if (deviceConfig.isHubMacAssigned()) {
+        deviceConfig.getHubMacAddress(roleConfigData.hubMacAddress);
+    } else {
+        memset(roleConfigData.hubMacAddress, 0, sizeof(roleConfigData.hubMacAddress));
+    }
     
     // Update characteristic value
     if (roleConfigChar != nullptr) {

@@ -16,10 +16,10 @@ enum DeviceRole {
     ROLE_UNKNOWN = 255       // No role assigned (default state)
 };
 
-// Device configuration structure (simplified)
+// Device configuration structure (enhanced for ESP-NOW support)
 struct DeviceConfigData {
-    DeviceRole role;
-    bool role_assigned;
+    DeviceRole role;           // ROLE_UNKNOWN = unassigned
+    uint8_t hubMacAddress[6];  // All zeros = unassigned
 } __attribute__((packed));
 
 // Device configuration manager class
@@ -35,6 +35,14 @@ public:
     static const char* getRoleName(DeviceRole role);
     static bool isHubMode();
     static bool isNodeMode();
+    
+    // Hub MAC address management (for ESP-NOW)
+    static bool setHubMacAddress(const uint8_t* macAddress);
+    static bool getHubMacAddress(uint8_t* macAddress);
+    static bool isHubMacAssigned();
+    static bool clearHubMacAddress();
+    static bool isValidMacAddress(const uint8_t* macAddress);
+    static bool isAllZerosMacAddress(const uint8_t* macAddress);
     
     // Configuration persistence
     static bool saveConfig();
@@ -55,7 +63,7 @@ private:
     // Configuration keys
     static const char* CONFIG_NAMESPACE;
     static const char* ROLE_KEY;
-    static const char* ROLE_ASSIGNED_KEY;
+    static const char* HUB_MAC_KEY;
 };
 
 // Global instance

@@ -5,6 +5,7 @@
 #include <NimBLECharacteristic.h>
 #include <NimBLEClient.h>
 #include <NimBLEScan.h>
+#include <WiFi.h>
 #include "BNO085.h"
 #include "BLE_Services/BLE_Callbacks.h"
 #include "Role_Services/RoleConfig_Service.h"
@@ -267,16 +268,45 @@ void sendQuaternionReport() {
             if (deviceConfig.isHubMode() && handQuaternionChar != nullptr && forearmQuaternionChar != nullptr) {
                 AggregatedQuaternionData* agg = getAggregatedData();
                 
+                // Debug: Log aggregated structure state every 5 seconds
+                static unsigned long lastAggDebugLog = 0;
+                if (millis() - lastAggDebugLog >= 5000) {
+                    Serial.printf("DEBUG: Aggregated structure - Hand connected: %s, Forearm connected: %s\n", 
+                                 agg->handConnected ? "YES" : "NO", 
+                                 agg->forearmConnected ? "YES" : "NO");
+                    if (agg->handConnected) {
+                        Serial.printf("DEBUG: Hand data in agg structure: W=%.4f X=%.4f Y=%.4f Z=%.4f\n", 
+                                     agg->handData.w, agg->handData.x, agg->handData.y, agg->handData.z);
+                    }
+                    lastAggDebugLog = millis();
+                }
+                
                 // Send hand quaternion data
                 if (agg->handConnected) {
                     QuaternionData handData = agg->handData;
                     handQuaternionChar->notify((uint8_t*)&handData, sizeof(handData));
+                    
+                    // Log sent data every 5 seconds to avoid spam
+                    static unsigned long lastSentDataLog = 0;
+                    if (millis() - lastSentDataLog >= 5000) {
+                        Serial.printf("SENT hand data: W=%.4f X=%.4f Y=%.4f Z=%.4f\n", 
+                                     handData.w, handData.x, handData.y, handData.z);
+                        lastSentDataLog = millis();
+                    }
                 }
                 
                 // Send forearm quaternion data
                 if (agg->forearmConnected) {
                     QuaternionData forearmData = agg->forearmData;
                     forearmQuaternionChar->notify((uint8_t*)&forearmData, sizeof(forearmData));
+                    
+                    // Log sent data every 5 seconds to avoid spam
+                    static unsigned long lastSentForearmDataLog = 0;
+                    if (millis() - lastSentForearmDataLog >= 5000) {
+                        Serial.printf("SENT forearm data: W=%.4f X=%.4f Y=%.4f Z=%.4f\n", 
+                                     forearmData.w, forearmData.x, forearmData.y, forearmData.z);
+                        lastSentForearmDataLog = millis();
+                    }
                 }
             }
         } else {
@@ -311,6 +341,11 @@ void setup() {
             delay(100);
         }
     }
+    
+    // Initialize WiFi for ESP-NOW support and MAC address retrieval
+    WiFi.mode(WIFI_MODE_STA);
+    WiFi.begin(); // Start WiFi (no need to connect to network for ESP-NOW)
+    Serial.println("WiFi initialized for ESP-NOW support");
     
     // Setup LED pin
     pinMode(LED_PIN, OUTPUT);
@@ -370,14 +405,22 @@ void setup() {
         DEVICE_INFO_CHAR_UUID,
         NIMBLE_PROPERTY::READ
     );
-    uint8_t deviceInfo[8] = {
+    
+    // Get device's WiFi MAC address
+    uint8_t deviceMac[6];
+    WiFi.macAddress(deviceMac);
+    
+    // Extended device info with MAC address (14 bytes total)
+    uint8_t deviceInfo[14] = {
         0x01, 0x00,  // Device ID
         0x01, 0x02,  // Firmware version 1.2
         100,         // Battery level
         (uint8_t)deviceConfig.getRole(),  // Device role
-        0, 0          // Reserved
+        deviceMac[0], deviceMac[1], deviceMac[2], deviceMac[3], deviceMac[4], deviceMac[5]  // MAC address
     };
     deviceInfoChar->setValue(deviceInfo, sizeof(deviceInfo));
+    Serial.printf("GATT: Device info characteristic created with MAC: %02X:%02X:%02X:%02X:%02X:%02X\n",
+                 deviceMac[0], deviceMac[1], deviceMac[2], deviceMac[3], deviceMac[4], deviceMac[5]);
     
     // Add new characteristics for hub devices only (child data)
     if (deviceConfig.isHubMode()) {
@@ -464,6 +507,22 @@ void setup() {
     
     // Start advertising
     pAdvertising->start();
+    
+    // Check for stored hub MAC address if this is a child device
+    if (deviceConfig.isNodeMode() && (deviceConfig.getRole() == ROLE_LEFT_HAND || 
+                                      deviceConfig.getRole() == ROLE_RIGHT_HAND ||
+                                      deviceConfig.getRole() == ROLE_LEFT_FOREARM || 
+                                      deviceConfig.getRole() == ROLE_RIGHT_FOREARM)) {
+        if (deviceConfig.isHubMacAssigned()) {
+            uint8_t hubMac[6];
+            deviceConfig.getHubMacAddress(hubMac);
+            Serial.printf("Child device startup: Found stored hub MAC address %02X:%02X:%02X:%02X:%02X:%02X\n",
+                         hubMac[0], hubMac[1], hubMac[2], hubMac[3], hubMac[4], hubMac[5]);
+            Serial.println("TODO: Initialize ESP-NOW communication with assigned hub");
+        } else {
+            Serial.println("Child device startup: No hub MAC address assigned");
+        }
+    }
 }
 
 void loop() {

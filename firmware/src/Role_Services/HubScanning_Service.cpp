@@ -251,45 +251,9 @@ void HubScanningService::processScanResults() {
         }
     }
     
-    // Log scan results every scan
+    // Log scan results summary only
     Serial.printf("HubScanning: Found %d total devices, %d Eidon devices, %d pairable children\n", 
                  resultCount, eidonDevicesFound, pairableChildrenFound);
-    
-    // Log all devices found (every scan)
-    Serial.println("HubScanning: Devices found:");
-    for (int i = 0; i < resultCount && i < MAX_SCAN_RESULTS; i++) {
-        const NimBLEAdvertisedDevice* device = results.getDevice(i);
-        std::string deviceNameStr = device->getName();
-        String deviceName = String(deviceNameStr.c_str());
-        if (deviceName.length() == 0) {
-            deviceName = "Unknown";
-        }
-        Serial.printf("  %d: %s (RSSI: %d)", i, deviceName.c_str(), device->getRSSI());
-        
-        if (device->haveManufacturerData()) {
-            std::string manufacturerData = device->getManufacturerData();
-            Serial.printf(" - Manufacturer data: ");
-            for (size_t j = 0; j < manufacturerData.length() && j < 5; j++) {
-                Serial.printf("%02X ", (uint8_t)manufacturerData[j]);
-            }
-            
-            // Check if this could be an Eidon device
-            if (manufacturerData.length() >= 3) {
-                uint8_t companyIdLow = manufacturerData[0];
-                uint8_t companyIdHigh = manufacturerData[1];
-                uint16_t companyId = (companyIdHigh << 8) | companyIdLow;
-                Serial.printf(" -> Company ID: 0x%04X", companyId);
-                
-                if (companyId == 0xE1D0) {
-                    uint8_t roleByte = manufacturerData[2];
-                    Serial.printf(" (EIDON - Role: %d)", roleByte);
-                }
-            }
-        } else {
-            Serial.print(" - No manufacturer data");
-        }
-        Serial.println();
-    }
     
     // Clear scan results
     pScan->clearResults();
