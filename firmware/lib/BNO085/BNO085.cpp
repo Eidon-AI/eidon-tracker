@@ -22,9 +22,9 @@ bool bno085_available = false;
 unsigned long lastUpdate = 0;
 const unsigned long UPDATE_INTERVAL = 1;
 
-// Debug print interval
+// Debug print interval - match main.cpp periodic logging
 unsigned long lastPrint = 0;
-const unsigned long PRINT_INTERVAL = 5000; // Print every 5 seconds instead of 2
+const unsigned long PRINT_INTERVAL = 3000; // Print every 3 seconds (increased from 5 seconds)
 
 // Function to scan I2C bus
 void BNO085::scanI2C() {
@@ -80,19 +80,13 @@ bool BNO085::testCommunication() {
 // Function to enable sensor reports
 void BNO085::enableReports() {
     // Use GAME_ROTATION_VECTOR for fast quaternion updates (no magnetic north reference)
-    // Reduce to 50Hz (20ms) for stability - prevents overwhelming I2C and BLE
-    if (!bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 20000)) { // 20ms (50Hz) - stable rate
-        if (!bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 10000)) { // 10ms (100Hz) fallback
+    // Set to 100Hz (10ms) to match main.cpp IMU_UPDATE_INTERVAL
+    if (!bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 10000)) { // 10ms (100Hz) - target rate
+        if (!bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 20000)) { // 20ms (50Hz) fallback
             if (!bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 5000)) { // 5ms (200Hz) fallback
                 Serial.println("Could not enable rotation vector");
-            } else {
-                Serial.println("Game rotation vector enabled at 200Hz");
             }
-        } else {
-            Serial.println("Game rotation vector enabled at 100Hz");
         }
-    } else {
-        Serial.println("Game rotation vector enabled at 50Hz");
     }
 
     // Enable Tap Detector (event-driven, report interval 0)
@@ -108,7 +102,7 @@ bool BNO085::begin() {
     Wire.begin();
     Wire.setClock(400000); // Set to 400kHz (standard fast mode) for stability
     
-    Serial.println("Initializing BNO085...");
+
     
     // Test basic I2C communication with retries
     int i2c_attempts = 0;
@@ -190,7 +184,7 @@ bool BNO085::begin() {
         return false;
     }
 
-    Serial.println("BNO085: Initialized successfully");
+    Serial.println("BNO085: Initialized");
 
     // Enable the rotation vector report
     enableReports();
@@ -226,7 +220,7 @@ void BNO085::update() {
     }
 
     if (bno08x.wasReset()) {
-        Serial.println("BNO085: Sensor reset detected");
+        Serial.println("IMU: Reset detected");
         enableReports();
     }
     
@@ -244,7 +238,7 @@ void BNO085::update() {
                 bool isDouble = f & TAPDET_DOUBLE;
                 
                 if (isDouble) {
-                    Serial.println("BNO085: Double tap detected");
+                    Serial.println("IMU: Double tap detected");
                     bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 0);
                     bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 5000);
                 }
@@ -252,16 +246,12 @@ void BNO085::update() {
             }
         }
 
-        // Print quaternion values every PRINT_INTERVAL milliseconds (reduced frequency)
-        if (millis() - lastPrint >= PRINT_INTERVAL) {
-            Serial.print("BNO085 Quaternion - X: "); Serial.print(quaternion_x, 4);
-            Serial.print(" Y: "); Serial.print(quaternion_y, 4);
-            Serial.print(" Z: "); Serial.print(quaternion_z, 4);
-            Serial.print(" W: "); Serial.print(quaternion_w, 4);
-            Serial.println();
-            
-            lastPrint = millis();
-        }
+        // Quaternion output disabled to reduce serial overhead
+        // if (millis() - lastPrint >= PRINT_INTERVAL) {
+        //     Serial.printf("IMU: W=%.4f X=%.4f Y=%.4f Z=%.4f\n", 
+        //                  quaternion_w, quaternion_x, quaternion_y, quaternion_z);
+        //     lastPrint = millis();
+        // }
     }
 }
 

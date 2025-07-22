@@ -20,6 +20,13 @@ private:
     AggregatedQuaternionData aggregatedData;
     bool espNowInitialized;
     
+    // Periodic logging variables
+    unsigned long lastLogTime;
+    
+public:
+    // Periodic logging access
+    int packetCounter;
+    
     // Helper functions
     int findChildSlot(DeviceRole childRole);
     int createChildSlot();

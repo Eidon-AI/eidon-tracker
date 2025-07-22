@@ -72,7 +72,7 @@ const unsigned long BLE_NOTIFICATION_INTERVAL = 20; // Send every 20ms (50Hz) fo
 unsigned long lastNotificationTime = 0;
 
 // Add transmission rate limiting for main loop
-const unsigned long TRANSMISSION_INTERVAL = 20; // 50Hz max (20ms interval) for stability
+const unsigned long TRANSMISSION_INTERVAL = 42; // 24Hz max (41.67ms interval) to match ESP-NOW
 unsigned long lastTransmission = 0;
 
 // Track subscription status
@@ -83,7 +83,24 @@ bool espNowInitialized = false;
 uint8_t hubMacAddress[6];
 bool hubMacAssigned = false;
 unsigned long lastESPNowTransmission = 0;
-const unsigned long ESP_NOW_INTERVAL = 50; // (30ms interval) - reduced for stability
+const unsigned long ESP_NOW_INTERVAL = 42; // 24 Hz (41.67ms interval) - matches 24fps video
+
+// Child device periodic logging system
+const unsigned long CHILD_LOG_INTERVAL = 10000; // 10 seconds for periodic updates
+unsigned long lastChildLogTime = 0;
+unsigned long imuUpdateCount = 0;
+unsigned long espNowSendCount = 0;
+unsigned long lastHubStatusCheck = 0;
+const unsigned long HUB_STATUS_CHECK_INTERVAL = 40000; // 40 seconds (5x the regular interval)
+
+// BLE advertising timeout for child devices
+const unsigned long BLE_ADVERTISING_TIMEOUT = 30000; // 30 seconds advertising window
+unsigned long startupTime = 0;
+bool advertisingTimedOut = false;
+
+// IMU rate limiting for both child and hub devices
+unsigned long lastIMUUpdate = 0;
+const unsigned long IMU_UPDATE_INTERVAL = 10; // 100 Hz (10ms interval) - 4x ESP-NOW rate
 
 // LED pin - changed from 5 to 2 to avoid conflict with switch pin
 #define LED_PIN 2
@@ -221,15 +238,7 @@ void updateAdvertisingData() {
     // Restart advertising with updated data
     pAdvertising->start();
     
-    Serial.printf("Advertising updated - Device: %s, Role: %s (0x%02X)\n", 
-                 deviceName.c_str(),
-                 deviceConfig.getRoleName(deviceConfig.getRole()),
-                 (uint8_t)deviceConfig.getRole());
-    Serial.print("Updated manufacturer data bytes: ");
-    for (int i = 0; i < manufacturerData.getPayload().size(); i++) {
-        Serial.printf("%02X ", manufacturerData.getPayload()[i]);
-    }
-    Serial.println();
+
 }
 
 void sendQuaternionReport() {
@@ -289,45 +298,18 @@ void sendQuaternionReport() {
             if (deviceConfig.isHubMode() && handQuaternionChar != nullptr && forearmQuaternionChar != nullptr) {
                 AggregatedQuaternionData* agg = getAggregatedData();
                 
-                // Debug: Log aggregated structure state every 5 seconds
-                static unsigned long lastAggDebugLog = 0;
-                if (millis() - lastAggDebugLog >= 5000) {
-                    Serial.printf("DEBUG: Aggregated structure - Hand connected: %s, Forearm connected: %s\n", 
-                                 agg->handConnected ? "YES" : "NO", 
-                                 agg->forearmConnected ? "YES" : "NO");
-                    if (agg->handConnected) {
-                        Serial.printf("DEBUG: Hand data in agg structure: W=%.4f X=%.4f Y=%.4f Z=%.4f\n", 
-                                     agg->handData.w, agg->handData.x, agg->handData.y, agg->handData.z);
-                    }
-                    lastAggDebugLog = millis();
-                }
+                // Debug logging removed for performance
                 
                 // Send hand quaternion data
                 if (agg->handConnected) {
                     QuaternionData handData = agg->handData;
                     handQuaternionChar->notify((uint8_t*)&handData, sizeof(handData));
-                    
-                    // Log sent data every 5 seconds to avoid spam
-                    static unsigned long lastSentDataLog = 0;
-                    if (millis() - lastSentDataLog >= 5000) {
-                        Serial.printf("SENT hand data: W=%.4f X=%.4f Y=%.4f Z=%.4f\n", 
-                                     handData.w, handData.x, handData.y, handData.z);
-                        lastSentDataLog = millis();
-                    }
                 }
                 
                 // Send forearm quaternion data
                 if (agg->forearmConnected) {
                     QuaternionData forearmData = agg->forearmData;
                     forearmQuaternionChar->notify((uint8_t*)&forearmData, sizeof(forearmData));
-                    
-                    // Log sent data every 5 seconds to avoid spam
-                    static unsigned long lastSentForearmDataLog = 0;
-                    if (millis() - lastSentForearmDataLog >= 5000) {
-                        Serial.printf("SENT forearm data: W=%.4f X=%.4f Y=%.4f Z=%.4f\n", 
-                                     forearmData.w, forearmData.x, forearmData.y, forearmData.z);
-                        lastSentForearmDataLog = millis();
-                    }
                 }
             }
         } else {
@@ -354,18 +336,15 @@ bool initializeESPNowSender() {
     
     // Initialize ESP-NOW
     if (esp_now_init() != ESP_OK) {
-        Serial.println("ESP-NOW: Failed to initialize ESP-NOW");
         return false;
     }
     
     // Set ESP-NOW role to sender
     if (esp_now_set_pmk((uint8_t*)"pmk1234567890123") != ESP_OK) {
-        Serial.println("ESP-NOW: Failed to set ESP-NOW PMK");
         return false;
     }
     
     espNowInitialized = true;
-    Serial.println("ESP-NOW: Sender initialized successfully");
     return true;
 }
 
@@ -382,24 +361,13 @@ void updateESPNowHubMacAddress() {
         peerInfo.encrypt = false; // No encryption for now
         
         esp_err_t result = esp_now_add_peer(&peerInfo);
-        if (result == ESP_OK) {
+        if (result == ESP_OK || result == ESP_ERR_ESPNOW_EXIST) {
             hubMacAssigned = true;
-            Serial.printf("ESP-NOW: Hub peer registered: %02X:%02X:%02X:%02X:%02X:%02X\n",
-                         hubMacAddress[0], hubMacAddress[1], hubMacAddress[2], 
-                         hubMacAddress[3], hubMacAddress[4], hubMacAddress[5]);
-        } else if (result == ESP_ERR_ESPNOW_EXIST) {
-            // Peer already exists - this is fine
-            hubMacAssigned = true;
-            Serial.printf("ESP-NOW: Hub peer already registered: %02X:%02X:%02X:%02X:%02X:%02X\n",
-                         hubMacAddress[0], hubMacAddress[1], hubMacAddress[2], 
-                         hubMacAddress[3], hubMacAddress[4], hubMacAddress[5]);
         } else {
-            Serial.printf("ESP-NOW: Failed to register hub peer, error: %d\n", result);
             hubMacAssigned = false;
         }
     } else {
         hubMacAssigned = false;
-        Serial.println("ESP-NOW: No hub MAC address assigned");
     }
 }
 
@@ -431,41 +399,15 @@ void sendESPNowQuaternionData() {
     packet.quaternion.y = corrected_y;
     packet.quaternion.z = corrected_z;
     
-    // Debug: Print packet details before sending
-    static unsigned long lastDebugTime = 0;
-    if (millis() - lastDebugTime >= 10000) { // Every 10 seconds
-        Serial.printf("DEBUG: ESP-NOW packet - Size: %d, Hub MAC: %02X:%02X:%02X:%02X:%02X:%02X\n", 
-                     sizeof(packet), hubMacAddress[0], hubMacAddress[1], hubMacAddress[2], 
-                     hubMacAddress[3], hubMacAddress[4], hubMacAddress[5]);
-        lastDebugTime = millis();
-    }
-    
     // Send packet to hub
     esp_err_t result = esp_now_send(hubMacAddress, (uint8_t*)&packet, sizeof(packet));
     
     if (result == ESP_OK) {
         lastESPNowTransmission = millis();
-        
-        // Log sent data (every 5 seconds to avoid spam)
-        static unsigned long lastLogTime = 0;
-        if (millis() - lastLogTime >= 5000) {
-            Serial.printf("ESP-NOW: Sent to hub - Role: %s, W=%.4f X=%.4f Y=%.4f Z=%.4f\n",
-                         deviceConfig.getRoleName(deviceConfig.getRole()),
-                         corrected_w, corrected_x, corrected_y, corrected_z);
-            lastLogTime = millis();
-        }
+        espNowSendCount++;
     } else {
-        // Rate limit error messages to avoid spam
-        static unsigned long lastErrorLogTime = 0;
-        static int errorCount = 0;
-        
-        if (millis() - lastErrorLogTime >= 5000) { // Log every 5 seconds
-            Serial.printf("ESP-NOW: Failed to send data, error: %d (occurred %d times in last 5s)\n", result, errorCount + 1);
-            lastErrorLogTime = millis();
-            errorCount = 0;
-        } else {
-            errorCount++;
-        }
+        // Only log critical errors (not rate limited to avoid missing important issues)
+        Serial.printf("ESP-NOW: Failed to send data, error: %d\n", result);
     }
 }
 
@@ -474,6 +416,9 @@ void setup() {
     delay(1000);
     
     Serial.println("\n\n----- Eidon Tracker Starting -----");
+    
+    // Record startup time for advertising timeout
+    startupTime = millis();
     
     // Initialize device configuration first
     if (!deviceConfig.begin()) {
@@ -489,7 +434,6 @@ void setup() {
     // Initialize WiFi for ESP-NOW support and MAC address retrieval
     WiFi.mode(WIFI_MODE_STA);
     WiFi.begin(); // Start WiFi (no need to connect to network for ESP-NOW)
-    Serial.println("WiFi initialized for ESP-NOW support");
     
     // Setup LED pin
     pinMode(LED_PIN, OUTPUT);
@@ -511,9 +455,6 @@ void setup() {
     // Set device name for advertising
     String deviceName = deviceConfig.generateDeviceName();
     NimBLEDevice::setDeviceName(deviceName.c_str());
-    
-    Serial.print("Advertising as: ");
-    Serial.println(deviceName.c_str());
     
     // Enable proper security to fix write callbacks on encrypted connections
     NimBLEDevice::setSecurityAuth(true, true, true);  // Enable authentication, encryption, and authorization
@@ -563,8 +504,6 @@ void setup() {
         deviceMac[0], deviceMac[1], deviceMac[2], deviceMac[3], deviceMac[4], deviceMac[5]  // MAC address
     };
     deviceInfoChar->setValue(deviceInfo, sizeof(deviceInfo));
-    Serial.printf("GATT: Device info characteristic created with MAC: %02X:%02X:%02X:%02X:%02X:%02X\n",
-                 deviceMac[0], deviceMac[1], deviceMac[2], deviceMac[3], deviceMac[4], deviceMac[5]);
     
     // Add new characteristics for hub devices only (child data)
     if (deviceConfig.isHubMode()) {
@@ -574,7 +513,6 @@ void setup() {
             NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
         );
         handQuaternionChar->setValue((uint8_t*)&gattQuaternionData, sizeof(gattQuaternionData));
-        Serial.println("GATT: Hand quaternion characteristic created for hub");
         
         // Configure Forearm Quaternion characteristic
         forearmQuaternionChar = eidonService->createCharacteristic(
@@ -582,7 +520,6 @@ void setup() {
             NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
         );
         forearmQuaternionChar->setValue((uint8_t*)&gattQuaternionData, sizeof(gattQuaternionData));
-        Serial.println("GATT: Forearm quaternion characteristic created for hub");
     }
     
     // Start custom service
@@ -595,9 +532,7 @@ void setup() {
     setupPollingSystem();
 
     // Add Role target to polling system
-    pollingManager.addTarget(roleConfigChar, 200, handleRoleChange, "Role");
-    
-    Serial.println("BLE Polling System setup complete");
+    pollingManager.addTarget(roleConfigChar, 1000, handleRoleChange, "Role"); // 1 Hz (1000ms)
     
     // ---------- Hub Client Setup -----------------------------
     setupHubClientService();
@@ -621,16 +556,7 @@ void setup() {
     // Set device name in main advertising data (not just scan response)
     pAdvertising->setName(deviceName.c_str());
     
-    // Debug logging for manufacturer data
-    Serial.printf("Advertising setup - Role: %s (0x%02X), Manufacturer data length: %d\n", 
-                 deviceConfig.getRoleName(deviceConfig.getRole()), 
-                 (uint8_t)deviceConfig.getRole(), 
-                 manufacturerData.getPayload().size());
-    Serial.print("Manufacturer data bytes: ");
-    for (int i = 0; i < manufacturerData.getPayload().size(); i++) {
-        Serial.printf("%02X ", manufacturerData.getPayload()[i]);
-    }
-    Serial.println();
+
     
     // Set conservative advertising intervals for stable connection
     pAdvertising->setMinInterval(160);  // 100ms minimum (more conservative)
@@ -652,25 +578,30 @@ void setup() {
         if (deviceConfig.isHubMacAssigned()) {
             uint8_t hubMac[6];
             deviceConfig.getHubMacAddress(hubMac);
-            Serial.printf("Child device startup: Found stored hub MAC address %02X:%02X:%02X:%02X:%02X:%02X\n",
-                         hubMac[0], hubMac[1], hubMac[2], hubMac[3], hubMac[4], hubMac[5]);
             
             // Initialize ESP-NOW sender for child device
             if (initializeESPNowSender()) {
                 updateESPNowHubMacAddress();
-                Serial.println("Child device: ESP-NOW sender initialized and ready to broadcast");
-            } else {
-                Serial.println("Child device: Failed to initialize ESP-NOW sender");
             }
-        } else {
-            Serial.println("Child device startup: No hub MAC address assigned");
         }
     }
+    
+    // Essential initialization summary
+    Serial.printf("INIT: Device: %s, Role: %s, Polling: 1Hz\n", 
+                 deviceName.c_str(), 
+                 deviceConfig.getRoleName(deviceConfig.getRole()));
+    
+    // Add ESP-NOW initialization status for child devices
+    if (deviceConfig.isNodeMode() && deviceConfig.isHubMacAssigned()) {
+        Serial.println("INIT: ESP-NOW ready");
+    }
+    
+    Serial.println("----- Initialization Complete -----");
 }
 
 void loop() {
-    // Update LED status first
-    updateLEDStatus();
+    // Update LED status first - DISABLED for performance
+    // updateLEDStatus();
     
     // Simplified connection state management for maximum performance (like reference code)
     bool actuallyConnected = (pServer->getConnectedCount() > 0);
@@ -678,24 +609,13 @@ void loop() {
         deviceConnected = actuallyConnected;
         // Minimal logging to avoid delays
         if (deviceConnected) {
-            Serial.println("=== MAIN LOOP: Connection detected ===");
-            Serial.println("Connected - starting to send data");
+            Serial.println("BLE: Connected");
             
             // Re-initialize ESP-NOW after BLE connection to prevent conflicts
             if (deviceConfig.isHubMode()) {
-                Serial.println("Re-initializing ESP-NOW after BLE connection...");
-                
-                // Debug: Log WiFi state before re-initialization
-                Serial.printf("WiFi before re-init - Mode: %d, Status: %d\n", 
-                             WiFi.getMode(), WiFi.status());
-                
                 // Force WiFi channel back to ESP-NOW channel
                 WiFi.setChannel(1);
                 delay(100); // Give WiFi time to settle
-                
-                // Debug: Log WiFi state after re-initialization
-                Serial.printf("WiFi after re-init - Mode: %d, Status: %d\n", 
-                             WiFi.getMode(), WiFi.status());
                 
                 // Force complete ESP-NOW re-initialization
                 esp_now_deinit();
@@ -704,9 +624,6 @@ void loop() {
                 if (esp_now_init() == ESP_OK) {
                     esp_now_set_pmk((uint8_t*)"pmk1234567890123");
                     esp_now_register_recv_cb(onESPNowDataRecv);
-                    Serial.println("ESP-NOW completely re-initialized for BLE coexistence");
-                } else {
-                    Serial.println("ESP-NOW re-initialization FAILED");
                 }
             }
             
@@ -716,15 +633,19 @@ void loop() {
             ledLastUpdate = 0; // Force immediate update
             currentLEDPattern = LED_CONNECTED;
         } else {
-            Serial.println("=== MAIN LOOP: Disconnection detected ===");
-            Serial.println("Disconnected - restarting advertising");
+            Serial.println("BLE: Disconnected");
             NimBLEDevice::startAdvertising();
             currentLEDPattern = LED_ADVERTISING; // Switch to advertising LED pattern
         }
     }
     
-    // Read sensor data directly (polling-based instead of interrupt-driven)
-    imu.update();
+    // Rate-limited IMU updates for both child and hub devices
+    unsigned long currentTime = millis();
+    if (currentTime - lastIMUUpdate >= IMU_UPDATE_INTERVAL) {
+        imu.update();
+        imuUpdateCount++; // Track IMU updates for periodic logging
+        lastIMUUpdate = currentTime;
+    }
     
     // Update BLE polling system
     pollingManager.update();
@@ -738,30 +659,15 @@ void loop() {
     if (deviceConnected) {
         // Rate limit data transmission to prevent overwhelming BLE connection
         static unsigned long lastTransmission = 0;
-        const unsigned long TRANSMISSION_INTERVAL = 20; // 50Hz max (20ms interval) for stability
+        const unsigned long TRANSMISSION_INTERVAL = 42; // 24Hz max (41.67ms interval) to match ESP-NOW
         
-        if (millis() - lastTransmission < TRANSMISSION_INTERVAL) {
-            // Skip this transmission cycle to maintain stable rate
-            delay(1); // Small delay to prevent busy waiting
-            return; // Early return to avoid rest of loop processing
+        if (millis() - lastTransmission >= TRANSMISSION_INTERVAL) {
+            lastTransmission = millis();
+            // Send quaternion report if connected
+            sendQuaternionReport();
         }
-        
-        lastTransmission = millis();
-        
-        // Send quaternion report if connected
-        sendQuaternionReport();
     } else {
-        // Add debug output when not connected - every 60 seconds (increased from 30 seconds)
-        static unsigned long lastDebugPrint = 0;
-        if (millis() - lastDebugPrint >= 60000) {
-            Serial.print("DEBUG: Not connected, waiting for client... Role: ");
-            Serial.print(deviceConfig.getRoleName(deviceConfig.getRole()));
-            Serial.print(", Assigned: ");
-            Serial.print(deviceConfig.isRoleAssigned() ? "YES" : "NO");
-            Serial.print(", Mode: ");
-            Serial.println(deviceConfig.isHubMode() ? "HUB" : "NODE");
-            lastDebugPrint = millis();
-        }
+        // No periodic debug output when not connected - connection events are logged above
     }
     
     // Send ESP-NOW data for child devices (regardless of BLE connection)
@@ -770,22 +676,71 @@ void loop() {
                                       deviceConfig.getRole() == ROLE_LEFT_FOREARM || 
                                       deviceConfig.getRole() == ROLE_RIGHT_FOREARM)) {
         sendESPNowQuaternionData();
+        
+        // Periodic logging for child devices
+        unsigned long currentTime = millis();
+        if (currentTime - lastChildLogTime >= CHILD_LOG_INTERVAL) {
+            float imuRate = (float)imuUpdateCount / (CHILD_LOG_INTERVAL / 1000.0);
+            float espNowRate = (float)espNowSendCount / (CHILD_LOG_INTERVAL / 1000.0);
+            
+            if (advertisingTimedOut) {
+                Serial.printf("CHILD: IMU %.0f Hz, Sent data to Hub: %.1f Hz, Role: %s (ESP-NOW only mode)\n", 
+                             imuRate, espNowRate, deviceConfig.getRoleName(deviceConfig.getRole()));
+            } else {
+                unsigned long timeLeft = BLE_ADVERTISING_TIMEOUT - (currentTime - startupTime);
+                if (timeLeft > 0) {
+                    Serial.printf("CHILD: IMU %.0f Hz, Sent data to Hub: %.1f Hz, Role: %s (BLE timeout in %lus)\n", 
+                                 imuRate, espNowRate, deviceConfig.getRoleName(deviceConfig.getRole()), timeLeft / 1000);
+                } else {
+                    Serial.printf("CHILD: IMU %.0f Hz, Sent data to Hub: %.1f Hz, Role: %s (BLE timeout imminent)\n", 
+                                 imuRate, espNowRate, deviceConfig.getRoleName(deviceConfig.getRole()));
+                }
+            }
+            
+            // Reset counters
+            imuUpdateCount = 0;
+            espNowSendCount = 0;
+            lastChildLogTime = currentTime;
+        }
+        
+        // Hub status check (every 5x the regular interval)
+        if (currentTime - lastHubStatusCheck >= HUB_STATUS_CHECK_INTERVAL) {
+            if (hubMacAssigned) {
+                Serial.printf("CHILD: Hub MAC: %02X:%02X:%02X:%02X:%02X:%02X\n",
+                             hubMacAddress[0], hubMacAddress[1], hubMacAddress[2], 
+                             hubMacAddress[3], hubMacAddress[4], hubMacAddress[5]);
+            } else {
+                Serial.println("CHILD: No hub MAC assigned");
+            }
+            lastHubStatusCheck = currentTime;
+        }
     }
     
-    // Only restart advertising if truly disconnected and not advertising
-    // Add some debugging and rate limiting to prevent spam
+    // BLE advertising timeout management for child devices
+    if (deviceConfig.isNodeMode() && !deviceConnected && !advertisingTimedOut) {
+        unsigned long timeSinceStartup = millis() - startupTime;
+        
+        if (timeSinceStartup >= BLE_ADVERTISING_TIMEOUT) {
+            // Stop advertising after 45 seconds if no connection
+            NimBLEDevice::getAdvertising()->stop();
+            advertisingTimedOut = true;
+            Serial.println("CHILD: BLE advertising stopped after 30s timeout (no phone connection)");
+            Serial.println("CHILD: ESP-NOW only mode active - phone connection requires device restart");
+        }
+    }
+    
+    // Only restart advertising if truly disconnected, not advertising, and not timed out
     static unsigned long lastAdvertisingCheck = 0;
     static unsigned long lastAdvertisingRestart = 0;
     const unsigned long ADVERTISING_CHECK_INTERVAL = 1000; // Check every 1 second
     const unsigned long ADVERTISING_RESTART_COOLDOWN = 5000; // Wait 5 seconds between restarts
     
-    if (!deviceConnected && (millis() - lastAdvertisingCheck > ADVERTISING_CHECK_INTERVAL)) {
+    if (!deviceConnected && !advertisingTimedOut && (millis() - lastAdvertisingCheck > ADVERTISING_CHECK_INTERVAL)) {
         lastAdvertisingCheck = millis();
         
         bool isCurrentlyAdvertising = NimBLEDevice::getAdvertising()->isAdvertising();
         
         if (!isCurrentlyAdvertising && (millis() - lastAdvertisingRestart > ADVERTISING_RESTART_COOLDOWN)) {
-            Serial.println("Restarting advertising to reconnect...");
             NimBLEDevice::startAdvertising();
             lastAdvertisingRestart = millis();
         }
