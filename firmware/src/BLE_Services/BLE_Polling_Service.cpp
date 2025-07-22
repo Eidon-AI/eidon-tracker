@@ -58,7 +58,7 @@ bool BLEPollingManager::begin() {
     targetCount = 0;
     initialized = true;
     
-    Serial.println("BLE Polling Manager initialized");
+
     return true;
 }
 
@@ -165,7 +165,7 @@ bool BLEPollingManager::addTarget(NimBLECharacteristic* characteristic, unsigned
     
     targetCount++;
     
-    Serial.printf("Added polling target: %s (interval: %lu ms)\n", name, interval);
+
     return true;
 }
 
@@ -418,31 +418,19 @@ void handleRoleChange(const std::string& value, bool success) {
         
         // Validate role value (0-6 are valid roles, 255 is ROLE_UNKNOWN)
         if (newRole <= 6 || newRole == 255) {
-            Serial.println("=== ENHANCED ROLE CHANGE DETECTED ===");
-            Serial.print("Role changed to: ");
-            Serial.print(newRole);
-            Serial.print(" (");
-            Serial.print(deviceConfig.getRoleName((DeviceRole)newRole));
-            Serial.println(")");
+            Serial.printf("ROLE CHANGE: %s\n", deviceConfig.getRoleName((DeviceRole)newRole));
             
             // Validate and set hub MAC address if provided
             if (!deviceConfig.isAllZerosMacAddress(data->hubMacAddress)) {
                 if (deviceConfig.isValidMacAddress(data->hubMacAddress)) {
-                    Serial.printf("Hub MAC address provided: %02X:%02X:%02X:%02X:%02X:%02X\n",
-                                 data->hubMacAddress[0], data->hubMacAddress[1], data->hubMacAddress[2],
-                                 data->hubMacAddress[3], data->hubMacAddress[4], data->hubMacAddress[5]);
                     deviceConfig.setHubMacAddress(data->hubMacAddress);
-                } else {
-                    Serial.println("Invalid hub MAC address provided, ignoring");
                 }
             } else {
-                Serial.println("No hub MAC address provided (all zeros)");
                 deviceConfig.clearHubMacAddress();
             }
             
             // Apply the role change
             if (deviceConfig.setRole((DeviceRole)newRole)) {
-                Serial.println("Role change applied successfully!");
                 
                 // 1. Update characteristic with full struct (state management)
                 updateRoleConfigCharacteristic();
@@ -453,50 +441,29 @@ void handleRoleChange(const std::string& value, bool success) {
                 // 3. Handle child behavior - disconnect from phone when CHILD role assigned
                 if (deviceConfig.isNodeMode() && (newRole == ROLE_LEFT_HAND || newRole == ROLE_RIGHT_HAND || 
                                                  newRole == ROLE_LEFT_FOREARM || newRole == ROLE_RIGHT_FOREARM)) {
-                    Serial.println("=== CHILD BEHAVIOR: Child role assigned ===");
-                    Serial.println("Child device will now disconnect from phone and accept hub connections");
-                    
                     // Initialize ESP-NOW communication with assigned hub
-                    Serial.println("Initializing ESP-NOW communication with assigned hub...");
                     if (initializeESPNowSender()) {
-                        Serial.println("ESP-NOW sender initialized successfully!");
                         updateESPNowHubMacAddress();
-                    } else {
-                        Serial.println("Failed to initialize ESP-NOW sender.");
                     }
                     
                     // Disconnect from current phone connection if connected
                     if (deviceConnected) {
-                        Serial.println("Child: Disconnecting from phone...");
                         // Force disconnect by stopping advertising and restarting with updated data
                         NimBLEDevice::getAdvertising()->stop();
                         delay(100); // Brief delay to ensure disconnect
                         updateAdvertisingData(); // Restart advertising with updated role information
-                        Serial.println("Child: Disconnected from phone, now advertising for hub connection");
                     }
-                    
-                    // Child devices should continue advertising normally
-                    // They will accept connections from both phones and hubs
-                    // The hub will be the one doing the seeking and connecting
                 }
                 
                 // 5. Provide LED feedback
                 // TODO: Check LED feedback is working
                 startRoleChangeLEDPattern();
                 
-                // 6. Log final status
-                Serial.print("Final status - Role: '");
-                Serial.print(deviceConfig.getRoleName(deviceConfig.getRole()));
-                Serial.print("', Assigned: ");
-                Serial.print(deviceConfig.isRoleAssigned() ? "YES" : "NO");
-                Serial.print(", Mode: ");
-                Serial.println(deviceConfig.isHubMode() ? "HUB" : "NODE");
-                
             } else {
-                Serial.println("Failed to apply role change!");
+                Serial.println("ROLE CHANGE: Failed to apply");
             }
         } else {
-            Serial.printf("Invalid role value: %d\n", newRole);
+            Serial.printf("ROLE CHANGE: Invalid role value: %d\n", newRole);
         }
     }
     // Handle single-byte role assignment (backward compatibility)
@@ -505,19 +472,12 @@ void handleRoleChange(const std::string& value, bool success) {
         
         // Validate role value (0-6 are valid roles, 255 is ROLE_UNKNOWN)
         if (newRole <= 6 || newRole == 255) {
-            Serial.println("=== LEGACY ROLE CHANGE DETECTED ===");
-            Serial.print("Role changed to: ");
-            Serial.print(newRole);
-            Serial.print(" (");
-            Serial.print(deviceConfig.getRoleName((DeviceRole)newRole));
-            Serial.println(")");
             
             // Clear hub MAC address for legacy role assignment
             deviceConfig.clearHubMacAddress();
             
             // Apply the role change
             if (deviceConfig.setRole((DeviceRole)newRole)) {
-                Serial.println("Role change applied successfully!");
                 
                 // 1. Update characteristic with full struct (state management)
                 updateRoleConfigCharacteristic();
@@ -634,8 +594,6 @@ void handleColorChange(const std::string& value, bool success) {
 }
 
 void setupPollingSystem() {
-    Serial.println("Setting up BLE Polling System...");
-    
     // Initialize the polling manager
     if (!pollingManager.begin()) {
         Serial.println("ERROR: Failed to initialize polling manager!");
@@ -644,6 +602,4 @@ void setupPollingSystem() {
     
     // Enable debug mode for initial setup
     pollingManager.setDebugMode(true);
-    
-    Serial.println("BLE Polling System setup complete");
 } 

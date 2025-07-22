@@ -39,7 +39,7 @@ bool DeviceConfig::begin() {
         saveConfig();
     }
     
-    Serial.println("DeviceConfig: Initialized successfully");
+    Serial.printf("DeviceConfig: Initialized - Role: %s\n", getRoleName(config.role));
     return true;
 }
 
@@ -55,7 +55,7 @@ bool DeviceConfig::setRole(DeviceRole role) {
     
     config.role = role;
     
-    Serial.printf("DeviceConfig: Role set to %s (%d)\n", getRoleName(role), (int)role);
+
     return saveConfig();
 }
 
@@ -96,9 +96,7 @@ bool DeviceConfig::setHubMacAddress(const uint8_t* macAddress) {
     // Copy MAC address
     memcpy(config.hubMacAddress, macAddress, sizeof(config.hubMacAddress));
     
-    Serial.printf("DeviceConfig: Hub MAC address set to %02X:%02X:%02X:%02X:%02X:%02X\n",
-                 macAddress[0], macAddress[1], macAddress[2], 
-                 macAddress[3], macAddress[4], macAddress[5]);
+
     
     return saveConfig();
 }
@@ -187,7 +185,7 @@ bool DeviceConfig::saveConfig() {
     // Save hub MAC address configuration
     prefs.putBytes(HUB_MAC_KEY, config.hubMacAddress, sizeof(config.hubMacAddress));
     
-    Serial.println("DeviceConfig: Configuration saved successfully");
+
     return true;
 }
 
@@ -237,23 +235,21 @@ String DeviceConfig::generateDeviceName() {
     WiFi.macAddress(deviceMac);
     
     // Debug: Print the MAC address we're using
-    Serial.printf("DEBUG: Using MAC: %02X:%02X:%02X:%02X:%02X:%02X\n", 
-                 deviceMac[0], deviceMac[1], deviceMac[2], deviceMac[3], deviceMac[4], deviceMac[5]);
+    
     
     // Try to get BLE MAC (WiFi MAC + 2)
     uint8_t bleMac[6];
     memcpy(bleMac, deviceMac, 6);
     bleMac[5] += 2;
     
-    Serial.printf("DEBUG: BLE MAC would be: %02X:%02X:%02X:%02X:%02X:%02X\n", 
-                 bleMac[0], bleMac[1], bleMac[2], bleMac[3], bleMac[4], bleMac[5]);
+    
     
     // Create device name: Eidon-Tracker-<last 4 digits of BLE MAC>
     char macSuffix[5];
     snprintf(macSuffix, sizeof(macSuffix), "%02X%02X", bleMac[4], bleMac[5]);
     
     String deviceName = String("Eidon-Tracker-") + String(macSuffix);
-    Serial.printf("DEBUG: Generated name: %s\n", deviceName.c_str());
+
     
     return deviceName;
 }
