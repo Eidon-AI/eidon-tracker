@@ -1,877 +1,793 @@
 #include <Arduino.h>
-#include <Adafruit_BNO08x.h>
-#include <bluefruit.h>
-#include <stdint.h>
-#include "Adafruit_SPIFlash.h"
+#include <NimBLEDevice.h>
+#include <NimBLEServer.h>
+#include <NimBLEUtils.h>
+#include <NimBLECharacteristic.h>
+#include <WiFi.h>
+#include <esp_now.h>
+#include "BNO085.h"
+#include "BLE_Services/BLE_Callbacks.h"
+#include "Role_Services/RoleConfig_Service.h"
+#include "Role_Services/HubClient_Service.h"
+#include "BLE_Services/BLE_Polling_Service.h" //TODO: Move this from BLE Services
+#include "DeviceConfig.h"
+#include "Role_Services/Hub_Structures.h"
 
-// Built from the P25Q16H datasheet.
-SPIFlash_Device_t const P25Q16H {
-  .total_size = (1UL << 21), // 2MiB
-  .start_up_time_us = 10000, // Don't know where to find that value
+// Function declarations
+void sendQuaternionReport();
+void updateLEDStatus();
+void startIMUResetPattern();
+bool isConnected();
+void updateAdvertisingData();
 
-  .manufacturer_id = 0x85,
-  .memory_type = 0x60,
-  .capacity = 0x15,
+// ESP-NOW sender functions for child devices
+bool initializeESPNowSender();
+void sendESPNowQuaternionData();
+void updateESPNowHubMacAddress();
 
-  .max_clock_speed_mhz = 55,
-  .quad_enable_bit_mask = 0x02, // Datasheet p. 27
-  .has_sector_protection = 1,   // Datasheet p. 27
-  .supports_fast_read = 1,      // Datasheet p. 29
-  .supports_qspi = 1,           // Obviously
-  .supports_qspi_writes = 1,    // Datasheet p. 41
-  .write_status_register_split = 1, // Datasheet p. 28
-  .single_status_byte = 0,      // 2 bytes
-  .is_fram = 0,                 // Flash Memory
-};
+// Hub client functions are now in Role_Services/HubClient_Service.h
 
-// LSM6DS3TR-C I2C pins and Address (for XIAO nRF52840 Sense built-in IMU)
-// #define LSM6DS_I2C_SDA 6  // SDA pin
-// #define LSM6DS_I2C_SCL 7  // SCL pin
-// #define LSM6DS_I2C_ADDR 0x6A // Address
+// Polling system functions (implemented in BLE_Polling_Service.cpp)
+void setupPollingSystem();
+void handleRoleChange(const std::string& value, bool success);
 
-// BNO085 I2C pins and Address (for external IMU)
-#define BNO085_I2C_SDA 9
-#define BNO085_I2C_SCL 10
-#define BNO085_I2C_ADDR 0x4B // Address
-#define BNO085_INT_PIN 8     // Interrupt pin for data ready
+// Polling manager instance (defined in BLE_Polling_Service.h)
+extern BLEPollingManager pollingManager;
 
-// Vendor and Product IDs
-#define VENDOR_ID  0xE1D0 // Eidon AI vendor ID
-#define PRODUCT_ID 0x0002 // Eidon Tracker product ID
+// Static callback instances to prevent memory deallocation issues
+static ServerCallbacks serverCallbacksInstance;
+static QuaternionCharCallbacks quaternionCallbacksInstance;
+static CalibrationCallbacks calibrationCallbacksInstance;
+// HubClientCallbacks moved to HubClient_Service.cpp
+// RoleConfig callbacks removed - using polling instead
+
+// BNO085 IMU instance
+BNO085 imu;
 
 // Custom GATT Service UUIDs
 #define EIDON_SERVICE_UUID        "E1D00001-8B5A-3E5B-9E23-4F9B5C91BBDE"
 #define QUATERNION_CHAR_UUID      "E1D00002-8B5A-3E5B-9E23-4F9B5C91BBDE"
 #define CALIBRATION_CHAR_UUID     "E1D00003-8B5A-3E5B-9E23-4F9B5C91BBDE"
-#define COLOR_CHAR_UUID           "E1D00004-8B5A-3E5B-9E23-4F9B5C91BBDE"
 #define DEVICE_INFO_CHAR_UUID     "E1D00005-8B5A-3E5B-9E23-4F9B5C91BBDE"
 
-// Custom GATT Service
-BLEService        eidonService(EIDON_SERVICE_UUID);
-BLECharacteristic quaternionChar(QUATERNION_CHAR_UUID);
-BLECharacteristic calibrationChar(CALIBRATION_CHAR_UUID);
-BLECharacteristic colorChar(COLOR_CHAR_UUID);
-BLECharacteristic deviceInfoChar(DEVICE_INFO_CHAR_UUID);
+// New characteristics for hub devices only (child data)
+#define HAND_QUATERNION_CHAR_UUID     "E1D00008-8B5A-3E5B-9E23-4F9B5C91BBDE"
+#define FOREARM_QUATERNION_CHAR_UUID  "E1D00009-8B5A-3E5B-9E23-4F9B5C91BBDE"
 
-// Quaternion data structure for GATT (20 bytes)
-struct QuaternionData {
-    float w;
-    float x;
-    float y;
-    float z;
-    uint8_t switches;    // bit 0: isLeft, bit 1: isUpper
-    uint8_t reserved[3]; // padding to 20 bytes
-} __attribute__((packed));
-
+// QuaternionData structure is now defined in Role_Services/Hub_Structures.h
 QuaternionData gattQuaternionData;
 
-/* One top-level application collection, Usage = Orientation                */
-/*  ├─ Input  (Quaternion + 2 switch bits)                                  */
-/*  ├─ Output (Vendor byte)                                                 */
-/*  └─ Feature(RGB)                                                         */
-
-const uint8_t hid_report_descriptor[] = {
-
-  /* -----------------------------------------------------------------------
-   * Top-level collection : sensor orientation + vendor channel, ID = 1
-   * ---------------------------------------------------------------------*/
-  0x05, 0x20,             /* UsagePage (Sensor)                    */
-  0x09, 0x80,             /* Usage     (Orientation)               */
-  0xA1, 0x01,             /* Collection (Application)              */
-
-    0x85, 0x01,           /*   Report ID (1)                       */
-
-    /* --- quaternion : 4 × 16-bit -------------------------------------- */
-    0x0A, 0x83, 0x04,     /*   Usage 0x0483 – Quaternion           */
-    0x75, 0x10,           /*   ReportSize 16                       */
-    0x95, 0x04,           /*   ReportCount 4                       */
-    0x17, 0x00,0x00,0x00,0x00, /* Logical Min 0                    */
-    0x27, 0xFF,0xFF,0x00,0x00, /* Logical Max 65535                */
-    0x81, 0x02,           /*   Input (Data,Var,Abs)                */
-
-    /* --- two switch bits on the Button page --------------------------- */
-    0x05, 0x09,           /*   UsagePage (Button)                  */
-    0x19, 0x01, 0x29, 0x02, /* Usage Min/Max (Button 1-2)         */
-    0x95, 0x02, 0x75, 0x01, /* ReportCount 2, ReportSize 1        */
-    0x15, 0x00, 0x25, 0x01, /* Logical 0-1                        */
-    0x81, 0x02,           /*   Input (Data,Var,Abs)                */
-
-    /* --- six padding bits --------------------------------------------- */
-    0x95, 0x06, 0x75, 0x01,
-    0x81, 0x03,           /*   Input (Cnst,Var,Abs)                */
-
-    /* ------------------------------------------------------------------
-     * Vendor-defined channel : Output (1 byte)
-     * ---------------------------------------------------------------- */
-    0x06, 0x00, 0xFF,     /*   UsagePage (Vendor 0xFF00)           */
-    0x09, 0x01,           /*   Usage      (Vendor 1)               */
-    0x15, 0x00, 0x26, 0xFF, 0x00,   /* Logical 0-255               */
-    0x75, 0x08, 0x95, 0x01,         /* ReportSize 8, Count 1       */
-    0x91, 0x02,           /*   Output (Data,Var,Abs)               */
-
-    /* ------------------------------------------------------------------
-     * Vendor-defined Feature report : saved RGB (3 bytes)
-     * ---------------------------------------------------------------- */
-    0x09, 0x02,           /*   Usage (Vendor 2)                    */
-    0x95, 0x03,           /*   ReportCount 3                       */
-    0xB1, 0x02,           /*   Feature (Data,Var,Abs)              */
-
-  0xC0                  /* End Collection                         */
-};
-
-// HID report map - now 9 bytes total (8 bytes for quaternion + 1 byte for switch states)
-uint8_t report_data[9] = {0};
-
-// Add output report buffer
-uint8_t output_report[1] = {0};
-
-// BNO085 sensor
-Adafruit_BNO08x bno08x;
-sh2_SensorValue_t sensorValue;
-
-// Orientation data
+// Global quaternion variables (for backward compatibility)
 float quaternion_x = 0;
 float quaternion_y = 0;
 float quaternion_z = 0;
 float quaternion_w = 1;
 
-// Bluetooth HID
-BLEDis bledis;
-BLEHidGeneric blehid(1, 2, 1);
-
-#define COLOR_MAGIC   0xE7          // any value ≠ 0xFF
-
-// Device color RGB stored (default white)
-uint8_t device_color[3] = {0xFF, 0xFF, 0xFF};
-
-// Battery Service
-BLEBas blebas;
-
 // Update interval (milliseconds)
 const unsigned long UPDATE_INTERVAL = 1;
 unsigned long lastUpdate = 0;
 
-// Forward declarations
-static void color_store_write(uint8_t rgb[3]);
-static bool color_store_read(uint8_t rgb[3]);
+// Add rate limiting for BLE notifications
+const unsigned long BLE_NOTIFICATION_INTERVAL = 20; // Send every 20ms (50Hz) for stability instead of 10ms
+unsigned long lastNotificationTime = 0;
 
-// -----------------------------------------------------------------------------
-// Battery-monitoring constants and helpers
-// Xiao nRF52840 Sense routes VBAT through a resistor divider ( ≈ 2.961 : 1 ) to
-// pin P0.31 (alias PIN_VBAT).
-// The nRF52 ADC is configured for a 0.6 V reference with gain ×6 → 3.6 V full-scale
-// and 12-bit resolution (0–4095).  Use the same settings recommended by Seeed.
-// -----------------------------------------------------------------------------
-const float ADC_REF_VOLTAGE   = 3.6f;       // 0.6 V × 6 gain
-const uint16_t ADC_MAX_COUNT  = 4095;       // 12-bit ADC
-const float VBAT_DIVIDER_RATIO = 2.961f;    // Empirically measured divider ratio
-const int   BAT_MONITOR_EN_PIN = 14;        // P0.14 controls divider (LOW = measure)
+// Add transmission rate limiting for main loop
+const unsigned long TRANSMISSION_INTERVAL = 20; // 50Hz max (20ms interval) for stability
+unsigned long lastTransmission = 0;
 
-// Battery monitoring pins
-#define PIN_VBAT        (32)  // D32 battery voltage
-#define PIN_VBAT_ENABLE (14)  // D14 LOW:read anable
-#define PIN_HICHG       (22)  // D22 charge current setting LOW:100mA HIGH:50mA
-#define PIN_CHG         (23)  // D23 charge indicatore LOW:charge HIGH:no charge
+// Track subscription status
+bool quaternionSubscribed = false;
 
-// Switch pins
-#define SWITCH_OUT_LEFT_RIGHT 5  // D5 output for left/right switch
-#define SWITCH_IN_LEFT_RIGHT 6   // D6 input for left/right switch
-#define SWITCH_OUT_UPPER_LOWER 0 // D0 output for upper/lower switch
-#define SWITCH_IN_UPPER_LOWER 1  // D1 input for upper/lower switch
+// ESP-NOW sender variables for child devices
+bool espNowInitialized = false;
+uint8_t hubMacAddress[6];
+bool hubMacAssigned = false;
+unsigned long lastESPNowTransmission = 0;
+const unsigned long ESP_NOW_INTERVAL = 50; // (30ms interval) - reduced for stability
 
-// Switch states
-bool isLeft = false;
-bool isUpper = false;
+// LED pin - changed from 5 to 2 to avoid conflict with switch pin
+#define LED_PIN 2
 
-float readVBAT(void) {
-  // Enable voltage divider (active LOW)
-//   pinMode(BAT_MONITOR_EN_PIN, OUTPUT);
-//   digitalWrite(BAT_MONITOR_EN_PIN, LOW);
-//   delayMicroseconds(300);                 // allow voltage to settle
+// LED status variables
+unsigned long ledLastUpdate = 0;
+// LED patterns
+enum LEDPattern {
+    LED_ADVERTISING,  // Strobing brightness when advertising
+    LED_CONNECTED,    // Fast blinking when connected
+    LED_IMU_RESET     // Solid LED when resetting IMU
+};
+LEDPattern currentLEDPattern = LED_ADVERTISING;
+unsigned long imuResetStartTime = 0;
+const unsigned long IMU_RESET_DURATION = 300; // Solid LED duration in ms
+int ledBrightness = 0;
+bool ledState = false;
 
-//   (void)analogRead(PIN_VBAT);             // dummy read to discard first sample
-  uint16_t adcCount = analogRead(PIN_VBAT);
+// Simple timer for debugging LED
+unsigned long debugLedTimer = 0;
+const unsigned long LED_FLASH_INTERVAL = 50; // Very slow flash for debugging
 
-  // Disable divider to save power
-  digitalWrite(BAT_MONITOR_EN_PIN, HIGH);
-
-  // Convert to volts
-  float vBat = ( (float)adcCount / ADC_MAX_COUNT ) * ADC_REF_VOLTAGE * VBAT_DIVIDER_RATIO;
-
-  return vBat;
-}
-
-// Convert voltage to battery percentage with more accurate mapping
-uint8_t mvToPercent(float voltage) {
-  // Debug the input voltage
-  // Serial.print("Input voltage: ");
-  // Serial.print(voltage, 3);
-  // Serial.println("V");
-  
-  // For LiPo battery
-  if (voltage >= 4.2) return 100;
-  if (voltage <= 3.3) return 0;
-  
-  // Linear mapping between 3.3V and 4.2V
-  // 3.3V = 0%, 3.6V = 20%, 3.7V = 40%, 3.8V = 60%, 3.9V = 80%, 4.2V = 100%
-  uint8_t percentage;
-  if (voltage < 3.6) {
-    percentage = (voltage - 3.3) * 66.67;  // 20% over 0.3V
-  } else if (voltage < 3.7) {
-    percentage = 20 + (voltage - 3.6) * 200;  // 20% over 0.1V
-  } else if (voltage < 3.8) {
-    percentage = 40 + (voltage - 3.7) * 200;  // 20% over 0.1V
-  } else if (voltage < 3.9) {
-    percentage = 60 + (voltage - 3.8) * 200;  // 20% over 0.1V
-  } else {
-    percentage = 80 + (voltage - 3.9) * 66.67;  // 20% over 0.3V
-  }
-  
-  // Debug the calculated percentage
-  // Serial.print("Calculated percentage: ");
-  // Serial.print(percentage);
-  // Serial.println("%");
-  
-  return percentage;
-}
-
-void enterDFU() {
-    // Enter DFU mode
-    #if defined(ARDUINO_NRF52_ADAFRUIT)
-        enterOTADfu();
-    #else
-        NRF_POWER->GPREGRET = 0x01; // Set the GPREGRET register to indicate DFU mode
-        NVIC_SystemReset();         // Perform a system reset
-    #endif
-}
-
-void setReports() {
-    // Enable game rotation vector at maximum rate (1000 Hz)
-    if (!bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 1000)) {
-        Serial.println("Could not enable rotation vector");
-    }
-
-    // Enable Tap Detector (event-driven, report interval 0)
-    if (!bno08x.enableReport(SH2_TAP_DETECTOR, 0)) {
-        Serial.println("Could not enable tap detector");
-    }
-}
-
-bool initIMU() {
-    // Initialize I2C with explicit pins for XIAO nRF52840 Sense
-    Wire.setPins(BNO085_I2C_SDA, BNO085_I2C_SCL);
-    Wire.begin();
-    
-    // Try to initialize the BNO085
-    if (!bno08x.begin_I2C(BNO085_I2C_ADDR)) {
-        Serial.println("Failed to find BNO085 chip");
-        return false;
-    }
-
-    Serial.println("BNO085 Found!");
-
-    // Enable the rotation vector report
-    setReports();
-
-    return true;
-}
-
-void updateOrientation() {
-    if (bno08x.wasReset()) {
-        Serial.println("BNO085 was reset");
-        setReports();
-    }
-
-    if (bno08x.getSensorEvent(&sensorValue)) {
-        switch (sensorValue.sensorId) {
-            case SH2_GAME_ROTATION_VECTOR:
-                // existing quaternion handling
-                quaternion_x = sensorValue.un.gameRotationVector.i;
-                quaternion_y = sensorValue.un.gameRotationVector.j;
-                quaternion_z = sensorValue.un.gameRotationVector.k;
-                quaternion_w = sensorValue.un.gameRotationVector.real;
-                break;
-
-            case SH2_TAP_DETECTOR: {
-                uint8_t f = sensorValue.un.tapDetector.flags;
-                bool isDouble = f & TAPDET_DOUBLE;
-                Serial.print(isDouble ? "Double" : "Single");
-                Serial.print(" tap detected on ");
-                if      (f & TAPDET_X)     Serial.println("-X side");
-                else if (f & TAPDET_X_POS) Serial.println("+X side");
-                else if (f & TAPDET_Y)     Serial.println("-Y side");
-                else if (f & TAPDET_Y_POS) Serial.println("+Y side");
-                else if (f & TAPDET_Z)     Serial.println("-Z side");
-                else if (f & TAPDET_Z_POS) Serial.println("+Z side");
-                else                       Serial.println("unknown side");
-
-                if (isDouble) {
-                    Serial.println("Double tap detected");
-
-                    digitalWrite(LED_GREEN, LOW);   // turn blue on
-                    bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 0);   // disable
-                    bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 5000); // re-enable (200 Hz)
-                    delay(2000);
-                    digitalWrite(LED_GREEN, HIGH);  // turn blue off
-                } else {
-                    Serial.println("Single tap detected");
-                }
-
-                break;
-            }
-        }
-    }
-}
-
-void sendQuaternionReport() {
-    // Apply 180-degree rotation around Z-axis to correct for IMU mounting
-    // For 180° rotation around Z: negate X and Y components, keep Z and W unchanged
-    
-    // Original sensor quaternion
-    float qw_sensor = quaternion_w;
-    float qx_sensor = quaternion_x;
-    float qy_sensor = quaternion_y;
-    float qz_sensor = quaternion_z;
-    
-    // Apply 180-degree Z-rotation by negating X and Y components
-    float corrected_w = qw_sensor;   // W stays the same
-    float corrected_x = -qx_sensor;  // Negate X (East becomes West)
-    float corrected_y = -qy_sensor;  // Negate Y (North becomes South)
-    float corrected_z = qz_sensor;   // Z stays the same (Up is still Up)
-    
-    // Prepare switch states
-    uint8_t switch_states = 0;
-    if (isLeft) switch_states |= 0x01;  // Set bit 0 for left
-    if (isUpper) switch_states |= 0x02; // Set bit 1 for upper
-    
-    // Send via HID if connected
-    if (Bluefruit.connected()) {
-        // Map corrected quaternion values (-1 to 1) to unsigned HID range (0 to 65535)
-        uint16_t x = (uint16_t)((corrected_x + 1.0f) * 32767.5f);
-        uint16_t y = (uint16_t)((corrected_y + 1.0f) * 32767.5f);
-        uint16_t z = (uint16_t)((corrected_z + 1.0f) * 32767.5f);
-        uint16_t w = (uint16_t)((corrected_w + 1.0f) * 32767.5f);
-        
-        // Create HID report - store 16-bit values in little-endian format
-        report_data[0] = x & 0xFF;        // LSB of x
-        report_data[1] = (x >> 8) & 0xFF; // MSB of x
-        report_data[2] = y & 0xFF;        // LSB of y
-        report_data[3] = (y >> 8) & 0xFF; // MSB of y
-        report_data[4] = z & 0xFF;        // LSB of z
-        report_data[5] = (z >> 8) & 0xFF; // MSB of z
-        report_data[6] = w & 0xFF;        // LSB of w
-        report_data[7] = (w >> 8) & 0xFF; // MSB of w
-        report_data[8] = switch_states;
-        
-        // Send HID report
-        if (!blehid.inputReport(1, report_data, sizeof(report_data))) {
-            Serial.println("Failed to send HID report!");
-        }
-        
-        // Also send via GATT service
-        gattQuaternionData.w = corrected_w;
-        gattQuaternionData.x = corrected_x;
-        gattQuaternionData.y = corrected_y;
-        gattQuaternionData.z = corrected_z;
-        gattQuaternionData.switches = switch_states;
-        memset(gattQuaternionData.reserved, 0, sizeof(gattQuaternionData.reserved));
-        
-        // Send GATT notification
-        if (quaternionChar.notify(&gattQuaternionData, sizeof(gattQuaternionData))) {
-            // Successfully sent
-        }
-        
-        digitalWrite(PIN_LED, !digitalRead(PIN_LED));
-    }
-    
-    // Debug output every second
-    // static unsigned long lastDebugPrint = 0;
-    // if (millis() - lastDebugPrint >= 1000) {
-    //     lastDebugPrint = millis();
-    //     // Debug the quaternion correction
-    //     Serial.println("Raw sensor quaternion:");
-    //     Serial.print("W: "); Serial.print(qw_sensor, 4);
-    //     Serial.print(" X: "); Serial.print(qx_sensor, 4);
-    //     Serial.print(" Y: "); Serial.print(qy_sensor, 4);
-    //     Serial.print(" Z: "); Serial.println(qz_sensor, 4);
-        
-    //     Serial.println("Corrected quaternion:");
-    //     Serial.print("W: "); Serial.print(corrected_w, 4);
-    //     Serial.print(" X: "); Serial.print(corrected_x, 4);
-    //     Serial.print(" Y: "); Serial.print(corrected_y, 4);
-    //     Serial.print(" Z: "); Serial.println(corrected_z, 4);
-    //     Serial.println("---");
-    // }
-}
-
-void appendUniqueToName() {
-  // 1. Fetch the STATIC RANDOM address the SoftDevice is using
-  uint8_t addr[6];
-  Bluefruit.getAddr(addr);            // LSByte = addr[0]
-
-  // 2. Build "Eidon Tracker-xxxx", where xxxx = low 16 bits of the address
-  char advName[32];
-  sprintf(advName, "Eidon Tracker-%02X%02X", addr[1], addr[0]); // 4 hex chars
-
-  // 3. Replace the default name and put it in the scan-response
-  Bluefruit.setName(advName);
-  Bluefruit.ScanResponse.clearData(); // keep other SR fields if you added any
-  Bluefruit.ScanResponse.addName();   // full name lives in scan response
-}
-
-void startAdv() {
-    // Primary Advertising packet
-    Bluefruit.Advertising.addFlags(BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE);
-    Bluefruit.Advertising.addTxPower();
-    Bluefruit.Advertising.addAppearance(BLE_APPEARANCE_GENERIC_HID);
-    
-    // Keep standard 16-bit service UUIDs in primary advertising
-    Bluefruit.Advertising.addService(blehid);    // HID Service
-    Bluefruit.Advertising.addService(bledis);    // Device Info Service
-    Bluefruit.Advertising.addService(blebas);    // Battery Service
-    
-    // Add manufacturer data with device color (5 bytes total)
-    uint8_t manufacturerData[] = {
-        0xD0, 0xE1,  // Company ID (0xE1D0 in little-endian)
-        device_color[0],  // R
-        device_color[1],  // G
-        device_color[2]   // B
-    };
-    Bluefruit.Advertising.addManufacturerData(manufacturerData, sizeof(manufacturerData));
-    
-    // Scan Response - only include custom service and name
-    Bluefruit.ScanResponse.clearData();
-    Bluefruit.ScanResponse.addService(eidonService);
-    appendUniqueToName();
-    
-    // Rest of the advertising setup
-    Bluefruit.Advertising.restartOnDisconnect(true);
-    Bluefruit.Advertising.setInterval(32, 244);
-    Bluefruit.Advertising.setFastTimeout(30);
-    Bluefruit.Advertising.start(0);
-}
-
-// Update battery level periodically
-void updateBatteryLevel() {
-  static unsigned long lastUpdate = 0;
-  
-  // Update every 5 minutes to minimize performance impact
-  if(millis() - lastUpdate >= 300000) {  // 300 seconds = 5 minutes
-    lastUpdate = millis();
-    
-    // Serial.println("\nBattery Reading:");
-    
-    // Read battery voltage
-    float vbat = readVBAT();
-    
-    // Convert to percentage
-    uint8_t battery_level = mvToPercent(vbat);
-    
-    // Update Battery Service
-    blebas.write(battery_level);
-    
-    // Update GATT device info with battery level
-    uint8_t deviceInfo[8];
-    deviceInfoChar.read(deviceInfo, sizeof(deviceInfo));
-    deviceInfo[4] = battery_level;  // Update battery level byte
-    deviceInfoChar.write(deviceInfo, sizeof(deviceInfo));
-    
-    // Debug output
-    // Serial.print("Final Battery Level: ");
-    // Serial.print(battery_level);
-    // Serial.println("%");
-    // Serial.println("-------------------");
-  }
-}
-
-// Function to read switch states
-void readSwitches() {
-  // Read left/right switch
-  pinMode(SWITCH_OUT_LEFT_RIGHT, OUTPUT);
-  digitalWrite(SWITCH_OUT_LEFT_RIGHT, HIGH);
-  delayMicroseconds(10);  // Small delay for signal to stabilize
-  pinMode(SWITCH_IN_LEFT_RIGHT, INPUT_PULLDOWN);  // Use pulldown to ensure clean low state
-  isLeft = digitalRead(SWITCH_IN_LEFT_RIGHT) == HIGH;
-  pinMode(SWITCH_OUT_LEFT_RIGHT, INPUT);  // Set back to input to prevent floating
-  
-  // Read upper/lower switch
-  pinMode(SWITCH_OUT_UPPER_LOWER, OUTPUT);
-  digitalWrite(SWITCH_OUT_UPPER_LOWER, HIGH);
-  delayMicroseconds(10);  // Small delay for signal to stabilize
-  pinMode(SWITCH_IN_UPPER_LOWER, INPUT_PULLDOWN);  // Use pulldown to ensure clean low state
-  isUpper = digitalRead(SWITCH_IN_UPPER_LOWER) == HIGH;
-  pinMode(SWITCH_OUT_UPPER_LOWER, INPUT);  // Set back to input to prevent floating
-}
-
-void initBatteryMonitoring() {
-    pinMode(PIN_VBAT, INPUT);
-    pinMode(PIN_VBAT_ENABLE, OUTPUT);
-    pinMode(PIN_HICHG, OUTPUT);
-    pinMode(PIN_CHG, INPUT);
-
-    digitalWrite(PIN_VBAT_ENABLE, LOW); // VBAT read enable
-    digitalWrite(PIN_HICHG, LOW);       // charge current 100mA
-
-    // -----------------------------------------------------------------
-    // ADC configuration for battery monitoring
-    // -----------------------------------------------------------------
-    analogReference(AR_DEFAULT);   // 0.6 V ×6 = 3.6 V
-    analogReadResolution(12);      // 0-4095 counts
-}
-
-void handleCommand(uint16_t conn_hdl,
-                   BLECharacteristic* chr,
-                   uint8_t* data, uint16_t len)
-{
-  if (len == 0) return;
-
-  switch (data[0])
-  {
-    case 0x01:               // soft-reset IMU
-      Serial.println("Host requested IMU reset");
-      digitalWrite(LED_GREEN, LOW);   // turn blue on
-      bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 0);   // disable
-      bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 5000); // re-enable (200 Hz)
-      delay(2000);
-      digitalWrite(LED_GREEN, HIGH);  // turn blue off
-      break;
-
-    // Add more command bytes here if you wish
-    default:
-      Serial.print("Unknown command 0x");
-      Serial.println(data[0], HEX);
-      break;
-  }
-}
-
-// GATT Calibration characteristic write callback
-void gattCalibrationCallback(uint16_t conn_hdl, BLECharacteristic* chr, uint8_t* data, uint16_t len)
-{
-  if (len == 0) return;
-  
-  switch (data[0])
-  {
-    case 0x01: { // Reset/calibrate IMU
-      Serial.println("GATT: IMU calibration requested");
-      digitalWrite(LED_GREEN, LOW);
-      bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 0);
-      bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 5000);
-      delay(2000);
-      digitalWrite(LED_GREEN, HIGH);
-      
-      // Send acknowledgment
-      uint8_t ack = 0x01;
-      calibrationChar.write(&ack, 1);
-      break;
-    }
-      
-    case 0x02:  // Request device info
-      Serial.println("GATT: Device info requested");
-      // Device info will be available via deviceInfoChar read
-      break;
-      
-    default:
-      Serial.print("GATT: Unknown calibration command 0x");
-      Serial.println(data[0], HEX);
-      break;
-  }
-}
-
-// GATT Color characteristic write callback
-void gattColorCallback(uint16_t conn_hdl, BLECharacteristic* chr, uint8_t* data, uint16_t len)
-{
-  if (len != 3) return;  // Expect RGB values
-  
-  // Store color
-  memcpy(device_color, data, 3);
-  color_store_write(device_color);
-  
-  // Update the characteristic value
-  colorChar.write(device_color, 3);
-  
-  Serial.print("GATT: Color set to #");
-  for (uint8_t i = 0; i < 3; ++i) {
-    if (device_color[i] < 16) Serial.print('0');
-    Serial.print(device_color[i], HEX);
-  }
-  Serial.println();
-}
-
-// QSPI flash transport and object for XIAO nRF52840 Sense (external 2-MiB P25Q16H)
-Adafruit_FlashTransport_QSPI flashTransport;
-Adafruit_SPIFlash qspiFlash(&flashTransport);
-
-// Sector/offset inside external flash that holds the color record
-#define COLOR_SECTOR      0          // last sector in 2-MiB device
-#define COLOR_ADDR        (COLOR_SECTOR * 4096)
-
-// ── Helper to write color to external flash ───────────────────────────────
-static void color_store_write(uint8_t rgb[3]) {
-    uint8_t buf[4] = { COLOR_MAGIC, rgb[0], rgb[1], rgb[2] };
-
-    // Erase sector 0 (first 4-kB) — pass sector *number*, not byte address
-    if (!qspiFlash.eraseSector(COLOR_SECTOR)) {
-        Serial.println("QSPI eraseSector() failed");
-        return;
-    }
-    qspiFlash.waitUntilReady();
-    if (qspiFlash.writeBuffer(COLOR_ADDR, buf, sizeof(buf)) != sizeof(buf)) {
-        Serial.println("QSPI writeBuffer() failed");
-        return;
-    }
-    qspiFlash.waitUntilReady(); // ensure data is on flash before power-down
-
-    // read back for verification during development
-    uint8_t verify[4];
-    qspiFlash.readBuffer(COLOR_ADDR, verify, sizeof(verify));
-    Serial.print("Color written / verify: ");
-    for(int i=0;i<4;i++){ Serial.print(verify[i], HEX); Serial.print(" "); }
-    Serial.println();
-}
-
-static bool color_store_read(uint8_t rgb[3]) {
-    uint8_t buf[4];
-    qspiFlash.readBuffer(COLOR_ADDR, buf, sizeof(buf));
-    if (buf[0] != COLOR_MAGIC) return false;
-
-    rgb[0] = buf[1];
-    rgb[1] = buf[2];
-    rgb[2] = buf[3];
-    return true;
-}
-
-void handleColorFeature(uint16_t         /*conn*/,
-                         BLECharacteristic* chr,
-                         uint8_t*          data,
-                         uint16_t          len)
-{
-  if (len != 3) return;                 // expect exactly R-G-B
-
-  // 1. store locally
-  memcpy(device_color, data, 3);      // keep it in RAM
-  color_store_write(device_color);
-
-  // 2. update the GATT database value of *this* characteristic
-  //    (so the next Get-Feature Read returns the new bytes)
-  chr->write(device_color, 3);
-
-  // optional debug
-  Serial.print  ("Color set to #");
-  for (uint8_t i=0; i<3; ++i) {
-      if (device_color[i] < 16) Serial.print('0');
-      Serial.print(device_color[i], HEX);
-  }
-  Serial.println();
-}
-
-void sendColorFeature()
-{
-  blehid.inputReport(   /*ID*/ 2, device_color, 3);   // echoes new value once
-}
+// LED brightness settings
+#define LED_DIM_BRIGHTNESS 50  // Dim brightness level (0-255) when connected
 
 // Add interrupt flag for faster sensor reading
 volatile bool sensorDataReady = false;
 
+// BLE connection state variables (moved up for LED functions)
+bool deviceConnected = false;
+
 // Interrupt service routine
-void sensorISR() {
+void IRAM_ATTR sensorISR() {
     sensorDataReady = true;
+}
+
+// Function to update LED status based on current state
+void updateLEDStatus() {
+    unsigned long currentTime = millis();
+    
+    // Special test mode for connected state LED
+    if (isConnected()) {
+        // SIMPLIFIED: Just toggle LED every LED_FLASH_INTERVAL ms when connected
+        if (currentTime - debugLedTimer >= LED_FLASH_INTERVAL) {
+            debugLedTimer = currentTime;
+            // Toggle between full on and full off for debugging
+            ledState = !ledState;
+            
+            if (ledState) {
+                digitalWrite(LED_PIN, HIGH); // Full ON for testing
+            } else {
+                digitalWrite(LED_PIN, LOW);  // Full OFF
+            }
+        }
+        return; // Skip normal LED logic when connected
+    }
+    
+    // Handle IMU reset pattern with priority
+    if (currentLEDPattern == LED_IMU_RESET) {
+        digitalWrite(LED_PIN, HIGH); // Solid ON during IMU reset
+        
+        // Check if IMU reset period is over
+        if (currentTime - imuResetStartTime >= IMU_RESET_DURATION) {
+            // Return to appropriate pattern based on connection state
+            currentLEDPattern = isConnected() ? LED_CONNECTED : LED_ADVERTISING;
+            ledLastUpdate = currentTime; // Reset timer to start new pattern immediately
+        }
+        return;
+    }
+    
+    // Only handle advertising when not connected - simplified and less frequent
+    if (currentLEDPattern == LED_ADVERTISING) {
+        // Simple blinking pattern instead of complex sine wave
+        if (currentTime - ledLastUpdate >= 100) { // Update every 100ms instead of 20ms
+            ledLastUpdate = currentTime;
+            ledState = !ledState;
+            digitalWrite(LED_PIN, ledState ? HIGH : LOW);
+        }
+    }
+}
+
+// Function to trigger IMU reset LED pattern
+void startIMUResetPattern() {
+    currentLEDPattern = LED_IMU_RESET;
+    imuResetStartTime = millis();
+}
+
+// BLE objects
+NimBLEServer* pServer = nullptr;
+
+// Custom GATT Service
+NimBLEService* eidonService = nullptr;
+NimBLECharacteristic* quaternionChar = nullptr;
+NimBLECharacteristic* calibrationChar = nullptr;
+NimBLECharacteristic* deviceInfoChar = nullptr;
+
+// New characteristics for hub devices only (child data)
+NimBLECharacteristic* handQuaternionChar = nullptr;
+NimBLECharacteristic* forearmQuaternionChar = nullptr;
+
+// Function to get current BLE connection state (similar to Bluefruit.connected())
+bool isConnected() {
+    return deviceConnected; // Simple state tracking like reference code
+}
+
+// Function to update advertising data with current role information
+void updateAdvertisingData() {
+    NimBLEAdvertising* pAdvertising = NimBLEDevice::getAdvertising();
+    if (pAdvertising == nullptr) return;
+    
+    // Stop current advertising
+    pAdvertising->stop();
+    
+    // Update device name
+    String deviceName = deviceConfig.generateDeviceName();
+    NimBLEDevice::setDeviceName(deviceName.c_str());
+    pAdvertising->setName(deviceName.c_str());
+    
+    // Update role information in manufacturer data
+    // Format: [Company ID Low, Company ID High, Role Data]
+    uint8_t manufacturerDataBytes[3];
+    manufacturerDataBytes[0] = 0xD0;        // Company ID low byte (0xD0)
+    manufacturerDataBytes[1] = 0xE1;        // Company ID high byte (0xE1)
+    manufacturerDataBytes[2] = (uint8_t)deviceConfig.getRole(); // Role data
+    
+    NimBLEAdvertisementData manufacturerData;
+    manufacturerData.setManufacturerData(manufacturerDataBytes, 3);
+    pAdvertising->setAdvertisementData(manufacturerData);
+    
+    // Update scan response data
+    NimBLEAdvertisementData scanResponse;
+    scanResponse.setName(deviceName.c_str());
+    pAdvertising->setScanResponseData(scanResponse);
+    
+    // Restart advertising with updated data
+    pAdvertising->start();
+    
+    Serial.printf("Advertising updated - Device: %s, Role: %s (0x%02X)\n", 
+                 deviceName.c_str(),
+                 deviceConfig.getRoleName(deviceConfig.getRole()),
+                 (uint8_t)deviceConfig.getRole());
+    Serial.print("Updated manufacturer data bytes: ");
+    for (int i = 0; i < manufacturerData.getPayload().size(); i++) {
+        Serial.printf("%02X ", manufacturerData.getPayload()[i]);
+    }
+    Serial.println();
+}
+
+void sendQuaternionReport() {
+    // Rate limiting is now handled in the main loop to prevent double rate limiting
+    
+    // Get current quaternion data from the library
+    float qw_sensor, qx_sensor, qy_sensor, qz_sensor;
+    imu.getQuaternion(qw_sensor, qx_sensor, qy_sensor, qz_sensor);
+    
+    // Apply 180-degree rotation around Z-axis to correct for IMU mounting
+    float corrected_w = qw_sensor;
+    float corrected_x = -qx_sensor;
+    float corrected_y = -qy_sensor;
+    float corrected_z = qz_sensor;
+    
+    // Update global variables for backward compatibility
+    quaternion_w = qw_sensor;
+    quaternion_x = qx_sensor;
+    quaternion_y = qy_sensor;
+    quaternion_z = qz_sensor;
+    
+    // Update child data if in hub mode
+    if (deviceConfig.isHubMode()) {
+        // Update hub's own quaternion data in aggregated structure
+        updateHubQuaternionData(corrected_w, corrected_x, corrected_y, corrected_z);
+        
+        // Update child data
+        updateChildData();
+    }
+    
+    // Send via GATT service if connected
+    if (isConnected()) {
+        // Only send quaternion data if BNO085 is available
+        if (imu.isAvailable()) {
+            // Send via GATT service
+            if (deviceConfig.isHubMode()) {
+                // Send aggregated data for hub
+                AggregatedQuaternionData* agg = getAggregatedData();
+                gattQuaternionData.w = agg->hubData.w;
+                gattQuaternionData.x = agg->hubData.x;
+                gattQuaternionData.y = agg->hubData.y;
+                gattQuaternionData.z = agg->hubData.z;
+            } else {
+                // Send individual quaternion data for non-hub devices
+                gattQuaternionData.w = corrected_w;
+                gattQuaternionData.x = corrected_x;
+                gattQuaternionData.y = corrected_y;
+                gattQuaternionData.z = corrected_z;
+            }
+            
+            // Send GATT notification with rate limiting
+            if (quaternionChar != nullptr) {
+                quaternionChar->notify((uint8_t*)&gattQuaternionData, sizeof(gattQuaternionData));
+            }
+            
+            // Send child data via separate characteristics (hub only)
+            if (deviceConfig.isHubMode() && handQuaternionChar != nullptr && forearmQuaternionChar != nullptr) {
+                AggregatedQuaternionData* agg = getAggregatedData();
+                
+                // Debug: Log aggregated structure state every 5 seconds
+                static unsigned long lastAggDebugLog = 0;
+                if (millis() - lastAggDebugLog >= 5000) {
+                    Serial.printf("DEBUG: Aggregated structure - Hand connected: %s, Forearm connected: %s\n", 
+                                 agg->handConnected ? "YES" : "NO", 
+                                 agg->forearmConnected ? "YES" : "NO");
+                    if (agg->handConnected) {
+                        Serial.printf("DEBUG: Hand data in agg structure: W=%.4f X=%.4f Y=%.4f Z=%.4f\n", 
+                                     agg->handData.w, agg->handData.x, agg->handData.y, agg->handData.z);
+                    }
+                    lastAggDebugLog = millis();
+                }
+                
+                // Send hand quaternion data
+                if (agg->handConnected) {
+                    QuaternionData handData = agg->handData;
+                    handQuaternionChar->notify((uint8_t*)&handData, sizeof(handData));
+                    
+                    // Log sent data every 5 seconds to avoid spam
+                    static unsigned long lastSentDataLog = 0;
+                    if (millis() - lastSentDataLog >= 5000) {
+                        Serial.printf("SENT hand data: W=%.4f X=%.4f Y=%.4f Z=%.4f\n", 
+                                     handData.w, handData.x, handData.y, handData.z);
+                        lastSentDataLog = millis();
+                    }
+                }
+                
+                // Send forearm quaternion data
+                if (agg->forearmConnected) {
+                    QuaternionData forearmData = agg->forearmData;
+                    forearmQuaternionChar->notify((uint8_t*)&forearmData, sizeof(forearmData));
+                    
+                    // Log sent data every 5 seconds to avoid spam
+                    static unsigned long lastSentForearmDataLog = 0;
+                    if (millis() - lastSentForearmDataLog >= 5000) {
+                        Serial.printf("SENT forearm data: W=%.4f X=%.4f Y=%.4f Z=%.4f\n", 
+                                     forearmData.w, forearmData.x, forearmData.y, forearmData.z);
+                        lastSentForearmDataLog = millis();
+                    }
+                }
+            }
+        } else {
+            // Send zero quaternion via GATT when BNO085 is not available
+            gattQuaternionData.w = 1.0f;  // Identity quaternion
+            gattQuaternionData.x = 0.0f;
+            gattQuaternionData.y = 0.0f;
+            gattQuaternionData.z = 0.0f;
+            
+            if (quaternionChar != nullptr) {
+                quaternionChar->notify((uint8_t*)&gattQuaternionData, sizeof(gattQuaternionData));
+            }
+        }
+        
+        // LED is now controlled by updateLEDStatus() in the main loop
+    }
+}
+
+// ESP-NOW sender functions for child devices
+bool initializeESPNowSender() {
+    if (espNowInitialized) {
+        return true; // Already initialized
+    }
+    
+    // Initialize ESP-NOW
+    if (esp_now_init() != ESP_OK) {
+        Serial.println("ESP-NOW: Failed to initialize ESP-NOW");
+        return false;
+    }
+    
+    // Set ESP-NOW role to sender
+    if (esp_now_set_pmk((uint8_t*)"pmk1234567890123") != ESP_OK) {
+        Serial.println("ESP-NOW: Failed to set ESP-NOW PMK");
+        return false;
+    }
+    
+    espNowInitialized = true;
+    Serial.println("ESP-NOW: Sender initialized successfully");
+    return true;
+}
+
+void updateESPNowHubMacAddress() {
+    // Check if we have a hub MAC address assigned
+    if (deviceConfig.isHubMacAssigned()) {
+        deviceConfig.getHubMacAddress(hubMacAddress);
+        
+        // Register hub as ESP-NOW peer
+        esp_now_peer_info_t peerInfo;
+        memset(&peerInfo, 0, sizeof(peerInfo));
+        memcpy(peerInfo.peer_addr, hubMacAddress, 6);
+        peerInfo.channel = 1; // Use channel 1
+        peerInfo.encrypt = false; // No encryption for now
+        
+        esp_err_t result = esp_now_add_peer(&peerInfo);
+        if (result == ESP_OK) {
+            hubMacAssigned = true;
+            Serial.printf("ESP-NOW: Hub peer registered: %02X:%02X:%02X:%02X:%02X:%02X\n",
+                         hubMacAddress[0], hubMacAddress[1], hubMacAddress[2], 
+                         hubMacAddress[3], hubMacAddress[4], hubMacAddress[5]);
+        } else if (result == ESP_ERR_ESPNOW_EXIST) {
+            // Peer already exists - this is fine
+            hubMacAssigned = true;
+            Serial.printf("ESP-NOW: Hub peer already registered: %02X:%02X:%02X:%02X:%02X:%02X\n",
+                         hubMacAddress[0], hubMacAddress[1], hubMacAddress[2], 
+                         hubMacAddress[3], hubMacAddress[4], hubMacAddress[5]);
+        } else {
+            Serial.printf("ESP-NOW: Failed to register hub peer, error: %d\n", result);
+            hubMacAssigned = false;
+        }
+    } else {
+        hubMacAssigned = false;
+        Serial.println("ESP-NOW: No hub MAC address assigned");
+    }
+}
+
+void sendESPNowQuaternionData() {
+    if (!espNowInitialized || !hubMacAssigned) {
+        return; // Not ready to send
+    }
+    
+    // Rate limiting
+    if (millis() - lastESPNowTransmission < ESP_NOW_INTERVAL) {
+        return;
+    }
+    
+    // Get current quaternion data from IMU
+    float qw_sensor, qx_sensor, qy_sensor, qz_sensor;
+    imu.getQuaternion(qw_sensor, qx_sensor, qy_sensor, qz_sensor);
+    
+    // Apply 180-degree rotation around Z-axis to correct for IMU mounting
+    float corrected_w = qw_sensor;
+    float corrected_x = -qx_sensor;
+    float corrected_y = -qy_sensor;
+    float corrected_z = qz_sensor;
+    
+    // Create ESP-NOW packet
+    ESPNowQuaternionPacket packet;
+    packet.senderRole = (uint8_t)deviceConfig.getRole();
+    packet.quaternion.w = corrected_w;
+    packet.quaternion.x = corrected_x;
+    packet.quaternion.y = corrected_y;
+    packet.quaternion.z = corrected_z;
+    
+    // Debug: Print packet details before sending
+    static unsigned long lastDebugTime = 0;
+    if (millis() - lastDebugTime >= 10000) { // Every 10 seconds
+        Serial.printf("DEBUG: ESP-NOW packet - Size: %d, Hub MAC: %02X:%02X:%02X:%02X:%02X:%02X\n", 
+                     sizeof(packet), hubMacAddress[0], hubMacAddress[1], hubMacAddress[2], 
+                     hubMacAddress[3], hubMacAddress[4], hubMacAddress[5]);
+        lastDebugTime = millis();
+    }
+    
+    // Send packet to hub
+    esp_err_t result = esp_now_send(hubMacAddress, (uint8_t*)&packet, sizeof(packet));
+    
+    if (result == ESP_OK) {
+        lastESPNowTransmission = millis();
+        
+        // Log sent data (every 5 seconds to avoid spam)
+        static unsigned long lastLogTime = 0;
+        if (millis() - lastLogTime >= 5000) {
+            Serial.printf("ESP-NOW: Sent to hub - Role: %s, W=%.4f X=%.4f Y=%.4f Z=%.4f\n",
+                         deviceConfig.getRoleName(deviceConfig.getRole()),
+                         corrected_w, corrected_x, corrected_y, corrected_z);
+            lastLogTime = millis();
+        }
+    } else {
+        // Rate limit error messages to avoid spam
+        static unsigned long lastErrorLogTime = 0;
+        static int errorCount = 0;
+        
+        if (millis() - lastErrorLogTime >= 5000) { // Log every 5 seconds
+            Serial.printf("ESP-NOW: Failed to send data, error: %d (occurred %d times in last 5s)\n", result, errorCount + 1);
+            lastErrorLogTime = millis();
+            errorCount = 0;
+        } else {
+            errorCount++;
+        }
+    }
 }
 
 void setup() {
     Serial.begin(115200);
-
-    // Reduced wait time for faster startup (500ms max)
-    unsigned long start = millis();
-    while (!Serial && (millis() - start < 500));
-
-    // Check for DFU trigger command
-    while (Serial.available()) {
-        if (Serial.read() == 'D') {  // 'D' for DFU
-            enterDFU();
+    delay(1000);
+    
+    Serial.println("\n\n----- Eidon Tracker Starting -----");
+    
+    // Initialize device configuration first
+    if (!deviceConfig.begin()) {
+        Serial.println("Failed to initialize device configuration!");
+        while (1) {
+            digitalWrite(LED_PIN, HIGH);
+            delay(100);
+            digitalWrite(LED_PIN, LOW);
+            delay(100);
         }
     }
-
-    Serial.println("XIAO nRF52840 IMU Bluetooth Orientation Tracker");
-    Serial.println("Using BNO085 sensor");
-
-    // Set the LED pin as output
-    pinMode(PIN_LED, OUTPUT);
-
-    initBatteryMonitoring();
-
-    // -------------------------------------------------
-    // Initialise external QSPI flash
-    // -------------------------------------------------
-    if (!qspiFlash.begin(&P25Q16H, 1)) {
-        Serial.println("QSPI Flash init FAILED – color will not persist");
-    }
+    
+    // Initialize WiFi for ESP-NOW support and MAC address retrieval
+    WiFi.mode(WIFI_MODE_STA);
+    WiFi.begin(); // Start WiFi (no need to connect to network for ESP-NOW)
+    Serial.println("WiFi initialized for ESP-NOW support");
+    
+    // Setup LED pin
+    pinMode(LED_PIN, OUTPUT);
 
     // Initialize IMU
-    if (!initIMU()) {
+    if (!imu.begin()) {
         Serial.println("Failed to initialize IMU!");
-        // Flash LED rapidly to indicate error
         while (1) {
-            digitalWrite(PIN_LED, HIGH);
+            digitalWrite(LED_PIN, HIGH);
             delay(100);
-            digitalWrite(PIN_LED, LOW);
+            digitalWrite(LED_PIN, LOW);
             delay(100);
         }
     }
-    
-    // Configure interrupt pin for sensor data ready
-    pinMode(BNO085_INT_PIN, INPUT_PULLUP);
-    attachInterrupt(digitalPinToInterrupt(BNO085_INT_PIN), sensorISR, FALLING);
-    
+        
     // Initialize Bluetooth
-    Bluefruit.begin();
+    NimBLEDevice::init("");
     
-    // Set device name
-    Bluefruit.setName("Eidon Tracker");
+    // Set device name for advertising
+    String deviceName = deviceConfig.generateDeviceName();
+    NimBLEDevice::setDeviceName(deviceName.c_str());
     
-    // Optimize BLE for minimum latency
-    Bluefruit.Periph.setConnInterval(6, 12);   // 7.5-15ms intervals (fast as possible)
-    // Note: setConnSupervision and setConnSlaveLatency may not be available in this library version
+    Serial.print("Advertising as: ");
+    Serial.println(deviceName.c_str());
+    
+    // Enable proper security to fix write callbacks on encrypted connections
+    NimBLEDevice::setSecurityAuth(true, true, true);  // Enable authentication, encryption, and authorization
+    NimBLEDevice::setSecurityIOCap(BLE_HS_IO_NO_INPUT_OUTPUT);  // No input/output - Just Works pairing, no prompt
+    
+    // Set consistent power level
+    NimBLEDevice::setPower(9); // Use integer value instead of ESP_PWR_LVL_P9
+    
+    // Create server
+    pServer = NimBLEDevice::createServer();
+    pServer->setCallbacks(&serverCallbacksInstance);
     
     // ---------- Custom GATT Service Setup -----------------------------
-    // Configure Eidon Service
-    eidonService.begin();
+    eidonService = pServer->createService(EIDON_SERVICE_UUID);
     
-    // Configure Quaternion characteristic (notify, read)
-    quaternionChar.setProperties(CHR_PROPS_NOTIFY | CHR_PROPS_READ);
-    quaternionChar.setPermission(SECMODE_OPEN, SECMODE_NO_ACCESS);
-    quaternionChar.setFixedLen(sizeof(QuaternionData));
-    quaternionChar.setMaxLen(sizeof(QuaternionData));
-    quaternionChar.begin();
-    quaternionChar.setCccdWriteCallback([](uint16_t conn_hdl, BLECharacteristic* chr, uint16_t cccd_value) {
-        Serial.print("GATT: Quaternion notifications ");
-        Serial.println(cccd_value & BLE_GATT_HVX_NOTIFICATION ? "enabled" : "disabled");
-    });
+    // Configure Quaternion characteristic
+    quaternionChar = eidonService->createCharacteristic(
+        QUATERNION_CHAR_UUID,
+        NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
+    );
+    quaternionChar->setValue((uint8_t*)&gattQuaternionData, sizeof(gattQuaternionData));
+    quaternionChar->setCallbacks(&quaternionCallbacksInstance);
     
-    // Configure Calibration characteristic (write, read)
-    calibrationChar.setProperties(CHR_PROPS_WRITE | CHR_PROPS_READ);
-    calibrationChar.setPermission(SECMODE_OPEN, SECMODE_OPEN);
-    calibrationChar.setFixedLen(1);
-    calibrationChar.begin();
-    calibrationChar.setWriteCallback(gattCalibrationCallback);
+    // Configure Calibration characteristic
+    calibrationChar = eidonService->createCharacteristic(
+        CALIBRATION_CHAR_UUID,
+        NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE
+    );
+    calibrationChar->setCallbacks(&calibrationCallbacksInstance);
     
-    // Configure Color characteristic (write, read)
-    colorChar.setProperties(CHR_PROPS_WRITE | CHR_PROPS_READ);
-    colorChar.setPermission(SECMODE_OPEN, SECMODE_OPEN);
-    colorChar.setFixedLen(3);
-    colorChar.begin();
-    colorChar.setWriteCallback(gattColorCallback);
+    // Configure Device Info characteristic
+    deviceInfoChar = eidonService->createCharacteristic(
+        DEVICE_INFO_CHAR_UUID,
+        NIMBLE_PROPERTY::READ
+    );
     
-    // Configure Device Info characteristic (read only)
-    deviceInfoChar.setProperties(CHR_PROPS_READ);
-    deviceInfoChar.setPermission(SECMODE_OPEN, SECMODE_NO_ACCESS);
-    deviceInfoChar.setFixedLen(8);  // 2 bytes for each: device_id, firmware_version, battery_level, reserved
-    deviceInfoChar.begin();
+    // Get device's WiFi MAC address
+    uint8_t deviceMac[6];
+    WiFi.macAddress(deviceMac);
     
-    // Set initial device info
-    uint8_t deviceInfo[8] = {
-        0x01, 0x00,  // Device ID (can be based on switch states later)
+    // Extended device info with MAC address (14 bytes total)
+    uint8_t deviceInfo[14] = {
+        0x01, 0x00,  // Device ID
         0x01, 0x02,  // Firmware version 1.2
-        100,         // Battery level (will be updated)
-        0, 0, 0      // Reserved
+        100,         // Battery level
+        (uint8_t)deviceConfig.getRole(),  // Device role
+        deviceMac[0], deviceMac[1], deviceMac[2], deviceMac[3], deviceMac[4], deviceMac[5]  // MAC address
     };
-    deviceInfoChar.write(deviceInfo, sizeof(deviceInfo));
+    deviceInfoChar->setValue(deviceInfo, sizeof(deviceInfo));
+    Serial.printf("GATT: Device info characteristic created with MAC: %02X:%02X:%02X:%02X:%02X:%02X\n",
+                 deviceMac[0], deviceMac[1], deviceMac[2], deviceMac[3], deviceMac[4], deviceMac[5]);
     
-    // ---------- Device-information service -----------------------------
+    // Add new characteristics for hub devices only (child data)
+    if (deviceConfig.isHubMode()) {
+        // Configure Hand Quaternion characteristic
+        handQuaternionChar = eidonService->createCharacteristic(
+            HAND_QUATERNION_CHAR_UUID,
+            NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
+        );
+        handQuaternionChar->setValue((uint8_t*)&gattQuaternionData, sizeof(gattQuaternionData));
+        Serial.println("GATT: Hand quaternion characteristic created for hub");
+        
+        // Configure Forearm Quaternion characteristic
+        forearmQuaternionChar = eidonService->createCharacteristic(
+            FOREARM_QUATERNION_CHAR_UUID,
+            NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
+        );
+        forearmQuaternionChar->setValue((uint8_t*)&gattQuaternionData, sizeof(gattQuaternionData));
+        Serial.println("GATT: Forearm quaternion characteristic created for hub");
+    }
+    
+    // Start custom service
+    eidonService->start();
+    
+    // ---------- Role Configuration Service Setup -----------------------------
+    createRoleConfigService(pServer);
+    
+    // ---------- BLE Polling System Setup -----------------------------
+    setupPollingSystem();
 
-    // PnP-ID (see Core Spec vol 3, part C §12.1)
-    static const uint8_t pnp_id[7] = {
-      0x02,                             // 0x01 = BT-SIG, 0x02 = USB-IF
-      (uint8_t)(VENDOR_ID  & 0xFF),
-      (uint8_t)(VENDOR_ID  >> 8),
-      (uint8_t)(PRODUCT_ID & 0xFF),
-      (uint8_t)(PRODUCT_ID >> 8),
-      0x00, 0x01                        // product / firmware version
-    };
-
-    bledis.setPNPID(reinterpret_cast<const char*>(pnp_id), sizeof(pnp_id));
-    bledis.setModel("Eidon Tracker");
-    bledis.setManufacturer("Eidon AI");
-    bledis.setHardwareRev("1.2");
-    bledis.setFirmwareRev("1.2");
-
-    char uid[17];                              // 16 hex digits + NUL
-    sprintf(uid, "%08lX%08lX",
-            NRF_FICR->DEVICEID[1],
-            NRF_FICR->DEVICEID[0]);
-    bledis.setSerialNum(uid);
-
-    // const char* uid = getMcuUniqueID();   // returns NUL-terminated C-string
-    Serial.print("Board UID = "); Serial.println(uid);
-
-    // CREATE the characteristics now
-    bledis.begin();
-    // -------------------------------------------------------------------
+    // Add Role target to polling system
+    pollingManager.addTarget(roleConfigChar, 200, handleRoleChange, "Role");
     
-    // Configure HID
-    blehid.enableKeyboard(false);  // Explicitly disable keyboard
-    blehid.enableMouse(false);     // Explicitly disable mouse
+    Serial.println("BLE Polling System setup complete");
     
-    // Set our custom report map (descriptor)
-    blehid.setReportMap(hid_report_descriptor, sizeof(hid_report_descriptor));
+    // ---------- Hub Client Setup -----------------------------
+    setupHubClientService();
     
-    // Set the length of our reports
-    uint16_t input_len[]  = { 9 };   // Quaternion + switches
-    uint16_t output_len[] = { 1, 1 };   // 1-byte dummy, 1-byte command (ID 2)
-    uint16_t feat_len[] = { 3 };     // RGB
-    blehid.setReportLen(input_len, output_len, feat_len);
+    // Configure advertising
+    NimBLEAdvertising* pAdvertising = NimBLEDevice::getAdvertising();
+    pAdvertising->addServiceUUID(eidonService->getUUID());
+    pAdvertising->addServiceUUID(roleConfigService->getUUID());
     
-    // Start HID Service
-    blehid.begin();
+    // Add role information to manufacturer data
+    // Format: [Company ID Low, Company ID High, Role Data]
+    uint8_t manufacturerDataBytes[3];
+    manufacturerDataBytes[0] = 0xD0;        // Company ID low byte (0xD0)
+    manufacturerDataBytes[1] = 0xE1;        // Company ID high byte (0xE1)
+    manufacturerDataBytes[2] = (uint8_t)deviceConfig.getRole(); // Role data
     
-    // Set the output report callback
-    blehid.setOutputReportCallback(1, handleCommand);
+    NimBLEAdvertisementData manufacturerData;
+    manufacturerData.setManufacturerData(manufacturerDataBytes, 3);
+    pAdvertising->setAdvertisementData(manufacturerData);
     
-    // Initialize Battery Service
-    blebas.begin();
-    blebas.write(100);
+    // Set device name in main advertising data (not just scan response)
+    pAdvertising->setName(deviceName.c_str());
+    
+    // Debug logging for manufacturer data
+    Serial.printf("Advertising setup - Role: %s (0x%02X), Manufacturer data length: %d\n", 
+                 deviceConfig.getRoleName(deviceConfig.getRole()), 
+                 (uint8_t)deviceConfig.getRole(), 
+                 manufacturerData.getPayload().size());
+    Serial.print("Manufacturer data bytes: ");
+    for (int i = 0; i < manufacturerData.getPayload().size(); i++) {
+        Serial.printf("%02X ", manufacturerData.getPayload()[i]);
+    }
+    Serial.println();
+    
+    // Set conservative advertising intervals for stable connection
+    pAdvertising->setMinInterval(160);  // 100ms minimum (more conservative)
+    pAdvertising->setMaxInterval(320);  // 200ms maximum (more conservative)
+    
+    // Create scan response data (additional data for active scanning)
+    NimBLEAdvertisementData scanResponse;
+    scanResponse.setName(deviceName.c_str());
+    pAdvertising->setScanResponseData(scanResponse);
     
     // Start advertising
-    startAdv();
+    pAdvertising->start();
     
-    Serial.println("Setup complete");
-    
-    // Initialize switch pins
-    pinMode(SWITCH_OUT_LEFT_RIGHT, INPUT);
-    pinMode(SWITCH_IN_LEFT_RIGHT, INPUT_PULLDOWN);
-    pinMode(SWITCH_OUT_UPPER_LOWER, INPUT);
-    pinMode(SWITCH_IN_UPPER_LOWER, INPUT_PULLDOWN);
-
-    pinMode(LED_GREEN, OUTPUT);
-    digitalWrite(LED_GREEN, HIGH); // off (assuming active-low RGB LED)
-
-    blehid.setFeatureReportCallback(1, handleColorFeature);
-    
-    // Read the color from flash
-    color_store_read(device_color);
-
-    Serial.print("Saved Color: #");
-    Serial.print(device_color[0], HEX);
-    Serial.print(device_color[1], HEX);
-    Serial.println(device_color[2], HEX);
-
-    // Update color feature report
-    blehid.featureReport(1 /*ID*/, device_color, 3);
-    
-    // Also set GATT color characteristic
-    colorChar.write(device_color, 3);
+    // Check for stored hub MAC address if this is a child device
+    if (deviceConfig.isNodeMode() && (deviceConfig.getRole() == ROLE_LEFT_HAND || 
+                                      deviceConfig.getRole() == ROLE_RIGHT_HAND ||
+                                      deviceConfig.getRole() == ROLE_LEFT_FOREARM || 
+                                      deviceConfig.getRole() == ROLE_RIGHT_FOREARM)) {
+        if (deviceConfig.isHubMacAssigned()) {
+            uint8_t hubMac[6];
+            deviceConfig.getHubMacAddress(hubMac);
+            Serial.printf("Child device startup: Found stored hub MAC address %02X:%02X:%02X:%02X:%02X:%02X\n",
+                         hubMac[0], hubMac[1], hubMac[2], hubMac[3], hubMac[4], hubMac[5]);
+            
+            // Initialize ESP-NOW sender for child device
+            if (initializeESPNowSender()) {
+                updateESPNowHubMacAddress();
+                Serial.println("Child device: ESP-NOW sender initialized and ready to broadcast");
+            } else {
+                Serial.println("Child device: Failed to initialize ESP-NOW sender");
+            }
+        } else {
+            Serial.println("Child device startup: No hub MAC address assigned");
+        }
+    }
 }
 
 void loop() {
-    // Interrupt-driven sensor reading for minimum latency
-    // if (sensorDataReady) {
-    //     sensorDataReady = false;
-        updateOrientation();
+    // Update LED status first
+    updateLEDStatus();
+    
+    // Simplified connection state management for maximum performance (like reference code)
+    bool actuallyConnected = (pServer->getConnectedCount() > 0);
+    if (actuallyConnected != deviceConnected) {
+        deviceConnected = actuallyConnected;
+        // Minimal logging to avoid delays
+        if (deviceConnected) {
+            Serial.println("=== MAIN LOOP: Connection detected ===");
+            Serial.println("Connected - starting to send data");
+            
+            // Re-initialize ESP-NOW after BLE connection to prevent conflicts
+            if (deviceConfig.isHubMode()) {
+                Serial.println("Re-initializing ESP-NOW after BLE connection...");
+                
+                // Debug: Log WiFi state before re-initialization
+                Serial.printf("WiFi before re-init - Mode: %d, Status: %d\n", 
+                             WiFi.getMode(), WiFi.status());
+                
+                // Force WiFi channel back to ESP-NOW channel
+                WiFi.setChannel(1);
+                delay(100); // Give WiFi time to settle
+                
+                // Debug: Log WiFi state after re-initialization
+                Serial.printf("WiFi after re-init - Mode: %d, Status: %d\n", 
+                             WiFi.getMode(), WiFi.status());
+                
+                // Force complete ESP-NOW re-initialization
+                esp_now_deinit();
+                delay(100);
+                
+                if (esp_now_init() == ESP_OK) {
+                    esp_now_set_pmk((uint8_t*)"pmk1234567890123");
+                    esp_now_register_recv_cb(onESPNowDataRecv);
+                    Serial.println("ESP-NOW completely re-initialized for BLE coexistence");
+                } else {
+                    Serial.println("ESP-NOW re-initialization FAILED");
+                }
+            }
+            
+            // Force reset LED state and start fresh pattern
+            digitalWrite(LED_PIN, LOW);  // Start with LED OFF
+            ledState = false;
+            ledLastUpdate = 0; // Force immediate update
+            currentLEDPattern = LED_CONNECTED;
+        } else {
+            Serial.println("=== MAIN LOOP: Disconnection detected ===");
+            Serial.println("Disconnected - restarting advertising");
+            NimBLEDevice::startAdvertising();
+            currentLEDPattern = LED_ADVERTISING; // Switch to advertising LED pattern
+        }
+    }
+    
+    // Read sensor data directly (polling-based instead of interrupt-driven)
+    imu.update();
+    
+    // Update BLE polling system
+    pollingManager.update();
+    
+    // Update hub client service (only if we're a hub)
+    if (deviceConfig.isHubMode()) {
+        updateHubClientService();
+    }
+    
+    // Send data if connected
+    if (deviceConnected) {
+        // Rate limit data transmission to prevent overwhelming BLE connection
+        static unsigned long lastTransmission = 0;
+        const unsigned long TRANSMISSION_INTERVAL = 20; // 50Hz max (20ms interval) for stability
+        
+        if (millis() - lastTransmission < TRANSMISSION_INTERVAL) {
+            // Skip this transmission cycle to maintain stable rate
+            delay(1); // Small delay to prevent busy waiting
+            return; // Early return to avoid rest of loop processing
+        }
+        
+        lastTransmission = millis();
+        
+        // Send quaternion report if connected
         sendQuaternionReport();
-    // }
+    } else {
+        // Add debug output when not connected - every 60 seconds (increased from 30 seconds)
+        static unsigned long lastDebugPrint = 0;
+        if (millis() - lastDebugPrint >= 60000) {
+            Serial.print("DEBUG: Not connected, waiting for client... Role: ");
+            Serial.print(deviceConfig.getRoleName(deviceConfig.getRole()));
+            Serial.print(", Assigned: ");
+            Serial.print(deviceConfig.isRoleAssigned() ? "YES" : "NO");
+            Serial.print(", Mode: ");
+            Serial.println(deviceConfig.isHubMode() ? "HUB" : "NODE");
+            lastDebugPrint = millis();
+        }
+    }
     
-    // Update battery level very infrequently to avoid performance impact
-    updateBatteryLevel();
+    // Send ESP-NOW data for child devices (regardless of BLE connection)
+    if (deviceConfig.isNodeMode() && (deviceConfig.getRole() == ROLE_LEFT_HAND || 
+                                      deviceConfig.getRole() == ROLE_RIGHT_HAND ||
+                                      deviceConfig.getRole() == ROLE_LEFT_FOREARM || 
+                                      deviceConfig.getRole() == ROLE_RIGHT_FOREARM)) {
+        sendESPNowQuaternionData();
+    }
     
-    // Read switch states (keep this frequent for responsiveness)
-    readSwitches();
+    // Only restart advertising if truly disconnected and not advertising
+    // Add some debugging and rate limiting to prevent spam
+    static unsigned long lastAdvertisingCheck = 0;
+    static unsigned long lastAdvertisingRestart = 0;
+    const unsigned long ADVERTISING_CHECK_INTERVAL = 1000; // Check every 1 second
+    const unsigned long ADVERTISING_RESTART_COOLDOWN = 5000; // Wait 5 seconds between restarts
+    
+    if (!deviceConnected && (millis() - lastAdvertisingCheck > ADVERTISING_CHECK_INTERVAL)) {
+        lastAdvertisingCheck = millis();
+        
+        bool isCurrentlyAdvertising = NimBLEDevice::getAdvertising()->isAdvertising();
+        
+        if (!isCurrentlyAdvertising && (millis() - lastAdvertisingRestart > ADVERTISING_RESTART_COOLDOWN)) {
+            Serial.println("Restarting advertising to reconnect...");
+            NimBLEDevice::startAdvertising();
+            lastAdvertisingRestart = millis();
+        }
+    }
 }

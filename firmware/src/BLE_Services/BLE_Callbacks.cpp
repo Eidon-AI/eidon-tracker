@@ -1,0 +1,45 @@
+#include "BLE_Callbacks.h"
+#include <Arduino.h>
+#include <NimBLEDevice.h>
+#include <NimBLEServer.h>
+#include <NimBLEUtils.h>
+#include "DeviceConfig.h"
+
+// External variables that the callbacks need access to
+extern bool deviceConnected;
+extern bool quaternionSubscribed;
+extern BNO085 imu;
+extern NimBLECharacteristic* calibrationChar;
+
+// Server callbacks implementation
+void ServerCallbacks::onConnect(NimBLEServer* pServer) {
+    deviceConnected = true;
+    Serial.println("=== PHONE CONNECTED ===");
+    if (NimBLEDevice::getAdvertising()->isAdvertising()) {
+        NimBLEDevice::getAdvertising()->stop();
+    }
+    NimBLEConnInfo connInfo = pServer->getPeerInfo(0);
+    pServer->updateConnParams(connInfo.getConnHandle(), 12, 24, 0, 400);
+    Serial.printf("Phone connection established, peer count: %d\n", pServer->getConnectedCount());
+}
+
+void ServerCallbacks::onDisconnect(NimBLEServer* pServer) {
+    deviceConnected = false;
+    Serial.println("=== PHONE DISCONNECTED ===");
+    NimBLEDevice::startAdvertising();
+}
+
+void ServerCallbacks::onMTUChange(uint16_t MTU, ble_gap_conn_desc* desc) {}
+void ServerCallbacks::onPassKeyDisplay(uint32_t pass_key) {}
+void ServerCallbacks::onAuthenticationComplete(NimBLEConnInfo& connInfo) {}
+
+// GATT Quaternion characteristic callback implementation
+void QuaternionCharCallbacks::onRead(NimBLECharacteristic* pChar) {}
+void QuaternionCharCallbacks::onWrite(NimBLECharacteristic* pChar, const std::string& value) {}
+void QuaternionCharCallbacks::onNotify(NimBLECharacteristic* pChar) {}
+void QuaternionCharCallbacks::onStatus(NimBLECharacteristic* pChar, int status, int code) {}
+void QuaternionCharCallbacks::onSubscribe(NimBLECharacteristic* pChar, ble_gap_conn_desc* desc, uint16_t subValue) {
+    quaternionSubscribed = (subValue != 0);
+}
+
+// Role configuration callbacks removed - using polling system instead 
