@@ -10,7 +10,7 @@
 // Hub ESP-NOW receiver configuration
 #define MAX_CHILDREN 2
 #define ESP_NOW_CHANNEL 1
-#define CHILD_DATA_TIMEOUT_MS 5000  // Consider child disconnected if no data for 5 seconds
+#define CHILD_DATA_TIMEOUT_MS 30000  // Consider child disconnected if no data for 30 seconds
 
 // ESP-NOW receiver service class
 class HubClientService {
@@ -64,6 +64,6 @@ bool isChildConnected(DeviceRole childRole);
 AggregatedQuaternionData* getAggregatedData();
 
 // ESP-NOW callback function declaration
-void onESPNowDataRecv(const uint8_t* macAddr, const uint8_t* data, int dataLen);
+void onESPNowDataRecv(const esp_now_recv_info_t* esp_now_info, const uint8_t* data, int dataLen);
 
 #endif // HUB_CLIENT_SERVICE_H 

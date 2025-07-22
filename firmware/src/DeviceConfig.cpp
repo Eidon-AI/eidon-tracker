@@ -25,6 +25,9 @@ bool DeviceConfig::begin() {
         return false;
     }
     
+    // Set initialized flag BEFORE calling loadConfig/saveConfig
+    initialized = true;
+    
     // Load configuration
     if (!loadConfig()) {
         Serial.println("DeviceConfig: Failed to load configuration, using defaults");
@@ -36,7 +39,6 @@ bool DeviceConfig::begin() {
         saveConfig();
     }
     
-    initialized = true;
     Serial.println("DeviceConfig: Initialized successfully");
     return true;
 }
@@ -230,16 +232,30 @@ bool DeviceConfig::resetConfig() {
 }
 
 String DeviceConfig::generateDeviceName() {
-    String baseName = "Eidon";
+    // Get device's WiFi MAC address for unique identification
+    uint8_t deviceMac[6];
+    WiFi.macAddress(deviceMac);
     
-    if (config.role != ROLE_UNKNOWN) {
-        baseName += "-";
-        baseName += getRoleName(config.role);
-    } else {
-        baseName += "-Unknown";
-    }
+    // Debug: Print the MAC address we're using
+    Serial.printf("DEBUG: Using MAC: %02X:%02X:%02X:%02X:%02X:%02X\n", 
+                 deviceMac[0], deviceMac[1], deviceMac[2], deviceMac[3], deviceMac[4], deviceMac[5]);
     
-    return baseName;
+    // Try to get BLE MAC (WiFi MAC + 2)
+    uint8_t bleMac[6];
+    memcpy(bleMac, deviceMac, 6);
+    bleMac[5] += 2;
+    
+    Serial.printf("DEBUG: BLE MAC would be: %02X:%02X:%02X:%02X:%02X:%02X\n", 
+                 bleMac[0], bleMac[1], bleMac[2], bleMac[3], bleMac[4], bleMac[5]);
+    
+    // Create device name: Eidon-Tracker-<last 4 digits of BLE MAC>
+    char macSuffix[5];
+    snprintf(macSuffix, sizeof(macSuffix), "%02X%02X", bleMac[4], bleMac[5]);
+    
+    String deviceName = String("Eidon-Tracker-") + String(macSuffix);
+    Serial.printf("DEBUG: Generated name: %s\n", deviceName.c_str());
+    
+    return deviceName;
 }
 
 bool DeviceConfig::isValidRole(DeviceRole role) {

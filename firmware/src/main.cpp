@@ -83,7 +83,7 @@ bool espNowInitialized = false;
 uint8_t hubMacAddress[6];
 bool hubMacAssigned = false;
 unsigned long lastESPNowTransmission = 0;
-const unsigned long ESP_NOW_INTERVAL = 20; // 50Hz (20ms interval)
+const unsigned long ESP_NOW_INTERVAL = 50; // (30ms interval) - reduced for stability
 
 // LED pin - changed from 5 to 2 to avoid conflict with switch pin
 #define LED_PIN 2
@@ -197,6 +197,11 @@ void updateAdvertisingData() {
     // Stop current advertising
     pAdvertising->stop();
     
+    // Update device name
+    String deviceName = deviceConfig.generateDeviceName();
+    NimBLEDevice::setDeviceName(deviceName.c_str());
+    pAdvertising->setName(deviceName.c_str());
+    
     // Update role information in manufacturer data
     // Format: [Company ID Low, Company ID High, Role Data]
     uint8_t manufacturerDataBytes[3];
@@ -208,10 +213,16 @@ void updateAdvertisingData() {
     manufacturerData.setManufacturerData(manufacturerDataBytes, 3);
     pAdvertising->setAdvertisementData(manufacturerData);
     
+    // Update scan response data
+    NimBLEAdvertisementData scanResponse;
+    scanResponse.setName(deviceName.c_str());
+    pAdvertising->setScanResponseData(scanResponse);
+    
     // Restart advertising with updated data
     pAdvertising->start();
     
-    Serial.printf("Advertising updated - Role: %s (0x%02X)\n", 
+    Serial.printf("Advertising updated - Device: %s, Role: %s (0x%02X)\n", 
+                 deviceName.c_str(),
                  deviceConfig.getRoleName(deviceConfig.getRole()),
                  (uint8_t)deviceConfig.getRole());
     Serial.print("Updated manufacturer data bytes: ");
@@ -362,10 +373,30 @@ void updateESPNowHubMacAddress() {
     // Check if we have a hub MAC address assigned
     if (deviceConfig.isHubMacAssigned()) {
         deviceConfig.getHubMacAddress(hubMacAddress);
-        hubMacAssigned = true;
-        Serial.printf("ESP-NOW: Hub MAC address updated: %02X:%02X:%02X:%02X:%02X:%02X\n",
-                     hubMacAddress[0], hubMacAddress[1], hubMacAddress[2], 
-                     hubMacAddress[3], hubMacAddress[4], hubMacAddress[5]);
+        
+        // Register hub as ESP-NOW peer
+        esp_now_peer_info_t peerInfo;
+        memset(&peerInfo, 0, sizeof(peerInfo));
+        memcpy(peerInfo.peer_addr, hubMacAddress, 6);
+        peerInfo.channel = 1; // Use channel 1
+        peerInfo.encrypt = false; // No encryption for now
+        
+        esp_err_t result = esp_now_add_peer(&peerInfo);
+        if (result == ESP_OK) {
+            hubMacAssigned = true;
+            Serial.printf("ESP-NOW: Hub peer registered: %02X:%02X:%02X:%02X:%02X:%02X\n",
+                         hubMacAddress[0], hubMacAddress[1], hubMacAddress[2], 
+                         hubMacAddress[3], hubMacAddress[4], hubMacAddress[5]);
+        } else if (result == ESP_ERR_ESPNOW_EXIST) {
+            // Peer already exists - this is fine
+            hubMacAssigned = true;
+            Serial.printf("ESP-NOW: Hub peer already registered: %02X:%02X:%02X:%02X:%02X:%02X\n",
+                         hubMacAddress[0], hubMacAddress[1], hubMacAddress[2], 
+                         hubMacAddress[3], hubMacAddress[4], hubMacAddress[5]);
+        } else {
+            Serial.printf("ESP-NOW: Failed to register hub peer, error: %d\n", result);
+            hubMacAssigned = false;
+        }
     } else {
         hubMacAssigned = false;
         Serial.println("ESP-NOW: No hub MAC address assigned");
@@ -400,6 +431,15 @@ void sendESPNowQuaternionData() {
     packet.quaternion.y = corrected_y;
     packet.quaternion.z = corrected_z;
     
+    // Debug: Print packet details before sending
+    static unsigned long lastDebugTime = 0;
+    if (millis() - lastDebugTime >= 10000) { // Every 10 seconds
+        Serial.printf("DEBUG: ESP-NOW packet - Size: %d, Hub MAC: %02X:%02X:%02X:%02X:%02X:%02X\n", 
+                     sizeof(packet), hubMacAddress[0], hubMacAddress[1], hubMacAddress[2], 
+                     hubMacAddress[3], hubMacAddress[4], hubMacAddress[5]);
+        lastDebugTime = millis();
+    }
+    
     // Send packet to hub
     esp_err_t result = esp_now_send(hubMacAddress, (uint8_t*)&packet, sizeof(packet));
     
@@ -415,7 +455,17 @@ void sendESPNowQuaternionData() {
             lastLogTime = millis();
         }
     } else {
-        Serial.printf("ESP-NOW: Failed to send data, error: %d\n", result);
+        // Rate limit error messages to avoid spam
+        static unsigned long lastErrorLogTime = 0;
+        static int errorCount = 0;
+        
+        if (millis() - lastErrorLogTime >= 5000) { // Log every 5 seconds
+            Serial.printf("ESP-NOW: Failed to send data, error: %d (occurred %d times in last 5s)\n", result, errorCount + 1);
+            lastErrorLogTime = millis();
+            errorCount = 0;
+        } else {
+            errorCount++;
+        }
     }
 }
 
@@ -630,6 +680,36 @@ void loop() {
         if (deviceConnected) {
             Serial.println("=== MAIN LOOP: Connection detected ===");
             Serial.println("Connected - starting to send data");
+            
+            // Re-initialize ESP-NOW after BLE connection to prevent conflicts
+            if (deviceConfig.isHubMode()) {
+                Serial.println("Re-initializing ESP-NOW after BLE connection...");
+                
+                // Debug: Log WiFi state before re-initialization
+                Serial.printf("WiFi before re-init - Mode: %d, Status: %d\n", 
+                             WiFi.getMode(), WiFi.status());
+                
+                // Force WiFi channel back to ESP-NOW channel
+                WiFi.setChannel(1);
+                delay(100); // Give WiFi time to settle
+                
+                // Debug: Log WiFi state after re-initialization
+                Serial.printf("WiFi after re-init - Mode: %d, Status: %d\n", 
+                             WiFi.getMode(), WiFi.status());
+                
+                // Force complete ESP-NOW re-initialization
+                esp_now_deinit();
+                delay(100);
+                
+                if (esp_now_init() == ESP_OK) {
+                    esp_now_set_pmk((uint8_t*)"pmk1234567890123");
+                    esp_now_register_recv_cb(onESPNowDataRecv);
+                    Serial.println("ESP-NOW completely re-initialized for BLE coexistence");
+                } else {
+                    Serial.println("ESP-NOW re-initialization FAILED");
+                }
+            }
+            
             // Force reset LED state and start fresh pattern
             digitalWrite(LED_PIN, LOW);  // Start with LED OFF
             ledState = false;

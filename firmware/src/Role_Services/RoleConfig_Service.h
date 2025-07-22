@@ -12,7 +12,6 @@
 // Role configuration data structure - Enhanced for ESP-NOW support
 struct RoleConfigData {
     uint8_t role;                    // Current role (0-6), 255 = ROLE_UNKNOWN (unassigned)
-    char roleName[16];               // Role name string
     uint8_t hubMacAddress[6];        // Hub MAC address (all zeros = unassigned)
 } __attribute__((packed));
 
