@@ -104,7 +104,7 @@ void HubClientService::begin() {
 }
 
 // Main update function
-void HubClientService::update() {
+void HubClientService::update(bool bleConnected) {
     if (!deviceConfig.isHubMode() || !espNowInitialized) {
         return; // Not a hub or ESP-NOW not initialized
     }
@@ -116,6 +116,8 @@ void HubClientService::update() {
             unsigned long timeSinceLastData = currentTime - childDevices[i].lastDataTime;
             
             if (timeSinceLastData > CHILD_DATA_TIMEOUT_MS) {
+                Serial.printf("HUB: Child %s timed out (no data for %lums)\n", 
+                             deviceConfig.getRoleName(childDevices[i].role), timeSinceLastData);
                 childDevices[i].dataAvailable = false;
                 childDevices[i].consecutiveFailures++;
             }
@@ -135,8 +137,19 @@ void HubClientService::update() {
         // Calculate ESP-NOW receive rate
         float espNowRate = (float)packetCounter / 8.0; // packets per second over 8 seconds
         
-        Serial.printf("HUB: ESP-NOW received: %.1f Hz, Children connected: %d/%d\n", 
-                     espNowRate, connectedCount, childDeviceCount);
+        Serial.printf("HUB: ESP-NOW received: %.1f Hz, Children: %d/%d, BLE: %s\n", 
+                     espNowRate, connectedCount, childDeviceCount, bleConnected ? "Connected" : "Disconnected");
+        
+        // Log individual child device status
+        for (int i = 0; i < childDeviceCount; i++) {
+            if (childDevices[i].role != ROLE_UNKNOWN) {
+                unsigned long timeSinceLastData = currentTime - childDevices[i].lastDataTime;
+                Serial.printf("HUB: Child %s - %s (last data: %lums ago)\n", 
+                             deviceConfig.getRoleName(childDevices[i].role),
+                             childDevices[i].dataAvailable ? "Active" : "Inactive",
+                             timeSinceLastData);
+            }
+        }
         
         // Reset counters
         packetCounter = 0;
@@ -175,12 +188,23 @@ void HubClientService::processESPNowPacket(const uint8_t* macAddr, const uint8_t
     
     // Update child device data
     ESPNowChildDevice& child = childDevices[slotIndex];
+    
+    // Check if this is a new child device or reconnection
+    bool wasAvailable = child.dataAvailable;
+    
     memcpy(child.macAddress, macAddr, sizeof(child.macAddress));
     child.role = senderRole;
     child.lastData = packet->quaternion;
     child.dataAvailable = true;
     child.lastDataTime = millis();
     child.consecutiveFailures = 0;
+    
+    // Log new child connections
+    if (!wasAvailable) {
+        Serial.printf("HUB: Child %s connected via ESP-NOW (MAC: %02X:%02X:%02X:%02X:%02X:%02X)\n", 
+                     deviceConfig.getRoleName(senderRole),
+                     macAddr[0], macAddr[1], macAddr[2], macAddr[3], macAddr[4], macAddr[5]);
+    }
 }
 
 // Find existing child slot by role
@@ -309,8 +333,8 @@ void setupHubClientService() {
 }
 
 // Update function for integration with main.cpp
-void updateHubClientService() {
-    hubClientService.update();
+void updateHubClientService(bool bleConnected) {
+    hubClientService.update(bleConnected);
 }
 
 // Wrapper functions for main.cpp compatibility

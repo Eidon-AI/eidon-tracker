@@ -105,7 +105,7 @@ bool advertisingTimedOut = false;
 
 // IMU rate limiting for both child and hub devices
 unsigned long lastIMUUpdate = 0;
-const unsigned long IMU_UPDATE_INTERVAL = 10; // 100 Hz (10ms interval) - 4x ESP-NOW rate
+const unsigned long IMU_UPDATE_INTERVAL = 12; // 80 Hz (12.5ms interval) - reduced from 100Hz for thermal management
 
 // LED pin - changed from 5 to 2 to avoid conflict with switch pin
 #define LED_PIN 2
@@ -299,7 +299,7 @@ void sendQuaternionReport() {
                 quaternionChar->notify((uint8_t*)&gattQuaternionData, sizeof(gattQuaternionData));
             }
             
-            // Send child data via separate characteristics (hub only)
+            // Send child data via separate characteristics (only populated when device is hub)
             if (deviceConfig.isHubMode() && handQuaternionChar != nullptr && forearmQuaternionChar != nullptr) {
                 AggregatedQuaternionData* agg = getAggregatedData();
                 
@@ -532,22 +532,20 @@ void setup() {
     };
     deviceInfoChar->setValue(deviceInfo, sizeof(deviceInfo));
     
-    // Add new characteristics for hub devices only (child data)
-    if (deviceConfig.isHubMode()) {
-        // Configure Hand Quaternion characteristic
-        handQuaternionChar = eidonService->createCharacteristic(
-            HAND_QUATERNION_CHAR_UUID,
-            NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
-        );
-        handQuaternionChar->setValue((uint8_t*)&gattQuaternionData, sizeof(gattQuaternionData));
-        
-        // Configure Forearm Quaternion characteristic
-        forearmQuaternionChar = eidonService->createCharacteristic(
-            FOREARM_QUATERNION_CHAR_UUID,
-            NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
-        );
-        forearmQuaternionChar->setValue((uint8_t*)&gattQuaternionData, sizeof(gattQuaternionData));
-    }
+    // Add child data characteristics for all devices (populated when device becomes hub)
+    // Configure Hand Quaternion characteristic
+    handQuaternionChar = eidonService->createCharacteristic(
+        HAND_QUATERNION_CHAR_UUID,
+        NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
+    );
+    handQuaternionChar->setValue((uint8_t*)&gattQuaternionData, sizeof(gattQuaternionData));
+    
+    // Configure Forearm Quaternion characteristic
+    forearmQuaternionChar = eidonService->createCharacteristic(
+        FOREARM_QUATERNION_CHAR_UUID,
+        NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
+    );
+    forearmQuaternionChar->setValue((uint8_t*)&gattQuaternionData, sizeof(gattQuaternionData));
     
     // Start custom service
     eidonService->start();
@@ -666,7 +664,7 @@ void loop() {
         }
     }
     
-    // Rate-limited IMU updates for both child and hub devices
+    // Rate-limited IMU updates for both child and hub devices (80Hz)
     unsigned long currentTime = millis();
     if (currentTime - lastIMUUpdate >= IMU_UPDATE_INTERVAL) {
         imu.update();
@@ -679,7 +677,7 @@ void loop() {
     
     // Update hub client service (only if we're a hub)
     if (deviceConfig.isHubMode()) {
-        updateHubClientService();
+        updateHubClientService(deviceConnected);
     }
     
     // Send data if connected
@@ -692,6 +690,22 @@ void loop() {
             lastTransmission = millis();
             // Send quaternion report if connected
             sendQuaternionReport();
+            
+            // Log BLE transmission for hub devices
+            if (deviceConfig.isHubMode()) {
+                static unsigned long lastBleLogTime = 0;
+                static unsigned long bleTransmissionCount = 0;
+                
+                bleTransmissionCount++;
+                
+                // Log BLE transmission rate every 10 seconds
+                if (millis() - lastBleLogTime >= 10000) {
+                    float bleRate = (float)bleTransmissionCount / 10.0; // transmissions per second
+                    Serial.printf("HUB: Transmitting Quaternion Data over BLE. Rate: %.1f Hz\n", bleRate);
+                    bleTransmissionCount = 0;
+                    lastBleLogTime = millis();
+                }
+            }
         }
     } else {
         // No periodic debug output when not connected - connection events are logged above

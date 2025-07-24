@@ -38,7 +38,7 @@ public:
     
     // Main interface
     void begin();
-    void update();
+    void update(bool bleConnected = false);
     
     // ESP-NOW management
     bool initializeESPNow();
@@ -62,7 +62,7 @@ extern HubClientService hubClientService;
 
 // Function declarations for integration with main.cpp
 void setupHubClientService();
-void updateHubClientService();
+void updateHubClientService(bool bleConnected = false);
 void registerChildDevice(const uint8_t* macAddress, DeviceRole childRole);
 void unregisterChildDevice(DeviceRole childRole);
 void updateChildData();
