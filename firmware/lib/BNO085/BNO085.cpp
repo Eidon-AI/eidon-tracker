@@ -247,11 +247,11 @@ void BNO085::update() {
         }
 
         // Quaternion output disabled to reduce serial overhead
-        // if (millis() - lastPrint >= PRINT_INTERVAL) {
-        //     Serial.printf("IMU: W=%.4f X=%.4f Y=%.4f Z=%.4f\n", 
-        //                  quaternion_w, quaternion_x, quaternion_y, quaternion_z);
-        //     lastPrint = millis();
-        // }
+        if (millis() - lastPrint >= PRINT_INTERVAL) {
+            Serial.printf("IMU: W=%.4f X=%.4f Y=%.4f Z=%.4f\n", 
+                         quaternion_w, quaternion_x, quaternion_y, quaternion_z);
+            lastPrint = millis();
+        }
     }
 }
 

@@ -85,6 +85,11 @@ bool hubMacAssigned = false;
 unsigned long lastESPNowTransmission = 0;
 const unsigned long ESP_NOW_INTERVAL = 42; // 24 Hz (41.67ms interval) - matches 24fps video
 
+// ESP-NOW error handling and timeout
+unsigned long lastESPNowError = 0;
+const unsigned long ESP_NOW_ERROR_TIMEOUT = 5000; // 5 seconds between error logs
+int espNowErrorCount = 0;
+
 // Child device periodic logging system
 const unsigned long CHILD_LOG_INTERVAL = 10000; // 10 seconds for periodic updates
 unsigned long lastChildLogTime = 0;
@@ -405,9 +410,31 @@ void sendESPNowQuaternionData() {
     if (result == ESP_OK) {
         lastESPNowTransmission = millis();
         espNowSendCount++;
+        // Reset error count on successful send
+        espNowErrorCount = 0;
     } else {
-        // Only log critical errors (not rate limited to avoid missing important issues)
-        Serial.printf("ESP-NOW: Failed to send data, error: %d\n", result);
+        // Rate limit error logging to prevent spam
+        unsigned long currentTime = millis();
+        if (currentTime - lastESPNowError >= ESP_NOW_ERROR_TIMEOUT) {
+            espNowErrorCount++;
+            Serial.printf("ESP-NOW: Failed to send data, error: %d (count: %d)\n", result, espNowErrorCount);
+            lastESPNowError = currentTime;
+            
+            // If we've had many errors, try to reinitialize ESP-NOW
+            if (espNowErrorCount >= 10) {
+                Serial.println("ESP-NOW: Too many errors, attempting reinitialization...");
+                esp_now_deinit();
+                delay(100);
+                if (esp_now_init() == ESP_OK) {
+                    esp_now_set_pmk((uint8_t*)"pmk1234567890123");
+                    updateESPNowHubMacAddress();
+                    espNowErrorCount = 0;
+                    Serial.println("ESP-NOW: Reinitialization successful");
+                } else {
+                    Serial.println("ESP-NOW: Reinitialization failed");
+                }
+            }
+        }
     }
 }
 
