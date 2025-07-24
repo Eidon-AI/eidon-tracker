@@ -105,7 +105,7 @@ bool advertisingTimedOut = false;
 
 // IMU rate limiting for both child and hub devices
 unsigned long lastIMUUpdate = 0;
-const unsigned long IMU_UPDATE_INTERVAL = 12; // 80 Hz (12.5ms interval) - reduced from 100Hz for thermal management
+const unsigned long IMU_UPDATE_INTERVAL = 17; // 60 Hz (16.7ms interval) - 2.5x ESP-NOW rate for thermal management
 
 // LED pin - changed from 5 to 2 to avoid conflict with switch pin
 #define LED_PIN 2
