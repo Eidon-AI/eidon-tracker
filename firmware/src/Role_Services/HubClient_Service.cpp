@@ -47,27 +47,28 @@ bool HubClientService::initializeESPNow() {
         return true; // Already initialized
     }
     
-    // Initialize ESP-NOW
-    if (esp_now_init() != ESP_OK) {
-        Serial.println("HubClient: Failed to initialize ESP-NOW");
-        return false;
-    }
-    
-    // Set ESP-NOW role to receiver
-    if (esp_now_set_pmk((uint8_t*)"pmk1234567890123") != ESP_OK) {
-        Serial.println("HubClient: Failed to set ESP-NOW PMK");
-        return false;
-    }
-    
-    // Set WiFi channel to match child devices (channel 1)
+    // Force WiFi channel to ESP-NOW channel first
     WiFi.setChannel(1);
+    delay(50); // Give WiFi time to settle (shorter than re-initialization)
     Serial.println("HubClient: WiFi channel set to 1 for ESP-NOW");
     
     // Configure WiFi for BLE coexistence
     WiFi.setSleep(false); // Disable WiFi sleep to prevent conflicts
     Serial.println("HubClient: WiFi sleep disabled for BLE coexistence");
     
-    // Register callback function
+    // Initialize ESP-NOW (same sequence as working re-initialization)
+    if (esp_now_init() != ESP_OK) {
+        Serial.println("HubClient: Failed to initialize ESP-NOW");
+        return false;
+    }
+    
+    // Set ESP-NOW PMK (same as re-initialization)
+    if (esp_now_set_pmk((uint8_t*)"pmk1234567890123") != ESP_OK) {
+        Serial.println("HubClient: Failed to set ESP-NOW PMK");
+        return false;
+    }
+    
+    // Register callback function (same as re-initialization)
     esp_now_register_recv_cb(onESPNowDataRecv);
     
     espNowInitialized = true;
@@ -139,18 +140,7 @@ void HubClientService::update(bool bleConnected) {
         
         Serial.printf("HUB: ESP-NOW received: %.1f Hz, Children: %d/%d, BLE: %s\n", 
                      espNowRate, connectedCount, childDeviceCount, bleConnected ? "Connected" : "Disconnected");
-        
-        // Log individual child device status
-        for (int i = 0; i < childDeviceCount; i++) {
-            if (childDevices[i].role != ROLE_UNKNOWN) {
-                unsigned long timeSinceLastData = currentTime - childDevices[i].lastDataTime;
-                Serial.printf("HUB: Child %s - %s (last data: %lums ago)\n", 
-                             deviceConfig.getRoleName(childDevices[i].role),
-                             childDevices[i].dataAvailable ? "Active" : "Inactive",
-                             timeSinceLastData);
-            }
-        }
-        
+                
         // Reset counters
         packetCounter = 0;
         lastLogTime = currentTime;
@@ -198,13 +188,6 @@ void HubClientService::processESPNowPacket(const uint8_t* macAddr, const uint8_t
     child.dataAvailable = true;
     child.lastDataTime = millis();
     child.consecutiveFailures = 0;
-    
-    // Log new child connections
-    if (!wasAvailable) {
-        Serial.printf("HUB: Child %s connected via ESP-NOW (MAC: %02X:%02X:%02X:%02X:%02X:%02X)\n", 
-                     deviceConfig.getRoleName(senderRole),
-                     macAddr[0], macAddr[1], macAddr[2], macAddr[3], macAddr[4], macAddr[5]);
-    }
 }
 
 // Find existing child slot by role
