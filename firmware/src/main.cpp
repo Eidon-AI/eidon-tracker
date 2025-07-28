@@ -83,7 +83,7 @@ bool espNowInitialized = false;
 uint8_t hubMacAddress[6];
 bool hubMacAssigned = false;
 unsigned long lastESPNowTransmission = 0;
-const unsigned long ESP_NOW_INTERVAL = 42; // 24 Hz (41.67ms interval) - matches 24fps video
+const unsigned long ESP_NOW_INTERVAL = 21; // 48 Hz (20.83ms interval) - redundancy approach for packet loss
 
 // ESP-NOW error handling and timeout
 unsigned long lastESPNowError = 0;
@@ -105,7 +105,7 @@ bool advertisingTimedOut = false;
 
 // IMU rate limiting for both child and hub devices
 unsigned long lastIMUUpdate = 0;
-const unsigned long IMU_UPDATE_INTERVAL = 10; // 100 Hz (10ms interval) - 4x ESP-NOW rate
+const unsigned long IMU_UPDATE_INTERVAL = 21; // 48 Hz (20.83ms interval) - matches ESP-NOW rate for redundancy
 
 // LED pin - changed from 5 to 2 to avoid conflict with switch pin
 #define LED_PIN 2
@@ -299,7 +299,7 @@ void sendQuaternionReport() {
                 quaternionChar->notify((uint8_t*)&gattQuaternionData, sizeof(gattQuaternionData));
             }
             
-            // Send child data via separate characteristics (hub only)
+            // Send child data via separate characteristics (only populated when device is hub)
             if (deviceConfig.isHubMode() && handQuaternionChar != nullptr && forearmQuaternionChar != nullptr) {
                 AggregatedQuaternionData* agg = getAggregatedData();
                 
@@ -381,10 +381,8 @@ void sendESPNowQuaternionData() {
         return; // Not ready to send
     }
     
-    // Rate limiting
-    if (millis() - lastESPNowTransmission < ESP_NOW_INTERVAL) {
-        return;
-    }
+    // Rate limiting - now handled by IMU update interval (48Hz)
+    // Removed redundant rate limiting since IMU updates at 48Hz
     
     // Get current quaternion data from IMU
     float qw_sensor, qx_sensor, qy_sensor, qz_sensor;
@@ -532,22 +530,20 @@ void setup() {
     };
     deviceInfoChar->setValue(deviceInfo, sizeof(deviceInfo));
     
-    // Add new characteristics for hub devices only (child data)
-    if (deviceConfig.isHubMode()) {
-        // Configure Hand Quaternion characteristic
-        handQuaternionChar = eidonService->createCharacteristic(
-            HAND_QUATERNION_CHAR_UUID,
-            NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
-        );
-        handQuaternionChar->setValue((uint8_t*)&gattQuaternionData, sizeof(gattQuaternionData));
-        
-        // Configure Forearm Quaternion characteristic
-        forearmQuaternionChar = eidonService->createCharacteristic(
-            FOREARM_QUATERNION_CHAR_UUID,
-            NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
-        );
-        forearmQuaternionChar->setValue((uint8_t*)&gattQuaternionData, sizeof(gattQuaternionData));
-    }
+    // Add child data characteristics for all devices (populated when device becomes hub)
+    // Configure Hand Quaternion characteristic
+    handQuaternionChar = eidonService->createCharacteristic(
+        HAND_QUATERNION_CHAR_UUID,
+        NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
+    );
+    handQuaternionChar->setValue((uint8_t*)&gattQuaternionData, sizeof(gattQuaternionData));
+    
+    // Configure Forearm Quaternion characteristic
+    forearmQuaternionChar = eidonService->createCharacteristic(
+        FOREARM_QUATERNION_CHAR_UUID,
+        NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
+    );
+    forearmQuaternionChar->setValue((uint8_t*)&gattQuaternionData, sizeof(gattQuaternionData));
     
     // Start custom service
     eidonService->start();
@@ -666,12 +662,20 @@ void loop() {
         }
     }
     
-    // Rate-limited IMU updates for both child and hub devices
+    // Rate-limited IMU updates for both child and hub devices (48Hz)
     unsigned long currentTime = millis();
     if (currentTime - lastIMUUpdate >= IMU_UPDATE_INTERVAL) {
         imu.update();
         imuUpdateCount++; // Track IMU updates for periodic logging
         lastIMUUpdate = currentTime;
+        
+        // For child devices: Send ESP-NOW data immediately after every IMU update (48Hz redundancy approach)
+        if (deviceConfig.isNodeMode() && (deviceConfig.getRole() == ROLE_LEFT_HAND || 
+                                          deviceConfig.getRole() == ROLE_RIGHT_HAND ||
+                                          deviceConfig.getRole() == ROLE_LEFT_FOREARM || 
+                                          deviceConfig.getRole() == ROLE_RIGHT_FOREARM)) {
+            sendESPNowQuaternionData();
+        }
     }
     
     // Update BLE polling system
@@ -679,7 +683,7 @@ void loop() {
     
     // Update hub client service (only if we're a hub)
     if (deviceConfig.isHubMode()) {
-        updateHubClientService();
+        updateHubClientService(deviceConnected);
     }
     
     // Send data if connected
@@ -692,18 +696,32 @@ void loop() {
             lastTransmission = millis();
             // Send quaternion report if connected
             sendQuaternionReport();
+            
+            // Log BLE transmission for hub devices
+            if (deviceConfig.isHubMode()) {
+                static unsigned long lastBleLogTime = 0;
+                static unsigned long bleTransmissionCount = 0;
+                
+                bleTransmissionCount++;
+                
+                // Log BLE transmission rate every 10 seconds
+                if (millis() - lastBleLogTime >= 10000) {
+                    float bleRate = (float)bleTransmissionCount / 10.0; // transmissions per second
+                    Serial.printf("HUB: Transmitting Quaternion Data over BLE. Rate: %.1f Hz\n", bleRate);
+                    bleTransmissionCount = 0;
+                    lastBleLogTime = millis();
+                }
+            }
         }
     } else {
         // No periodic debug output when not connected - connection events are logged above
     }
     
-    // Send ESP-NOW data for child devices (regardless of BLE connection)
+    // Periodic logging for child devices (ESP-NOW transmission now handled in IMU update section)
     if (deviceConfig.isNodeMode() && (deviceConfig.getRole() == ROLE_LEFT_HAND || 
                                       deviceConfig.getRole() == ROLE_RIGHT_HAND ||
                                       deviceConfig.getRole() == ROLE_LEFT_FOREARM || 
                                       deviceConfig.getRole() == ROLE_RIGHT_FOREARM)) {
-        sendESPNowQuaternionData();
-        
         // Periodic logging for child devices
         unsigned long currentTime = millis();
         if (currentTime - lastChildLogTime >= CHILD_LOG_INTERVAL) {

@@ -10,7 +10,6 @@
 // Hub ESP-NOW receiver configuration
 #define MAX_CHILDREN 2
 #define ESP_NOW_CHANNEL 1
-#define CHILD_DATA_TIMEOUT_MS 30000  // Consider child disconnected if no data for 30 seconds
 
 // ESP-NOW receiver service class
 class HubClientService {
@@ -38,7 +37,7 @@ public:
     
     // Main interface
     void begin();
-    void update();
+    void update(bool bleConnected = false);
     
     // ESP-NOW management
     bool initializeESPNow();
@@ -62,7 +61,7 @@ extern HubClientService hubClientService;
 
 // Function declarations for integration with main.cpp
 void setupHubClientService();
-void updateHubClientService();
+void updateHubClientService(bool bleConnected = false);
 void registerChildDevice(const uint8_t* macAddress, DeviceRole childRole);
 void unregisterChildDevice(DeviceRole childRole);
 void updateChildData();

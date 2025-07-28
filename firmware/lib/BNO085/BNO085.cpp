@@ -20,7 +20,7 @@ bool bno085_available = false;
 
 // Update interval tracking
 unsigned long lastUpdate = 0;
-const unsigned long UPDATE_INTERVAL = 1;
+const unsigned long UPDATE_INTERVAL = 1; // Not used in current implementation
 
 // Debug print interval - match main.cpp periodic logging
 unsigned long lastPrint = 0;
@@ -80,10 +80,10 @@ bool BNO085::testCommunication() {
 // Function to enable sensor reports
 void BNO085::enableReports() {
     // Use GAME_ROTATION_VECTOR for fast quaternion updates (no magnetic north reference)
-    // Set to 100Hz (10ms) to match main.cpp IMU_UPDATE_INTERVAL
-    if (!bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 10000)) { // 10ms (100Hz) - target rate
-        if (!bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 20000)) { // 20ms (50Hz) fallback
-            if (!bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 5000)) { // 5ms (200Hz) fallback
+    // Set to 48Hz (20.83ms) to match main.cpp IMU_UPDATE_INTERVAL for redundancy approach
+    if (!bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 20830)) { // 20.83ms (48Hz) - target rate
+        if (!bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 25000)) { // 25ms (40Hz) fallback
+            if (!bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 16700)) { // 16.7ms (60Hz) fallback
                 Serial.println("Could not enable rotation vector");
             }
         }
