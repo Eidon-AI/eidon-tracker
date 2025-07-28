@@ -10,7 +10,6 @@
 // Hub ESP-NOW receiver configuration
 #define MAX_CHILDREN 2
 #define ESP_NOW_CHANNEL 1
-#define CHILD_DATA_TIMEOUT_MS 30000  // Consider child disconnected if no data for 30 seconds
 
 // ESP-NOW receiver service class
 class HubClientService {

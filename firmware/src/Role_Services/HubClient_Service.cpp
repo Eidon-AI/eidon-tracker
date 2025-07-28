@@ -24,7 +24,6 @@ HubClientService::HubClientService()
         memset(childDevices[i].macAddress, 0, sizeof(childDevices[i].macAddress));
         childDevices[i].role = ROLE_UNKNOWN;
         childDevices[i].dataAvailable = false;
-        childDevices[i].consecutiveFailures = 0;
     }
     
     // Initialize aggregated data
@@ -93,7 +92,6 @@ void HubClientService::begin() {
         memset(childDevices[i].macAddress, 0, sizeof(childDevices[i].macAddress));
         childDevices[i].role = ROLE_UNKNOWN;
         childDevices[i].dataAvailable = false;
-        childDevices[i].consecutiveFailures = 0;
     }
     
     // Initialize aggregated data
@@ -110,22 +108,10 @@ void HubClientService::update(bool bleConnected) {
         return; // Not a hub or ESP-NOW not initialized
     }
     
-    // Check for stale child data (timeout handling)
-    unsigned long currentTime = millis();
-    for (int i = 0; i < childDeviceCount; i++) {
-        if (childDevices[i].dataAvailable) {
-            unsigned long timeSinceLastData = currentTime - childDevices[i].lastDataTime;
-            
-            if (timeSinceLastData > CHILD_DATA_TIMEOUT_MS) {
-                Serial.printf("HUB: Child %s timed out (no data for %lums)\n", 
-                             deviceConfig.getRoleName(childDevices[i].role), timeSinceLastData);
-                childDevices[i].dataAvailable = false;
-                childDevices[i].consecutiveFailures++;
-            }
-        }
-    }
+    // Child timeout handling removed - just burning CPU cycles and giving useless data
     
     // Periodic logging (every 8 seconds to match child devices)
+    unsigned long currentTime = millis();
     if (currentTime - lastLogTime >= 8000) {
         // Count connected children
         int connectedCount = 0;
@@ -186,8 +172,6 @@ void HubClientService::processESPNowPacket(const uint8_t* macAddr, const uint8_t
     child.role = senderRole;
     child.lastData = packet->quaternion;
     child.dataAvailable = true;
-    child.lastDataTime = millis();
-    child.consecutiveFailures = 0;
 }
 
 // Find existing child slot by role
@@ -235,7 +219,6 @@ void HubClientService::registerChildDevice(const uint8_t* macAddress, DeviceRole
     memcpy(child.macAddress, macAddress, sizeof(child.macAddress));
     child.role = childRole;
     child.dataAvailable = false;
-    child.consecutiveFailures = 0;
 }
 
 // Unregister a child device

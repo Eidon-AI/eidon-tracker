@@ -24,8 +24,6 @@ struct ESPNowChildDevice {
     DeviceRole role;           // Child device role
     bool dataAvailable;        // Whether we've received data recently
     QuaternionData lastData;   // Last received quaternion data
-    unsigned long lastDataTime; // Timestamp of last data reception
-    unsigned long consecutiveFailures; // Track reception failures
 } __attribute__((packed));
 
 // Aggregated quaternion data for hub (unchanged structure)
