@@ -80,10 +80,10 @@ bool BNO085::testCommunication() {
 // Function to enable sensor reports
 void BNO085::enableReports() {
     // Use GAME_ROTATION_VECTOR for fast quaternion updates (no magnetic north reference)
-    // Set to 60Hz (16.7ms) to match main.cpp IMU_UPDATE_INTERVAL
-    if (!bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 16700)) { // 16.7ms (60Hz) - target rate
-        if (!bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 20000)) { // 20ms (50Hz) fallback
-            if (!bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 12500)) { // 12.5ms (80Hz) fallback
+    // Set to 48Hz (20.83ms) to match main.cpp IMU_UPDATE_INTERVAL for redundancy approach
+    if (!bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 20830)) { // 20.83ms (48Hz) - target rate
+        if (!bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 25000)) { // 25ms (40Hz) fallback
+            if (!bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 16700)) { // 16.7ms (60Hz) fallback
                 Serial.println("Could not enable rotation vector");
             }
         }

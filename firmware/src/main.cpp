@@ -83,7 +83,7 @@ bool espNowInitialized = false;
 uint8_t hubMacAddress[6];
 bool hubMacAssigned = false;
 unsigned long lastESPNowTransmission = 0;
-const unsigned long ESP_NOW_INTERVAL = 42; // 24 Hz (41.67ms interval) - matches 24fps video
+const unsigned long ESP_NOW_INTERVAL = 21; // 48 Hz (20.83ms interval) - redundancy approach for packet loss
 
 // ESP-NOW error handling and timeout
 unsigned long lastESPNowError = 0;
@@ -105,7 +105,7 @@ bool advertisingTimedOut = false;
 
 // IMU rate limiting for both child and hub devices
 unsigned long lastIMUUpdate = 0;
-const unsigned long IMU_UPDATE_INTERVAL = 17; // 60 Hz (16.7ms interval) - 2.5x ESP-NOW rate for thermal management
+const unsigned long IMU_UPDATE_INTERVAL = 21; // 48 Hz (20.83ms interval) - matches ESP-NOW rate for redundancy
 
 // LED pin - changed from 5 to 2 to avoid conflict with switch pin
 #define LED_PIN 2
@@ -381,10 +381,8 @@ void sendESPNowQuaternionData() {
         return; // Not ready to send
     }
     
-    // Rate limiting
-    if (millis() - lastESPNowTransmission < ESP_NOW_INTERVAL) {
-        return;
-    }
+    // Rate limiting - now handled by IMU update interval (48Hz)
+    // Removed redundant rate limiting since IMU updates at 48Hz
     
     // Get current quaternion data from IMU
     float qw_sensor, qx_sensor, qy_sensor, qz_sensor;
@@ -664,12 +662,20 @@ void loop() {
         }
     }
     
-    // Rate-limited IMU updates for both child and hub devices (80Hz)
+    // Rate-limited IMU updates for both child and hub devices (48Hz)
     unsigned long currentTime = millis();
     if (currentTime - lastIMUUpdate >= IMU_UPDATE_INTERVAL) {
         imu.update();
         imuUpdateCount++; // Track IMU updates for periodic logging
         lastIMUUpdate = currentTime;
+        
+        // For child devices: Send ESP-NOW data immediately after every IMU update (48Hz redundancy approach)
+        if (deviceConfig.isNodeMode() && (deviceConfig.getRole() == ROLE_LEFT_HAND || 
+                                          deviceConfig.getRole() == ROLE_RIGHT_HAND ||
+                                          deviceConfig.getRole() == ROLE_LEFT_FOREARM || 
+                                          deviceConfig.getRole() == ROLE_RIGHT_FOREARM)) {
+            sendESPNowQuaternionData();
+        }
     }
     
     // Update BLE polling system
@@ -711,13 +717,11 @@ void loop() {
         // No periodic debug output when not connected - connection events are logged above
     }
     
-    // Send ESP-NOW data for child devices (regardless of BLE connection)
+    // Periodic logging for child devices (ESP-NOW transmission now handled in IMU update section)
     if (deviceConfig.isNodeMode() && (deviceConfig.getRole() == ROLE_LEFT_HAND || 
                                       deviceConfig.getRole() == ROLE_RIGHT_HAND ||
                                       deviceConfig.getRole() == ROLE_LEFT_FOREARM || 
                                       deviceConfig.getRole() == ROLE_RIGHT_FOREARM)) {
-        sendESPNowQuaternionData();
-        
         // Periodic logging for child devices
         unsigned long currentTime = millis();
         if (currentTime - lastChildLogTime >= CHILD_LOG_INTERVAL) {
