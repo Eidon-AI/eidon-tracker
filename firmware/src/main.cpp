@@ -91,7 +91,7 @@ const unsigned long ESP_NOW_ERROR_TIMEOUT = 5000; // 5 seconds between error log
 int espNowErrorCount = 0;
 
 // Child device periodic logging system
-const unsigned long CHILD_LOG_INTERVAL = 10000; // 10 seconds for periodic updates
+const unsigned long CHILD_LOG_INTERVAL = 30000; // 30 seconds for periodic updates (optimized for battery)
 unsigned long lastChildLogTime = 0;
 unsigned long imuUpdateCount = 0;
 unsigned long espNowSendCount = 0;
@@ -99,9 +99,12 @@ unsigned long lastHubStatusCheck = 0;
 const unsigned long HUB_STATUS_CHECK_INTERVAL = 40000; // 40 seconds (5x the regular interval)
 
 // BLE advertising timeout for child devices
-const unsigned long BLE_ADVERTISING_TIMEOUT = 30000; // 30 seconds advertising window
+const unsigned long BLE_STARTUP_TIMEOUT = 30000; // 30 seconds for devices that start as children
+const unsigned long BLE_DISCONNECT_TIMEOUT = 60000; // 60 seconds after role change to child
 unsigned long startupTime = 0;
-bool advertisingTimedOut = false;
+unsigned long disconnectTime = 0; // Time when device last disconnected
+bool startupTimedOut = false;
+bool disconnectTimedOut = false;
 
 // IMU rate limiting for both child and hub devices
 unsigned long lastIMUUpdate = 0;
@@ -623,6 +626,9 @@ void setup() {
 }
 
 void loop() {
+    // Single millis() call for all timing operations
+    unsigned long currentTime = millis();
+    
     // Update LED status first - DISABLED for performance
     // updateLEDStatus();
     
@@ -657,13 +663,17 @@ void loop() {
             currentLEDPattern = LED_CONNECTED;
         } else {
             Serial.println("BLE: Disconnected");
+            // Record disconnection time for child devices
+            if (deviceConfig.isNodeMode()) {
+                disconnectTime = currentTime;
+                disconnectTimedOut = false; // Reset disconnect timeout flag
+            }
             NimBLEDevice::startAdvertising();
             currentLEDPattern = LED_ADVERTISING; // Switch to advertising LED pattern
         }
     }
     
     // Rate-limited IMU updates for both child and hub devices (48Hz)
-    unsigned long currentTime = millis();
     if (currentTime - lastIMUUpdate >= IMU_UPDATE_INTERVAL) {
         imu.update();
         imuUpdateCount++; // Track IMU updates for periodic logging
@@ -692,8 +702,8 @@ void loop() {
         static unsigned long lastTransmission = 0;
         const unsigned long TRANSMISSION_INTERVAL = 42; // 24Hz max (41.67ms interval) to match ESP-NOW
         
-        if (millis() - lastTransmission >= TRANSMISSION_INTERVAL) {
-            lastTransmission = millis();
+        if (currentTime - lastTransmission >= TRANSMISSION_INTERVAL) {
+            lastTransmission = currentTime;
             // Send quaternion report if connected
             sendQuaternionReport();
             
@@ -704,12 +714,12 @@ void loop() {
                 
                 bleTransmissionCount++;
                 
-                // Log BLE transmission rate every 10 seconds
-                if (millis() - lastBleLogTime >= 10000) {
-                    float bleRate = (float)bleTransmissionCount / 10.0; // transmissions per second
+                // Log BLE transmission rate every 30 seconds
+                if (currentTime - lastBleLogTime >= 30000) {
+                    float bleRate = (float)bleTransmissionCount / 30.0; // transmissions per second
                     Serial.printf("HUB: Transmitting Quaternion Data over BLE. Rate: %.1f Hz\n", bleRate);
                     bleTransmissionCount = 0;
-                    lastBleLogTime = millis();
+                    lastBleLogTime = currentTime;
                 }
             }
         }
@@ -723,19 +733,24 @@ void loop() {
                                       deviceConfig.getRole() == ROLE_LEFT_FOREARM || 
                                       deviceConfig.getRole() == ROLE_RIGHT_FOREARM)) {
         // Periodic logging for child devices
-        unsigned long currentTime = millis();
         if (currentTime - lastChildLogTime >= CHILD_LOG_INTERVAL) {
             float imuRate = (float)imuUpdateCount / (CHILD_LOG_INTERVAL / 1000.0);
             float espNowRate = (float)espNowSendCount / (CHILD_LOG_INTERVAL / 1000.0);
             
-            if (advertisingTimedOut) {
+            if (startupTimedOut || disconnectTimedOut) {
                 Serial.printf("CHILD: IMU %.0f Hz, Sent data to Hub: %.1f Hz, Role: %s (ESP-NOW only mode)\n", 
                              imuRate, espNowRate, deviceConfig.getRoleName(deviceConfig.getRole()));
             } else {
-                unsigned long timeLeft = BLE_ADVERTISING_TIMEOUT - (currentTime - startupTime);
-                if (timeLeft > 0) {
-                    Serial.printf("CHILD: IMU %.0f Hz, Sent data to Hub: %.1f Hz, Role: %s (BLE timeout in %lus)\n", 
-                                 imuRate, espNowRate, deviceConfig.getRoleName(deviceConfig.getRole()), timeLeft / 1000);
+                // Check which timeout is closer
+                unsigned long startupTimeLeft = BLE_STARTUP_TIMEOUT - (currentTime - startupTime);
+                unsigned long disconnectTimeLeft = (disconnectTime > 0) ? BLE_DISCONNECT_TIMEOUT - (currentTime - disconnectTime) : 0;
+                
+                if (startupTimeLeft > 0 && (disconnectTime == 0 || startupTimeLeft <= disconnectTimeLeft)) {
+                    Serial.printf("CHILD: IMU %.0f Hz, Sent data to Hub: %.1f Hz, Role: %s (Startup timeout in %lus)\n", 
+                                 imuRate, espNowRate, deviceConfig.getRoleName(deviceConfig.getRole()), startupTimeLeft / 1000);
+                } else if (disconnectTimeLeft > 0) {
+                    Serial.printf("CHILD: IMU %.0f Hz, Sent data to Hub: %.1f Hz, Role: %s (Disconnect timeout in %lus)\n", 
+                                 imuRate, espNowRate, deviceConfig.getRoleName(deviceConfig.getRole()), disconnectTimeLeft / 1000);
                 } else {
                     Serial.printf("CHILD: IMU %.0f Hz, Sent data to Hub: %.1f Hz, Role: %s (BLE timeout imminent)\n", 
                                  imuRate, espNowRate, deviceConfig.getRoleName(deviceConfig.getRole()));
@@ -762,15 +777,54 @@ void loop() {
     }
     
     // BLE advertising timeout management for child devices
-    if (deviceConfig.isNodeMode() && !deviceConnected && !advertisingTimedOut) {
-        unsigned long timeSinceStartup = millis() - startupTime;
+    if (deviceConfig.isNodeMode() && !deviceConnected) {
+        // Check startup timeout (30 seconds) - only for devices that start as children
+        if (!startupTimedOut && deviceConfig.isRoleAssigned()) {
+            unsigned long timeSinceStartup = currentTime - startupTime;
+            
+            // Debug: Log timeout status every 10 seconds
+            static unsigned long lastTimeoutDebug = 0;
+            if (currentTime - lastTimeoutDebug >= 10000) {
+                Serial.printf("CHILD: Startup timeout debug - timeSinceStartup: %lus, timeout: %lus\n", 
+                             timeSinceStartup / 1000, BLE_STARTUP_TIMEOUT / 1000);
+                lastTimeoutDebug = currentTime;
+            }
+            
+            if (timeSinceStartup >= BLE_STARTUP_TIMEOUT) {
+                // Stop advertising after 30 seconds from startup if no connection
+                NimBLEDevice::getAdvertising()->stop();
+                startupTimedOut = true;
+                Serial.println("CHILD: BLE advertising stopped after 30s startup timeout (no phone connection)");
+                Serial.println("CHILD: ESP-NOW only mode active - phone connection requires device restart");
+            }
+        }
         
-        if (timeSinceStartup >= BLE_ADVERTISING_TIMEOUT) {
-            // Stop advertising after 45 seconds if no connection
-            NimBLEDevice::getAdvertising()->stop();
-            advertisingTimedOut = true;
-            Serial.println("CHILD: BLE advertising stopped after 30s timeout (no phone connection)");
-            Serial.println("CHILD: ESP-NOW only mode active - phone connection requires device restart");
+        // Check disconnect timeout (60 seconds from last disconnection)
+        if (!disconnectTimedOut && disconnectTime > 0) {
+            unsigned long timeSinceDisconnect = currentTime - disconnectTime;
+            
+            // Debug: Log disconnect timeout status every 10 seconds
+            static unsigned long lastDisconnectDebug = 0;
+            if (currentTime - lastDisconnectDebug >= 10000) {
+                Serial.printf("CHILD: Disconnect timeout debug - timeSinceDisconnect: %lus, timeout: %lus\n", 
+                             timeSinceDisconnect / 1000, BLE_DISCONNECT_TIMEOUT / 1000);
+                lastDisconnectDebug = currentTime;
+            }
+            
+            if (timeSinceDisconnect >= BLE_DISCONNECT_TIMEOUT) {
+                // Stop advertising after 60 seconds from disconnection
+                NimBLEDevice::getAdvertising()->stop();
+                disconnectTimedOut = true;
+                Serial.println("CHILD: BLE advertising stopped after 60s disconnect timeout (no phone reconnection)");
+                Serial.println("CHILD: ESP-NOW only mode active - phone connection requires device restart");
+            }
+        }
+    } else if (deviceConfig.isNodeMode() && deviceConnected) {
+        // Debug: When connected, reset disconnect timeout
+        if (disconnectTime > 0) {
+            Serial.printf("CHILD: Connected, resetting disconnect timeout (was %lus ago)\n", 
+                         (currentTime - disconnectTime) / 1000);
+            disconnectTime = 0; // Reset disconnect time when connected
         }
     }
     
@@ -780,14 +834,14 @@ void loop() {
     const unsigned long ADVERTISING_CHECK_INTERVAL = 1000; // Check every 1 second
     const unsigned long ADVERTISING_RESTART_COOLDOWN = 5000; // Wait 5 seconds between restarts
     
-    if (!deviceConnected && !advertisingTimedOut && (millis() - lastAdvertisingCheck > ADVERTISING_CHECK_INTERVAL)) {
-        lastAdvertisingCheck = millis();
+    if (!deviceConnected && !startupTimedOut && !disconnectTimedOut && (currentTime - lastAdvertisingCheck > ADVERTISING_CHECK_INTERVAL)) {
+        lastAdvertisingCheck = currentTime;
         
         bool isCurrentlyAdvertising = NimBLEDevice::getAdvertising()->isAdvertising();
         
-        if (!isCurrentlyAdvertising && (millis() - lastAdvertisingRestart > ADVERTISING_RESTART_COOLDOWN)) {
+        if (!isCurrentlyAdvertising && (currentTime - lastAdvertisingRestart > ADVERTISING_RESTART_COOLDOWN)) {
             NimBLEDevice::startAdvertising();
-            lastAdvertisingRestart = millis();
+            lastAdvertisingRestart = currentTime;
         }
     }
 }

@@ -110,9 +110,9 @@ void HubClientService::update(bool bleConnected) {
     
     // Child timeout handling removed - just burning CPU cycles and giving useless data
     
-    // Periodic logging (every 8 seconds to match child devices)
+    // Periodic logging (every 30 seconds to match child devices)
     unsigned long currentTime = millis();
-    if (currentTime - lastLogTime >= 8000) {
+    if (currentTime - lastLogTime >= 30000) {
         // Count connected children
         int connectedCount = 0;
         for (int i = 0; i < childDeviceCount; i++) {
@@ -122,7 +122,7 @@ void HubClientService::update(bool bleConnected) {
         }
         
         // Calculate ESP-NOW receive rate
-        float espNowRate = (float)packetCounter / 8.0; // packets per second over 8 seconds
+        float espNowRate = (float)packetCounter / 30.0; // packets per second over 30 seconds
         
         Serial.printf("HUB: ESP-NOW received: %.1f Hz, Children: %d/%d, BLE: %s\n", 
                      espNowRate, connectedCount, childDeviceCount, bleConnected ? "Connected" : "Disconnected");
