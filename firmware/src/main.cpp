@@ -694,6 +694,13 @@ void loop() {
     // Update hub client service (only if we're a hub)
     if (deviceConfig.isHubMode()) {
         updateHubClientService(deviceConnected);
+        
+        // Check for child disconnections every second
+        static unsigned long lastDisconnectCheck = 0;
+        if (currentTime - lastDisconnectCheck >= 1000) {
+            checkChildDisconnections();
+            lastDisconnectCheck = currentTime;
+        }
     }
     
     // Send data if connected

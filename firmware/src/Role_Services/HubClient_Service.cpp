@@ -18,7 +18,8 @@ void onESPNowDataRecv(const esp_now_recv_info_t* esp_now_info, const uint8_t* da
 
 // Constructor
 HubClientService::HubClientService() 
-    : childDeviceCount(0), espNowInitialized(false), packetCounter(0), lastLogTime(0) {
+    : childDeviceCount(0), espNowInitialized(false), packetCounter(0), lastLogTime(0),
+      handMissedPolls(0), forearmMissedPolls(0) {
     // Initialize child devices
     for (int i = 0; i < MAX_CHILDREN; i++) {
         memset(childDevices[i].macAddress, 0, sizeof(childDevices[i].macAddress));
@@ -30,6 +31,10 @@ HubClientService::HubClientService()
     memset(&aggregatedData, 0, sizeof(aggregatedData));
     aggregatedData.handConnected = false;
     aggregatedData.forearmConnected = false;
+    
+    // Reset disconnection tracking
+    handMissedPolls = 0;
+    forearmMissedPolls = 0;
 }
 
 // Destructor
@@ -99,6 +104,10 @@ void HubClientService::begin() {
     aggregatedData.handConnected = false;
     aggregatedData.forearmConnected = false;
     
+    // Reset disconnection tracking
+    handMissedPolls = 0;
+    forearmMissedPolls = 0;
+    
 
 }
 
@@ -165,13 +174,20 @@ void HubClientService::processESPNowPacket(const uint8_t* macAddr, const uint8_t
     // Update child device data
     ESPNowChildDevice& child = childDevices[slotIndex];
     
-    // Check if this is a new child device or reconnection
-    bool wasAvailable = child.dataAvailable;
-    
     memcpy(child.macAddress, macAddr, sizeof(child.macAddress));
     child.role = senderRole;
     child.lastData = packet->quaternion;
     child.dataAvailable = true;
+    
+    // Reset the appropriate missed polls counter based on role
+    if (senderRole == ROLE_LEFT_HAND || senderRole == ROLE_RIGHT_HAND) {
+        handMissedPolls = 0;
+    } else if (senderRole == ROLE_LEFT_FOREARM || senderRole == ROLE_RIGHT_FOREARM) {
+        forearmMissedPolls = 0;
+    }
+    
+    // Update aggregated data immediately
+    syncConnectionStatus();
 }
 
 // Find existing child slot by role
@@ -268,6 +284,37 @@ void HubClientService::updateHubQuaternionData(float w, float x, float y, float 
     aggregatedData.hubData.z = z;
 }
 
+// Check for child disconnections (called every second)
+void HubClientService::checkChildDisconnections() {
+    if (!deviceConfig.isHubMode()) {
+        return;
+    }
+    
+    // Increment hand missed polls
+    handMissedPolls++;
+    if (handMissedPolls >= 4) {
+        // Mark all hand children as disconnected
+        for (int i = 0; i < childDeviceCount; i++) {
+            ESPNowChildDevice& child = childDevices[i];
+            if (child.dataAvailable && (child.role == ROLE_LEFT_HAND || child.role == ROLE_RIGHT_HAND)) {
+                child.dataAvailable = false;
+            }
+        }
+    }
+    
+    // Increment forearm missed polls
+    forearmMissedPolls++;
+    if (forearmMissedPolls >= 4) {
+        // Mark all forearm children as disconnected
+        for (int i = 0; i < childDeviceCount; i++) {
+            ESPNowChildDevice& child = childDevices[i];
+            if (child.dataAvailable && (child.role == ROLE_LEFT_FOREARM || child.role == ROLE_RIGHT_FOREARM)) {
+                child.dataAvailable = false;
+            }
+        }
+    }
+}
+
 // Synchronize connection status with actual child data state
 void HubClientService::syncConnectionStatus() {
     // Update timestamp for data freshness tracking
@@ -301,6 +348,11 @@ void setupHubClientService() {
 // Update function for integration with main.cpp
 void updateHubClientService(bool bleConnected) {
     hubClientService.update(bleConnected);
+}
+
+// Check for child disconnections (global wrapper)
+void checkChildDisconnections() {
+    hubClientService.checkChildDisconnections();
 }
 
 // Wrapper functions for main.cpp compatibility
