@@ -4,6 +4,9 @@
 #include <Arduino.h>
 #include "DeviceConfig.h"
 
+// Message type constants for ESP-NOW packets
+#define MESSAGE_TYPE_QUAT 0x01    // Quaternion data
+
 // Quaternion data structure for GATT (16 bytes) - unchanged
 struct QuaternionData {
     float w;
@@ -12,10 +15,17 @@ struct QuaternionData {
     float z;
 } __attribute__((packed));
 
-// ESP-NOW packet structure for child to hub communication
+// Common header for all ESP-NOW packets (simplified)
+struct ESPNowPacketHeader {
+    uint8_t messageType;     // 0x01=QUAT
+    uint8_t senderRole;      // Sender's role (0-6) - needed for data categorization
+    uint8_t reserved[2];     // Future use, alignment
+} __attribute__((packed));
+
+// ESP-NOW packet structure for child to hub communication (simplified)
 struct ESPNowQuaternionPacket {
-    uint8_t senderRole;        // Sender's role (0-6)
-    QuaternionData quaternion; // Existing structure (unchanged)
+    ESPNowPacketHeader header;  // messageType = 0x01
+    QuaternionData quaternion;  // Existing structure (unchanged)
 } __attribute__((packed));
 
 // ESP-NOW child device structure (replaces BLE ChildConnection)

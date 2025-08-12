@@ -396,9 +396,12 @@ void sendESPNowQuaternionData() {
     float corrected_y = -qy_sensor;
     float corrected_z = qz_sensor;
     
-    // Create ESP-NOW packet
+    // Create ESP-NOW packet with simplified header structure
     ESPNowQuaternionPacket packet;
-    packet.senderRole = (uint8_t)deviceConfig.getRole();
+    packet.header.messageType = MESSAGE_TYPE_QUAT;  // QUAT
+    packet.header.senderRole = (uint8_t)deviceConfig.getRole();  // Include role for categorization
+    packet.header.reserved[0] = 0;
+    packet.header.reserved[1] = 0;
     packet.quaternion.w = corrected_w;
     packet.quaternion.x = corrected_x;
     packet.quaternion.y = corrected_y;

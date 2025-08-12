@@ -1,6 +1,7 @@
 #include "HubClient_Service.h"
 #include <Arduino.h>
 #include <WiFi.h>
+#include "Hub_Structures.h"
 
 // External dependencies
 extern DeviceConfig deviceConfig;
@@ -36,6 +37,8 @@ HubClientService::HubClientService()
     handMissedPolls = 0;
     forearmMissedPolls = 0;
 }
+
+
 
 // Destructor
 HubClientService::~HubClientService() {
@@ -134,7 +137,7 @@ void HubClientService::update(bool bleConnected) {
         float espNowRate = (float)packetCounter / 30.0; // packets per second over 30 seconds
         
         Serial.printf("HUB: ESP-NOW received: %.1f Hz, Children: %d/%d, BLE: %s\n", 
-                     espNowRate, connectedCount, childDeviceCount, bleConnected ? "Connected" : "Disconnected");
+                     espNowRate, connectedCount, 2, bleConnected ? "Connected" : "Disconnected");
                 
         // Reset counters
         packetCounter = 0;
@@ -142,26 +145,37 @@ void HubClientService::update(bool bleConnected) {
     }
 }
 
-// Process incoming ESP-NOW packet
+// Process incoming ESP-NOW packet (simplified - only handles quaternions)
 void HubClientService::processESPNowPacket(const uint8_t* macAddr, const uint8_t* data, int dataLen) {
+    // Check minimum packet size (header size)
+    if (dataLen < sizeof(ESPNowPacketHeader)) {
+        Serial.printf("HubClient: Packet too small: %d bytes (minimum %d)\n", 
+                     dataLen, sizeof(ESPNowPacketHeader));
+        return;
+    }
+    
+    // Extract header to determine packet type
+    ESPNowPacketHeader* header = (ESPNowPacketHeader*)data;
+    
+    // Only handle quaternion packets for now
+    if (header->messageType == MESSAGE_TYPE_QUAT) {
+        processQuaternionPacket(macAddr, data, dataLen);
+    }
+    // Silently ignore non-quaternion packets to reduce log spam
+}
+
+// Process quaternion packet (simplified - uses MAC address instead of role)
+void HubClientService::processQuaternionPacket(const uint8_t* macAddr, const uint8_t* data, int dataLen) {
     if (dataLen != sizeof(ESPNowQuaternionPacket)) {
-        Serial.printf("HubClient: Invalid ESP-NOW packet size: %d (expected %d)\n", 
+        Serial.printf("HubClient: Invalid quaternion packet size: %d (expected %d)\n", 
                      dataLen, sizeof(ESPNowQuaternionPacket));
         return;
     }
     
     ESPNowQuaternionPacket* packet = (ESPNowQuaternionPacket*)data;
-    DeviceRole senderRole = (DeviceRole)packet->senderRole;
     
-    // Validate sender role
-    if (senderRole != ROLE_LEFT_HAND && senderRole != ROLE_RIGHT_HAND &&
-        senderRole != ROLE_LEFT_FOREARM && senderRole != ROLE_RIGHT_FOREARM) {
-        Serial.printf("HubClient: Invalid sender role in ESP-NOW packet: %d\n", senderRole);
-        return;
-    }
-    
-    // Find or create child device slot
-    int slotIndex = findChildSlot(senderRole);
+    // Find or create child device slot by MAC address
+    int slotIndex = findChildByMac(macAddr);
     if (slotIndex == -1) {
         slotIndex = createChildSlot();
     }
@@ -175,14 +189,14 @@ void HubClientService::processESPNowPacket(const uint8_t* macAddr, const uint8_t
     ESPNowChildDevice& child = childDevices[slotIndex];
     
     memcpy(child.macAddress, macAddr, sizeof(child.macAddress));
-    child.role = senderRole;
+    child.role = (DeviceRole)packet->header.senderRole;  // Get role from packet
     child.lastData = packet->quaternion;
     child.dataAvailable = true;
     
     // Reset the appropriate missed polls counter based on role
-    if (senderRole == ROLE_LEFT_HAND || senderRole == ROLE_RIGHT_HAND) {
+    if (child.role == ROLE_LEFT_HAND || child.role == ROLE_RIGHT_HAND) {
         handMissedPolls = 0;
-    } else if (senderRole == ROLE_LEFT_FOREARM || senderRole == ROLE_RIGHT_FOREARM) {
+    } else if (child.role == ROLE_LEFT_FOREARM || child.role == ROLE_RIGHT_FOREARM) {
         forearmMissedPolls = 0;
     }
 }
@@ -191,6 +205,16 @@ void HubClientService::processESPNowPacket(const uint8_t* macAddr, const uint8_t
 int HubClientService::findChildSlot(DeviceRole childRole) {
     for (int i = 0; i < childDeviceCount; i++) {
         if (childDevices[i].role == childRole) {
+            return i;
+        }
+    }
+    return -1; // Not found
+}
+
+// Find existing child slot by MAC address
+int HubClientService::findChildByMac(const uint8_t* macAddress) {
+    for (int i = 0; i < childDeviceCount; i++) {
+        if (memcmp(childDevices[i].macAddress, macAddress, 6) == 0) {
             return i;
         }
     }
@@ -356,6 +380,8 @@ void checkChildDisconnections() {
 void registerChildDevice(const uint8_t* macAddress, DeviceRole childRole) {
     hubClientService.registerChildDevice(macAddress, childRole);
 }
+
+
 
 void unregisterChildDevice(DeviceRole childRole) {
     hubClientService.unregisterChildDevice(childRole);

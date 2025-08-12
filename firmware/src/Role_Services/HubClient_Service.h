@@ -32,6 +32,7 @@ public:
     
     // Helper functions
     int findChildSlot(DeviceRole childRole);
+    int findChildByMac(const uint8_t* macAddress);
     int createChildSlot();
     void syncConnectionStatus();
     
@@ -49,6 +50,7 @@ public:
     void unregisterChildDevice(DeviceRole childRole);
     bool isChildConnected(DeviceRole childRole);
     void processESPNowPacket(const uint8_t* macAddr, const uint8_t* data, int dataLen);
+    void processQuaternionPacket(const uint8_t* macAddr, const uint8_t* data, int dataLen);
     
     // Data management
     void updateChildData();
