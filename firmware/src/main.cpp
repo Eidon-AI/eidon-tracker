@@ -345,17 +345,25 @@ bool initializeESPNowSender() {
         return true; // Already initialized
     }
     
+    // Force WiFi channel to ESP-NOW channel first
+    WiFi.setChannel(1);
+    delay(50); // Give WiFi time to settle
+    
     // Initialize ESP-NOW
     if (esp_now_init() != ESP_OK) {
         return false;
     }
     
-    // Set ESP-NOW role to sender
+    // Set ESP-NOW PMK (required for all ESP-NOW operations)
     if (esp_now_set_pmk((uint8_t*)"pmk1234567890123") != ESP_OK) {
         return false;
     }
     
+    // ESP-NOW automatically supports both sending and receiving
+    // No need to set a specific role - it can do both
+    
     espNowInitialized = true;
+    Serial.println("CHILD: ESP-NOW initialized on channel 1 (bidirectional)");
     return true;
 }
 
@@ -410,8 +418,11 @@ void onESPNowDataRecv(const esp_now_recv_info_t* esp_now_info, const uint8_t* da
                 }
             }
         }
+    } else if (header->messageType == MESSAGE_TYPE_QUAT) {
+        // Ignore quaternion packets silently
+    } else {
+        Serial.printf("ESP-NOW: Unknown message type: 0x%02X\n", header->messageType);
     }
-    // Ignore other packet types silently
 }
 
 void sendESPNowQuaternionData() {
