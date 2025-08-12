@@ -49,6 +49,10 @@ BNO085 imu;
 #define CALIBRATION_CHAR_UUID     "E1D00003-8B5A-3E5B-9E23-4F9B5C91BBDE"
 #define DEVICE_INFO_CHAR_UUID     "E1D00005-8B5A-3E5B-9E23-4F9B5C91BBDE"
 
+// Message type constants for ESP-NOW packets
+#define MESSAGE_TYPE_QUAT 0x01    // Quaternion data
+#define MESSAGE_TYPE_CMD  0x02    // Command
+
 // New characteristics for hub devices only (child data)
 #define HAND_QUATERNION_CHAR_UUID     "E1D00008-8B5A-3E5B-9E23-4F9B5C91BBDE"
 #define FOREARM_QUATERNION_CHAR_UUID  "E1D00009-8B5A-3E5B-9E23-4F9B5C91BBDE"
@@ -376,6 +380,38 @@ void updateESPNowHubMacAddress() {
     } else {
         hubMacAssigned = false;
     }
+}
+
+// Process incoming ESP-NOW packets (for children to receive commands)
+void onESPNowDataRecv(const esp_now_recv_info_t* esp_now_info, const uint8_t* data, int dataLen) {
+    // Check minimum packet size (header size)
+    if (dataLen < sizeof(ESPNowPacketHeader)) {
+        return; // Packet too small, ignore silently
+    }
+    
+    // Extract header to determine packet type
+    ESPNowPacketHeader* header = (ESPNowPacketHeader*)data;
+    
+    // Handle different packet types
+    if (header->messageType == MESSAGE_TYPE_CMD) {
+        // Process command packet
+        if (dataLen == sizeof(ESPNowCommandPacket)) {
+            ESPNowCommandPacket* cmd = (ESPNowCommandPacket*)data;
+            
+            if (cmd->commandType == 0x01) { // IMU reset command
+                Serial.println("=== CALIBRATION COMMAND RECEIVED ===");
+                
+                if (imu.isAvailable()) {
+                    Serial.println("Resetting IMU...");
+                    imu.reset();
+                    Serial.println("IMU reset completed successfully");
+                } else {
+                    Serial.println("ERROR: IMU not available for reset");
+                }
+            }
+        }
+    }
+    // Ignore other packet types silently
 }
 
 void sendESPNowQuaternionData() {

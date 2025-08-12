@@ -14,11 +14,13 @@ class ColorManager;
 // ESP-NOW function declarations (for child devices)
 extern bool initializeESPNowSender();
 extern void updateESPNowHubMacAddress();
+extern void sendCalibrationCommand();
 
 // External variables that handlers need access to
 extern BNO085 imu;
 extern DeviceConfig deviceConfig;
 extern NimBLECharacteristic* roleConfigChar;
+extern NimBLECharacteristic* calibrationChar;
 extern bool deviceConnected;
 extern HubClientService hubClientService;
 
@@ -558,24 +560,18 @@ void handleCalibration(const std::string& value, bool success) {
                 imu.reset();
                 Serial.println("IMU reset completed successfully");
                 
-                // Mock log the communication to child devices
-                Serial.println("=== MOCK CHILD DEVICE COMMUNICATION ===");
-                Serial.println("Next: Send calibration command to children via ESP-NOW");
-                Serial.println("Child devices to calibrate:");
-                
-                // Log child device information (from HubClientService)
-                for (int i = 0; i < hubClientService.getChildDeviceCount(); i++) {
-                    ESPNowChildDevice* child = &hubClientService.getChildDevices()[i];
-                    if (child->dataAvailable) {
-                        Serial.printf("  Child %d: Role=%s, MAC=%02X:%02X:%02X:%02X:%02X:%02X\n",
-                            i,
-                            deviceConfig.getRoleName(child->role),
-                            child->macAddress[0], child->macAddress[1], child->macAddress[2],
-                            child->macAddress[3], child->macAddress[4], child->macAddress[5]);
-                    }
-                }
-                
+                // Send calibration command to children via ESP-NOW
+                Serial.println("=== SENDING CALIBRATION COMMAND TO CHILDREN ===");
+                sendCalibrationCommand();
                 Serial.println("=== CALIBRATION COMPLETE ===");
+                
+                // Reset the GATT characteristic to its original value (empty/0x00)
+                // This ensures future calibration commands are properly detected
+                if (calibrationChar != nullptr) {
+                    // Set to empty value (0 bytes) to reset the characteristic
+                    calibrationChar->setValue((uint8_t*)"", 0);
+                    Serial.println("Calibration: GATT characteristic reset to original value");
+                }
             } else {
                 Serial.println("Calibration: IMU not available for reset");
             }

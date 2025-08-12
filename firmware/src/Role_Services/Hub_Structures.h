@@ -6,6 +6,7 @@
 
 // Message type constants for ESP-NOW packets
 #define MESSAGE_TYPE_QUAT 0x01    // Quaternion data
+#define MESSAGE_TYPE_CMD  0x02    // Command
 
 // Quaternion data structure for GATT (16 bytes) - unchanged
 struct QuaternionData {
@@ -26,6 +27,13 @@ struct ESPNowPacketHeader {
 struct ESPNowQuaternionPacket {
     ESPNowPacketHeader header;  // messageType = 0x01
     QuaternionData quaternion;  // Existing structure (unchanged)
+} __attribute__((packed));
+
+// ESP-NOW command packet for hub to child communication
+struct ESPNowCommandPacket {
+    ESPNowPacketHeader header;  // messageType = 0x02
+    uint8_t commandType;        // 0x01 = IMU reset
+    uint8_t reserved[3];        // Future use, alignment
 } __attribute__((packed));
 
 // ESP-NOW child device structure (replaces BLE ChildConnection)

@@ -38,7 +38,71 @@ HubClientService::HubClientService()
     forearmMissedPolls = 0;
 }
 
+// Send calibration command to all connected children
+void HubClientService::sendCalibrationCommand() {
+    if (!espNowInitialized) {
+        Serial.println("HubClient: ESP-NOW not initialized, cannot send command");
+        return;
+    }
+    
+    ESPNowCommandPacket cmd;
+    cmd.header.messageType = MESSAGE_TYPE_CMD;
+    cmd.header.senderRole = (uint8_t)deviceConfig.getRole();
+    cmd.header.reserved[0] = 0;
+    cmd.header.reserved[1] = 0;
+    cmd.commandType = 0x01;  // IMU reset
+    cmd.reserved[0] = 0;
+    cmd.reserved[1] = 0;
+    cmd.reserved[2] = 0;
+    
+    Serial.println("HubClient: Sending calibration command to all children");
+    
+    // Send to all connected children
+    for (int i = 0; i < childDeviceCount; i++) {
+        if (childDevices[i].dataAvailable) {
+            esp_err_t result = esp_now_send(childDevices[i].macAddress, (const uint8_t*)&cmd, sizeof(cmd));
+            if (result == ESP_OK) {
+                Serial.printf("HubClient: Calibration command sent to child %d\n", i);
+            } else {
+                Serial.printf("HubClient: Failed to send calibration command to child %d, error: %d\n", i, result);
+            }
+        }
+    }
+}
 
+// Register a child device as an ESP-NOW peer so hub can send commands to it
+bool HubClientService::registerChildAsESPNowPeer(const uint8_t* macAddress) {
+    if (!espNowInitialized) {
+        Serial.println("HubClient: ESP-NOW not initialized, cannot register peer");
+        return false;
+    }
+    
+    // Create ESP-NOW peer info
+    esp_now_peer_info_t peerInfo;
+    memset(&peerInfo, 0, sizeof(peerInfo));
+    memcpy(peerInfo.peer_addr, macAddress, 6);
+    peerInfo.channel = 1;  // Use same channel as quaternion communication
+    peerInfo.encrypt = false;  // No encryption to match existing setup
+    
+    // Add the peer
+    esp_err_t result = esp_now_add_peer(&peerInfo);
+    if (result == ESP_OK) {
+        Serial.printf("HubClient: Successfully registered child as ESP-NOW peer: %02X:%02X:%02X:%02X:%02X:%02X\n",
+                     macAddress[0], macAddress[1], macAddress[2], 
+                     macAddress[3], macAddress[4], macAddress[5]);
+        return true;
+    } else if (result == ESP_ERR_ESPNOW_EXIST) {
+        Serial.printf("HubClient: Child already registered as ESP-NOW peer: %02X:%02X:%02X:%02X:%02X:%02X\n",
+                     macAddress[0], macAddress[1], macAddress[2], 
+                     macAddress[3], macAddress[4], macAddress[5]);
+        return true;  // Already exists, consider it successful
+    } else {
+        Serial.printf("HubClient: Failed to register child as ESP-NOW peer: %02X:%02X:%02X:%02X:%02X:%02X, error: %d\n",
+                     macAddress[0], macAddress[1], macAddress[2], 
+                     macAddress[3], macAddress[4], macAddress[5], result);
+        return false;
+    }
+}
 
 // Destructor
 HubClientService::~HubClientService() {
@@ -176,8 +240,11 @@ void HubClientService::processQuaternionPacket(const uint8_t* macAddr, const uin
     
     // Find or create child device slot by MAC address
     int slotIndex = findChildByMac(macAddr);
+    bool isNewChild = false;
+    
     if (slotIndex == -1) {
         slotIndex = createChildSlot();
+        isNewChild = true;
     }
     
     if (slotIndex == -1) {
@@ -192,6 +259,15 @@ void HubClientService::processQuaternionPacket(const uint8_t* macAddr, const uin
     child.role = (DeviceRole)packet->header.senderRole;  // Get role from packet
     child.lastData = packet->quaternion;
     child.dataAvailable = true;
+    
+    // If this is a new child, register it as an ESP-NOW peer so we can send commands to it
+    if (isNewChild) {
+        if (registerChildAsESPNowPeer(macAddr)) {
+            Serial.printf("HubClient: New child registered and ready for bidirectional communication\n");
+        } else {
+            Serial.printf("HubClient: Warning: New child registered but ESP-NOW peer setup failed\n");
+        }
+    }
     
     // Reset the appropriate missed polls counter based on role
     if (child.role == ROLE_LEFT_HAND || child.role == ROLE_RIGHT_HAND) {
@@ -393,6 +469,14 @@ void updateChildData() {
 
 void updateHubQuaternionData(float w, float x, float y, float z) {
     hubClientService.updateHubQuaternionData(w, x, y, z);
+}
+
+void sendCalibrationCommand() {
+    hubClientService.sendCalibrationCommand();
+}
+
+bool registerChildAsESPNowPeer(const uint8_t* macAddress) {
+    return hubClientService.registerChildAsESPNowPeer(macAddress);
 }
 
 bool isChildConnected(DeviceRole childRole) {
