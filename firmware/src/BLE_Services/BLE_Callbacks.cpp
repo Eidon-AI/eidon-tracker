@@ -9,7 +9,6 @@
 extern bool deviceConnected;
 extern bool quaternionSubscribed;
 extern BNO085 imu;
-extern NimBLECharacteristic* calibrationChar;
 
 // Server callbacks implementation
 void ServerCallbacks::onConnect(NimBLEServer* pServer) {

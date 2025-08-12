@@ -185,9 +185,6 @@ void HubClientService::processESPNowPacket(const uint8_t* macAddr, const uint8_t
     } else if (senderRole == ROLE_LEFT_FOREARM || senderRole == ROLE_RIGHT_FOREARM) {
         forearmMissedPolls = 0;
     }
-    
-    // Update aggregated data immediately
-    syncConnectionStatus();
 }
 
 // Find existing child slot by role

@@ -4,6 +4,7 @@
 #include "DeviceConfig.h"
 #include "BNO085.h"
 #include "Role_Services/RoleConfig_Service.h"
+#include "Role_Services/HubClient_Service.h"
 
 // Forward declarations
 class BNO085;
@@ -19,6 +20,7 @@ extern BNO085 imu;
 extern DeviceConfig deviceConfig;
 extern NimBLECharacteristic* roleConfigChar;
 extern bool deviceConnected;
+extern HubClientService hubClientService;
 
 // Global instance
 BLEPollingManager pollingManager;
@@ -535,22 +537,45 @@ void handleCalibration(const std::string& value, bool success) {
         return;
     }
     
+    // Only process if this is a HUB device
+    if (!deviceConfig.isHubMode()) {
+        Serial.println("Calibration: Ignored - device is not in HUB mode");
+        return;
+    }
+    
+    Serial.println("=== CALIBRATION POLLING DETECTED ===");
+    
     // Check for calibration command
     if (!value.empty()) {
         uint8_t cmd = static_cast<uint8_t>(value[0]);
+        Serial.printf("Calibration command: 0x%02X\n", cmd);
         
         if (cmd == 0x01) { // Calibration command
-            Serial.println("=== CALIBRATION REQUEST DETECTED ===");
+            Serial.println("Processing IMU reset command...");
             
             if (imu.isAvailable()) {
                 Serial.println("Resetting IMU...");
                 imu.reset();
+                Serial.println("IMU reset completed successfully");
                 
-                // LED feedback (if available)
-                // Note: startIMUResetPattern() would need to be accessible
-                // or we can implement LED feedback here
+                // Mock log the communication to child devices
+                Serial.println("=== MOCK CHILD DEVICE COMMUNICATION ===");
+                Serial.println("Next: Send calibration command to children via ESP-NOW");
+                Serial.println("Child devices to calibrate:");
                 
-                Serial.println("IMU reset completed");
+                // Log child device information (from HubClientService)
+                for (int i = 0; i < hubClientService.getChildDeviceCount(); i++) {
+                    ESPNowChildDevice* child = &hubClientService.getChildDevices()[i];
+                    if (child->dataAvailable) {
+                        Serial.printf("  Child %d: Role=%s, MAC=%02X:%02X:%02X:%02X:%02X:%02X\n",
+                            i,
+                            deviceConfig.getRoleName(child->role),
+                            child->macAddress[0], child->macAddress[1], child->macAddress[2],
+                            child->macAddress[3], child->macAddress[4], child->macAddress[5]);
+                    }
+                }
+                
+                Serial.println("=== CALIBRATION COMPLETE ===");
             } else {
                 Serial.println("Calibration: IMU not available for reset");
             }

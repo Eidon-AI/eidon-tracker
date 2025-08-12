@@ -37,7 +37,6 @@ extern BLEPollingManager pollingManager;
 // Static callback instances to prevent memory deallocation issues
 static ServerCallbacks serverCallbacksInstance;
 static QuaternionCharCallbacks quaternionCallbacksInstance;
-static CalibrationCallbacks calibrationCallbacksInstance;
 // HubClientCallbacks moved to HubClient_Service.cpp
 // RoleConfig callbacks removed - using polling instead
 
@@ -511,7 +510,6 @@ void setup() {
         CALIBRATION_CHAR_UUID,
         NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE
     );
-    calibrationChar->setCallbacks(&calibrationCallbacksInstance);
     
     // Configure Device Info characteristic
     deviceInfoChar = eidonService->createCharacteristic(
@@ -559,6 +557,14 @@ void setup() {
 
     // Add Role target to polling system
     pollingManager.addTarget(roleConfigChar, 1000, handleRoleChange, "Role"); // 1 Hz (1000ms)
+    
+    // Add Calibration target to polling system (HUB devices only)
+    if (deviceConfig.isHubMode()) {
+        pollingManager.addTarget(calibrationChar, 100, handleCalibration, "Calibration"); // 10 Hz (100ms)
+        Serial.println("HUB: Calibration polling enabled");
+    } else {
+        Serial.println("CHILD: Calibration polling disabled (not a hub)");
+    }
     
     // ---------- Hub Client Setup -----------------------------
     setupHubClientService();
