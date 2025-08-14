@@ -54,6 +54,7 @@ public:
     bool isChildConnected(DeviceRole childRole);
     void processESPNowPacket(const uint8_t* macAddr, const uint8_t* data, int dataLen);
     void processQuaternionPacket(const uint8_t* macAddr, const uint8_t* data, int dataLen);
+    void restoreESPNowPeers();  // New recovery function
     
     // Command sending
     void sendCalibrationCommand();
@@ -84,6 +85,7 @@ bool isChildConnected(DeviceRole childRole);
 AggregatedQuaternionData* getAggregatedData();
 void sendCalibrationCommand();
 bool registerChildAsESPNowPeer(const uint8_t* macAddress);
+void restoreESPNowPeers();  // Global recovery function
 
 // ESP-NOW callback function declaration
 void onESPNowDataRecv(const esp_now_recv_info_t* esp_now_info, const uint8_t* data, int dataLen);

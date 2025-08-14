@@ -24,6 +24,7 @@ void updateAdvertisingData();
 bool initializeESPNowSender();
 void sendESPNowQuaternionData();
 void updateESPNowHubMacAddress();
+void restoreESPNowPeers();  // ESP-NOW peer recovery function
 
 // Hub client functions are now in Role_Services/HubClient_Service.h
 
@@ -363,7 +364,6 @@ bool initializeESPNowSender() {
     // No need to set a specific role - it can do both
     
     espNowInitialized = true;
-    Serial.println("CHILD: ESP-NOW initialized on channel 1 (bidirectional)");
     return true;
 }
 
@@ -420,9 +420,8 @@ void onESPNowDataRecv(const esp_now_recv_info_t* esp_now_info, const uint8_t* da
         }
     } else if (header->messageType == MESSAGE_TYPE_QUAT) {
         // Ignore quaternion packets silently
-    } else {
-        Serial.printf("ESP-NOW: Unknown message type: 0x%02X\n", header->messageType);
     }
+    // Silently ignore other message types
 }
 
 void sendESPNowQuaternionData() {
@@ -467,7 +466,6 @@ void sendESPNowQuaternionData() {
         unsigned long currentTime = millis();
         if (currentTime - lastESPNowError >= ESP_NOW_ERROR_TIMEOUT) {
             espNowErrorCount++;
-            Serial.printf("ESP-NOW: Failed to send data, error: %d (count: %d)\n", result, espNowErrorCount);
             lastESPNowError = currentTime;
             
             // If we've had many errors, try to reinitialize ESP-NOW
@@ -709,6 +707,9 @@ void loop() {
                 if (esp_now_init() == ESP_OK) {
                     esp_now_set_pmk((uint8_t*)"pmk1234567890123");
                     esp_now_register_recv_cb(onESPNowDataRecv);
+                    
+                    // Restore ESP-NOW peer registrations after reinitialization
+                    restoreESPNowPeers();
                 }
             }
             

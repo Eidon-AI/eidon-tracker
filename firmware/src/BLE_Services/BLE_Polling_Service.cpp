@@ -535,51 +535,36 @@ void handleRoleChange(const std::string& value, bool success) {
 
 void handleCalibration(const std::string& value, bool success) {
     if (!success) {
-        Serial.println("Calibration: Failed to read characteristic value");
+        Serial.println("HUB: Calibration: Failed to read characteristic value");
         return;
     }
     
     // Only process if this is a HUB device
     if (!deviceConfig.isHubMode()) {
-        Serial.println("Calibration: Ignored - device is not in HUB mode");
         return;
     }
-    
-    Serial.println("=== CALIBRATION POLLING DETECTED ===");
     
     // Check for calibration command
     if (!value.empty()) {
         uint8_t cmd = static_cast<uint8_t>(value[0]);
-        Serial.printf("Calibration command: 0x%02X\n", cmd);
         
         if (cmd == 0x01) { // Calibration command
-            Serial.println("Processing IMU reset command...");
+            Serial.println("HUB: Calibration command detected");
             
             if (imu.isAvailable()) {
-                Serial.println("Resetting IMU...");
                 imu.reset();
-                Serial.println("IMU reset completed successfully");
                 
                 // Send calibration command to children via ESP-NOW
-                Serial.println("=== SENDING CALIBRATION COMMAND TO CHILDREN ===");
                 sendCalibrationCommand();
-                Serial.println("=== CALIBRATION COMPLETE ===");
+                Serial.println("HUB: Calibration command sent to children");
                 
                 // Reset the GATT characteristic to its original value (empty/0x00)
                 // This ensures future calibration commands are properly detected
                 if (calibrationChar != nullptr) {
-                    // Set to empty value (0 bytes) to reset the characteristic
                     calibrationChar->setValue((uint8_t*)"", 0);
-                    Serial.println("Calibration: GATT characteristic reset to original value");
                 }
-            } else {
-                Serial.println("Calibration: IMU not available for reset");
             }
-        } else {
-            Serial.printf("Calibration: Unknown command: 0x%02X\n", cmd);
         }
-    } else {
-        Serial.println("Calibration: Empty value received");
     }
 }
 

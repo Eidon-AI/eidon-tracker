@@ -55,16 +55,14 @@ void HubClientService::sendCalibrationCommand() {
     cmd.reserved[1] = 0;
     cmd.reserved[2] = 0;
     
-    Serial.println("HubClient: Sending calibration command to all children");
-    
     // Send to all connected children
     for (int i = 0; i < childDeviceCount; i++) {
         if (childDevices[i].dataAvailable) {
             esp_err_t result = esp_now_send(childDevices[i].macAddress, (const uint8_t*)&cmd, sizeof(cmd));
             if (result == ESP_OK) {
-                Serial.printf("HubClient: Calibration command sent to child %d\n", i);
+                Serial.printf("HUB: Calibration command successfully sent to child %d\n", i);
             } else {
-                Serial.printf("HubClient: Failed to send calibration command to child %d, error: %d\n", i, result);
+                Serial.printf("HUB: Failed to send calibration command to child %d, error: %d\n", i, result);
             }
         }
     }
@@ -87,19 +85,11 @@ bool HubClientService::registerChildAsESPNowPeer(const uint8_t* macAddress) {
     // Add the peer
     esp_err_t result = esp_now_add_peer(&peerInfo);
     if (result == ESP_OK) {
-        Serial.printf("HubClient: Successfully registered child as ESP-NOW peer: %02X:%02X:%02X:%02X:%02X:%02X\n",
-                     macAddress[0], macAddress[1], macAddress[2], 
-                     macAddress[3], macAddress[4], macAddress[5]);
         return true;
     } else if (result == ESP_ERR_ESPNOW_EXIST) {
-        Serial.printf("HubClient: Child already registered as ESP-NOW peer: %02X:%02X:%02X:%02X:%02X:%02X\n",
-                     macAddress[0], macAddress[1], macAddress[2], 
-                     macAddress[3], macAddress[4], macAddress[5]);
         return true;  // Already exists, consider it successful
     } else {
-        Serial.printf("HubClient: Failed to register child as ESP-NOW peer: %02X:%02X:%02X:%02X:%02X:%02X, error: %d\n",
-                     macAddress[0], macAddress[1], macAddress[2], 
-                     macAddress[3], macAddress[4], macAddress[5], result);
+        Serial.printf("HubClient: Failed to register child as ESP-NOW peer, error: %d\n", result);
         return false;
     }
 }
@@ -110,6 +100,23 @@ HubClientService::~HubClientService() {
     if (espNowInitialized) {
         esp_now_del_peer(0); // Remove all peers
     }
+}
+
+// Restore ESP-NOW peer registrations after reinitialization
+void HubClientService::restoreESPNowPeers() {
+    if (!espNowInitialized) {
+        Serial.println("HubClient: Cannot restore peers - ESP-NOW not initialized");
+        return;
+    }
+    
+    Serial.println("HubClient: Restoring ESP-NOW peer registrations...");
+    
+    // Re-register all known children as ESP-NOW peers
+    for (int i = 0; i < childDeviceCount; i++) {
+        registerChildAsESPNowPeer(childDevices[i].macAddress);
+    }
+    
+    Serial.printf("HubClient: ESP-NOW peer restoration complete - %d children\n", childDeviceCount);
 }
 
 // Initialize ESP-NOW receiver
@@ -143,7 +150,6 @@ bool HubClientService::initializeESPNow() {
     esp_now_register_recv_cb(onESPNowDataRecv);
     
     espNowInitialized = true;
-    Serial.println("HubClient: ESP-NOW receiver initialized successfully");
     return true;
 }
 
@@ -213,8 +219,6 @@ void HubClientService::update(bool bleConnected) {
 void HubClientService::processESPNowPacket(const uint8_t* macAddr, const uint8_t* data, int dataLen) {
     // Check minimum packet size (header size)
     if (dataLen < sizeof(ESPNowPacketHeader)) {
-        Serial.printf("HubClient: Packet too small: %d bytes (minimum %d)\n", 
-                     dataLen, sizeof(ESPNowPacketHeader));
         return;
     }
     
@@ -477,6 +481,10 @@ void sendCalibrationCommand() {
 
 bool registerChildAsESPNowPeer(const uint8_t* macAddress) {
     return hubClientService.registerChildAsESPNowPeer(macAddress);
+}
+
+void restoreESPNowPeers() {
+    hubClientService.restoreESPNowPeers();
 }
 
 bool isChildConnected(DeviceRole childRole) {
