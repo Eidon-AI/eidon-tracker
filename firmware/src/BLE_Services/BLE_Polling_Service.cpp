@@ -4,6 +4,7 @@
 #include "DeviceConfig.h"
 #include "BNO085.h"
 #include "Role_Services/RoleConfig_Service.h"
+#include "Role_Services/HubClient_Service.h"
 
 // Forward declarations
 class BNO085;
@@ -13,12 +14,15 @@ class ColorManager;
 // ESP-NOW function declarations (for child devices)
 extern bool initializeESPNowSender();
 extern void updateESPNowHubMacAddress();
+extern void sendCalibrationCommand();
 
 // External variables that handlers need access to
 extern BNO085 imu;
 extern DeviceConfig deviceConfig;
 extern NimBLECharacteristic* roleConfigChar;
+extern NimBLECharacteristic* calibrationChar;
 extern bool deviceConnected;
+extern HubClientService hubClientService;
 
 // Global instance
 BLEPollingManager pollingManager;
@@ -531,7 +535,12 @@ void handleRoleChange(const std::string& value, bool success) {
 
 void handleCalibration(const std::string& value, bool success) {
     if (!success) {
-        Serial.println("Calibration: Failed to read characteristic value");
+        Serial.println("HUB: Calibration: Failed to read characteristic value");
+        return;
+    }
+    
+    // Only process if this is a HUB device
+    if (!deviceConfig.isHubMode()) {
         return;
     }
     
@@ -540,25 +549,22 @@ void handleCalibration(const std::string& value, bool success) {
         uint8_t cmd = static_cast<uint8_t>(value[0]);
         
         if (cmd == 0x01) { // Calibration command
-            Serial.println("=== CALIBRATION REQUEST DETECTED ===");
+            Serial.println("HUB: Calibration command detected");
             
             if (imu.isAvailable()) {
-                Serial.println("Resetting IMU...");
                 imu.reset();
                 
-                // LED feedback (if available)
-                // Note: startIMUResetPattern() would need to be accessible
-                // or we can implement LED feedback here
+                // Send calibration command to children via ESP-NOW
+                sendCalibrationCommand();
+                Serial.println("HUB: Calibration command sent to children");
                 
-                Serial.println("IMU reset completed");
-            } else {
-                Serial.println("Calibration: IMU not available for reset");
+                // Reset the GATT characteristic to its original value (empty/0x00)
+                // This ensures future calibration commands are properly detected
+                if (calibrationChar != nullptr) {
+                    calibrationChar->setValue((uint8_t*)"", 0);
+                }
             }
-        } else {
-            Serial.printf("Calibration: Unknown command: 0x%02X\n", cmd);
         }
-    } else {
-        Serial.println("Calibration: Empty value received");
     }
 }
 

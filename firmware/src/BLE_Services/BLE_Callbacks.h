@@ -20,12 +20,6 @@ public:
     void onAuthenticationComplete(NimBLEConnInfo& connInfo);
 };
 
-// GATT Calibration characteristic write callback
-class CalibrationCallbacks : public NimBLECharacteristicCallbacks {
-public:
-    void onWrite(NimBLECharacteristic* pChar, const std::string& value);
-};
-
 // GATT Quaternion characteristic callback
 class QuaternionCharCallbacks : public NimBLECharacteristicCallbacks {
 public:

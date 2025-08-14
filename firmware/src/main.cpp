@@ -24,6 +24,7 @@ void updateAdvertisingData();
 bool initializeESPNowSender();
 void sendESPNowQuaternionData();
 void updateESPNowHubMacAddress();
+void restoreESPNowPeers();  // ESP-NOW peer recovery function
 
 // Hub client functions are now in Role_Services/HubClient_Service.h
 
@@ -37,7 +38,6 @@ extern BLEPollingManager pollingManager;
 // Static callback instances to prevent memory deallocation issues
 static ServerCallbacks serverCallbacksInstance;
 static QuaternionCharCallbacks quaternionCallbacksInstance;
-static CalibrationCallbacks calibrationCallbacksInstance;
 // HubClientCallbacks moved to HubClient_Service.cpp
 // RoleConfig callbacks removed - using polling instead
 
@@ -49,6 +49,10 @@ BNO085 imu;
 #define QUATERNION_CHAR_UUID      "E1D00002-8B5A-3E5B-9E23-4F9B5C91BBDE"
 #define CALIBRATION_CHAR_UUID     "E1D00003-8B5A-3E5B-9E23-4F9B5C91BBDE"
 #define DEVICE_INFO_CHAR_UUID     "E1D00005-8B5A-3E5B-9E23-4F9B5C91BBDE"
+
+// Message type constants for ESP-NOW packets
+#define MESSAGE_TYPE_QUAT 0x01    // Quaternion data
+#define MESSAGE_TYPE_CMD  0x02    // Command
 
 // New characteristics for hub devices only (child data)
 #define HAND_QUATERNION_CHAR_UUID     "E1D00008-8B5A-3E5B-9E23-4F9B5C91BBDE"
@@ -342,15 +346,26 @@ bool initializeESPNowSender() {
         return true; // Already initialized
     }
     
+    // Force WiFi channel to ESP-NOW channel first
+    WiFi.setChannel(1);
+    delay(50); // Give WiFi time to settle
+    
     // Initialize ESP-NOW
     if (esp_now_init() != ESP_OK) {
         return false;
     }
     
-    // Set ESP-NOW role to sender
+    // Set ESP-NOW PMK (required for all ESP-NOW operations)
     if (esp_now_set_pmk((uint8_t*)"pmk1234567890123") != ESP_OK) {
         return false;
     }
+    
+    // Register callback for receiving commands from hub
+    esp_now_register_recv_cb(onESPNowDataRecv);
+    Serial.println("CHILD: ESP-NOW receive callback registered - ready to receive calibration commands");
+    
+    // ESP-NOW automatically supports both sending and receiving
+    // No need to set a specific role - it can do both
     
     espNowInitialized = true;
     return true;
@@ -379,6 +394,69 @@ void updateESPNowHubMacAddress() {
     }
 }
 
+/**
+ * Unified ESP-NOW callback function for both hub and child devices
+ * 
+ * This function handles all incoming ESP-NOW packets and routes them based on device role:
+ * - HUB devices: Process MESSAGE_TYPE_QUAT (quaternion packets) from children
+ * - CHILD devices: Process MESSAGE_TYPE_CMD (calibration commands) from hub
+ * 
+ * Packet Flow:
+ * 1. Children send quaternions (MESSAGE_TYPE_QUAT) → Hub receives and processes
+ * 2. Hub sends calibration (MESSAGE_TYPE_CMD) → Children receive and process
+ * 
+ * Expected Behavior:
+ * - Hub ignores command packets (it only sends them)
+ * - Children ignore quaternion packets (they only send them)
+ * - All packets are validated for minimum size before processing
+ * 
+ * @param esp_now_info ESP-NOW receive information including source MAC address
+ * @param data Raw packet data
+ * @param dataLen Length of packet data in bytes
+ */
+void onESPNowDataRecv(const esp_now_recv_info_t* esp_now_info, const uint8_t* data, int dataLen) {
+    // Check minimum packet size (header size)
+    if (dataLen < sizeof(ESPNowPacketHeader)) {
+        Serial.printf("ESP-NOW: Packet too small: %d bytes\n", dataLen);
+        return; // Packet too small, ignore silently
+    }
+    
+    // Extract header to determine packet type
+    ESPNowPacketHeader* header = (ESPNowPacketHeader*)data;
+    
+    // Route packets based on device role
+    if (deviceConfig.isHubMode()) {
+        // HUB: Process quaternion packets only
+        if (header->messageType == MESSAGE_TYPE_QUAT) {
+            // Forward to hub client service for processing
+            hubClientService.processESPNowPacket(esp_now_info->src_addr, data, dataLen);
+        }
+        // Hub ignores command packets (it only sends them)
+    } else {
+        // CHILD: Process command packets only
+        if (header->messageType == MESSAGE_TYPE_CMD) {
+            Serial.printf("CHILD: ESP-NOW packet received - type: 0x%02X, from: %02X:%02X:%02X:%02X:%02X:%02X\n",
+                         header->messageType,
+                         esp_now_info->src_addr[0], esp_now_info->src_addr[1], esp_now_info->src_addr[2],
+                         esp_now_info->src_addr[3], esp_now_info->src_addr[4], esp_now_info->src_addr[5]);
+            
+            // Process calibration command
+            if (dataLen == sizeof(ESPNowCommandPacket)) {
+                ESPNowCommandPacket* cmd = (ESPNowCommandPacket*)data;
+                
+                if (cmd->commandType == 0x01) { // IMU reset command
+                    Serial.println("CHILD: Calibration command received");
+                    
+                    if (imu.isAvailable()) {
+                        imu.reset();
+                    }
+                }
+            }
+        }
+        // Children ignore quaternion packets (they only send them)
+    }
+}
+
 void sendESPNowQuaternionData() {
     if (!espNowInitialized || !hubMacAssigned) {
         return; // Not ready to send
@@ -397,9 +475,12 @@ void sendESPNowQuaternionData() {
     float corrected_y = -qy_sensor;
     float corrected_z = qz_sensor;
     
-    // Create ESP-NOW packet
+    // Create ESP-NOW packet with simplified header structure
     ESPNowQuaternionPacket packet;
-    packet.senderRole = (uint8_t)deviceConfig.getRole();
+    packet.header.messageType = MESSAGE_TYPE_QUAT;  // QUAT
+    packet.header.senderRole = (uint8_t)deviceConfig.getRole();  // Include role for categorization
+    packet.header.reserved[0] = 0;
+    packet.header.reserved[1] = 0;
     packet.quaternion.w = corrected_w;
     packet.quaternion.x = corrected_x;
     packet.quaternion.y = corrected_y;
@@ -418,7 +499,6 @@ void sendESPNowQuaternionData() {
         unsigned long currentTime = millis();
         if (currentTime - lastESPNowError >= ESP_NOW_ERROR_TIMEOUT) {
             espNowErrorCount++;
-            Serial.printf("ESP-NOW: Failed to send data, error: %d (count: %d)\n", result, espNowErrorCount);
             lastESPNowError = currentTime;
             
             // If we've had many errors, try to reinitialize ESP-NOW
@@ -511,7 +591,6 @@ void setup() {
         CALIBRATION_CHAR_UUID,
         NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE
     );
-    calibrationChar->setCallbacks(&calibrationCallbacksInstance);
     
     // Configure Device Info characteristic
     deviceInfoChar = eidonService->createCharacteristic(
@@ -559,6 +638,14 @@ void setup() {
 
     // Add Role target to polling system
     pollingManager.addTarget(roleConfigChar, 1000, handleRoleChange, "Role"); // 1 Hz (1000ms)
+    
+    // Add Calibration target to polling system (HUB devices only)
+    if (deviceConfig.isHubMode()) {
+        pollingManager.addTarget(calibrationChar, 100, handleCalibration, "Calibration"); // 10 Hz (100ms)
+        Serial.println("HUB: Calibration polling enabled");
+    } else {
+        Serial.println("CHILD: Calibration polling disabled (not a hub)");
+    }
     
     // ---------- Hub Client Setup -----------------------------
     setupHubClientService();
@@ -653,6 +740,9 @@ void loop() {
                 if (esp_now_init() == ESP_OK) {
                     esp_now_set_pmk((uint8_t*)"pmk1234567890123");
                     esp_now_register_recv_cb(onESPNowDataRecv);
+                    
+                    // Restore ESP-NOW peer registrations after reinitialization
+                    restoreESPNowPeers();
                 }
             }
             
@@ -661,6 +751,12 @@ void loop() {
             ledState = false;
             ledLastUpdate = 0; // Force immediate update
             currentLEDPattern = LED_CONNECTED;
+            
+            // Reset polling disabled log flag for children
+            if (deviceConfig.isNodeMode()) {
+                // Reset the static flag by calling a function that can access it
+                // This will be handled in the polling update section
+            }
         } else {
             Serial.println("BLE: Disconnected");
             // Record disconnection time for child devices
@@ -688,12 +784,33 @@ void loop() {
         }
     }
     
-    // Update BLE polling system
-    pollingManager.update();
+    // Update BLE polling system (skip when BLE timeout is up on children)
+    if (!deviceConfig.isNodeMode() || deviceConnected || (!startupTimedOut && !disconnectTimedOut)) {
+        // Reset polling disabled log flag when polling is active
+        static bool pollingDisabledLogged = false;
+        if (pollingDisabledLogged) {
+            pollingDisabledLogged = false;
+        }
+        pollingManager.update();
+    } else if (deviceConfig.isNodeMode() && !deviceConnected) {
+        // Log once when polling is disabled for children
+        static bool pollingDisabledLogged = false;
+        if (!pollingDisabledLogged) {
+            Serial.println("CHILD: BLE polling disabled - ESP-NOW only mode active");
+            pollingDisabledLogged = true;
+        }
+    }
     
     // Update hub client service (only if we're a hub)
     if (deviceConfig.isHubMode()) {
         updateHubClientService(deviceConnected);
+        
+        // Check for child disconnections every second
+        static unsigned long lastDisconnectCheck = 0;
+        if (currentTime - lastDisconnectCheck >= 1000) {
+            checkChildDisconnections();
+            lastDisconnectCheck = currentTime;
+        }
     }
     
     // Send data if connected

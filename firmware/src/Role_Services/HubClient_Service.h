@@ -19,6 +19,10 @@ private:
     AggregatedQuaternionData aggregatedData;
     bool espNowInitialized;
     
+    // Simple disconnection tracking - one counter per type
+    unsigned int handMissedPolls;
+    unsigned int forearmMissedPolls;
+    
     // Periodic logging variables
     unsigned long lastLogTime;
     
@@ -28,8 +32,12 @@ public:
     
     // Helper functions
     int findChildSlot(DeviceRole childRole);
+    int findChildByMac(const uint8_t* macAddress);
     int createChildSlot();
     void syncConnectionStatus();
+    
+    // ESP-NOW peer management
+    bool registerChildAsESPNowPeer(const uint8_t* macAddress);
     
 public:
     HubClientService();
@@ -45,10 +53,16 @@ public:
     void unregisterChildDevice(DeviceRole childRole);
     bool isChildConnected(DeviceRole childRole);
     void processESPNowPacket(const uint8_t* macAddr, const uint8_t* data, int dataLen);
+    void processQuaternionPacket(const uint8_t* macAddr, const uint8_t* data, int dataLen);
+    void restoreESPNowPeers();  // New recovery function
+    
+    // Command sending
+    void sendCalibrationCommand();
     
     // Data management
     void updateChildData();
     void updateHubQuaternionData(float w, float x, float y, float z);
+    void checkChildDisconnections();
     AggregatedQuaternionData* getAggregatedData() { return &aggregatedData; }
     
     // Access to child devices for external use
@@ -62,14 +76,18 @@ extern HubClientService hubClientService;
 // Function declarations for integration with main.cpp
 void setupHubClientService();
 void updateHubClientService(bool bleConnected = false);
+void checkChildDisconnections();
 void registerChildDevice(const uint8_t* macAddress, DeviceRole childRole);
 void unregisterChildDevice(DeviceRole childRole);
 void updateChildData();
 void updateHubQuaternionData(float w, float x, float y, float z);
 bool isChildConnected(DeviceRole childRole);
 AggregatedQuaternionData* getAggregatedData();
+void sendCalibrationCommand();
+bool registerChildAsESPNowPeer(const uint8_t* macAddress);
+void restoreESPNowPeers();  // Global recovery function
 
-// ESP-NOW callback function declaration
+// ESP-NOW callback function declaration (defined in main.cpp)
 void onESPNowDataRecv(const esp_now_recv_info_t* esp_now_info, const uint8_t* data, int dataLen);
 
 #endif // HUB_CLIENT_SERVICE_H 
