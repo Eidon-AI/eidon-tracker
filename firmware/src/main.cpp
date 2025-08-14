@@ -394,40 +394,66 @@ void updateESPNowHubMacAddress() {
     }
 }
 
-// Process incoming ESP-NOW packets (for children to receive commands)
+/**
+ * Unified ESP-NOW callback function for both hub and child devices
+ * 
+ * This function handles all incoming ESP-NOW packets and routes them based on device role:
+ * - HUB devices: Process MESSAGE_TYPE_QUAT (quaternion packets) from children
+ * - CHILD devices: Process MESSAGE_TYPE_CMD (calibration commands) from hub
+ * 
+ * Packet Flow:
+ * 1. Children send quaternions (MESSAGE_TYPE_QUAT) → Hub receives and processes
+ * 2. Hub sends calibration (MESSAGE_TYPE_CMD) → Children receive and process
+ * 
+ * Expected Behavior:
+ * - Hub ignores command packets (it only sends them)
+ * - Children ignore quaternion packets (they only send them)
+ * - All packets are validated for minimum size before processing
+ * 
+ * @param esp_now_info ESP-NOW receive information including source MAC address
+ * @param data Raw packet data
+ * @param dataLen Length of packet data in bytes
+ */
 void onESPNowDataRecv(const esp_now_recv_info_t* esp_now_info, const uint8_t* data, int dataLen) {
     // Check minimum packet size (header size)
     if (dataLen < sizeof(ESPNowPacketHeader)) {
-        Serial.printf("CHILD: ESP-NOW packet too small: %d bytes\n", dataLen);
+        Serial.printf("ESP-NOW: Packet too small: %d bytes\n", dataLen);
         return; // Packet too small, ignore silently
     }
     
     // Extract header to determine packet type
     ESPNowPacketHeader* header = (ESPNowPacketHeader*)data;
     
-    Serial.printf("CHILD: ESP-NOW packet received - type: 0x%02X, from: %02X:%02X:%02X:%02X:%02X:%02X\n",
-                 header->messageType,
-                 esp_now_info->src_addr[0], esp_now_info->src_addr[1], esp_now_info->src_addr[2],
-                 esp_now_info->src_addr[3], esp_now_info->src_addr[4], esp_now_info->src_addr[5]);
-    
-    // Handle different packet types
-    if (header->messageType == MESSAGE_TYPE_CMD) {
-        // Process command packet
-        if (dataLen == sizeof(ESPNowCommandPacket)) {
-            ESPNowCommandPacket* cmd = (ESPNowCommandPacket*)data;
+    // Route packets based on device role
+    if (deviceConfig.isHubMode()) {
+        // HUB: Process quaternion packets only
+        if (header->messageType == MESSAGE_TYPE_QUAT) {
+            // Forward to hub client service for processing
+            hubClientService.processESPNowPacket(esp_now_info->src_addr, data, dataLen);
+        }
+        // Hub ignores command packets (it only sends them)
+    } else {
+        // CHILD: Process command packets only
+        if (header->messageType == MESSAGE_TYPE_CMD) {
+            Serial.printf("CHILD: ESP-NOW packet received - type: 0x%02X, from: %02X:%02X:%02X:%02X:%02X:%02X\n",
+                         header->messageType,
+                         esp_now_info->src_addr[0], esp_now_info->src_addr[1], esp_now_info->src_addr[2],
+                         esp_now_info->src_addr[3], esp_now_info->src_addr[4], esp_now_info->src_addr[5]);
             
-            if (cmd->commandType == 0x01) { // IMU reset command
-                Serial.println("CHILD: Calibration command received");
+            // Process calibration command
+            if (dataLen == sizeof(ESPNowCommandPacket)) {
+                ESPNowCommandPacket* cmd = (ESPNowCommandPacket*)data;
                 
-                if (imu.isAvailable()) {
-                    imu.reset();
+                if (cmd->commandType == 0x01) { // IMU reset command
+                    Serial.println("CHILD: Calibration command received");
+                    
+                    if (imu.isAvailable()) {
+                        imu.reset();
+                    }
                 }
             }
         }
-    } else if (header->messageType == MESSAGE_TYPE_QUAT) {
-        // Ignore quaternion packets silently
-    } else {
-        Serial.printf("CHILD: Unknown packet type: 0x%02X\n", header->messageType);
+        // Children ignore quaternion packets (they only send them)
     }
 }
 

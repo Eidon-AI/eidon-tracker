@@ -9,13 +9,7 @@ extern DeviceConfig deviceConfig;
 // Global instance
 HubClientService hubClientService;
 
-// ESP-NOW callback function
-void onESPNowDataRecv(const esp_now_recv_info_t* esp_now_info, const uint8_t* data, int dataLen) {
-    // Increment packet counter for periodic logging
-    hubClientService.packetCounter++;
-    
-    hubClientService.processESPNowPacket(esp_now_info->src_addr, data, dataLen);
-}
+
 
 // Constructor
 HubClientService::HubClientService() 
@@ -240,6 +234,8 @@ void HubClientService::processESPNowPacket(const uint8_t* macAddr, const uint8_t
     
     // Only handle quaternion packets for now
     if (header->messageType == MESSAGE_TYPE_QUAT) {
+        // Increment packet counter for periodic logging (moved from old callback)
+        packetCounter++;
         processQuaternionPacket(macAddr, data, dataLen);
     }
     // Silently ignore non-quaternion packets to reduce log spam

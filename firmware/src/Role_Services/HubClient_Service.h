@@ -87,7 +87,7 @@ void sendCalibrationCommand();
 bool registerChildAsESPNowPeer(const uint8_t* macAddress);
 void restoreESPNowPeers();  // Global recovery function
 
-// ESP-NOW callback function declaration
+// ESP-NOW callback function declaration (defined in main.cpp)
 void onESPNowDataRecv(const esp_now_recv_info_t* esp_now_info, const uint8_t* data, int dataLen);
 
 #endif // HUB_CLIENT_SERVICE_H 
