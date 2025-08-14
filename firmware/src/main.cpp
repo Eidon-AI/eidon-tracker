@@ -360,6 +360,10 @@ bool initializeESPNowSender() {
         return false;
     }
     
+    // Register callback for receiving commands from hub
+    esp_now_register_recv_cb(onESPNowDataRecv);
+    Serial.println("CHILD: ESP-NOW receive callback registered - ready to receive calibration commands");
+    
     // ESP-NOW automatically supports both sending and receiving
     // No need to set a specific role - it can do both
     
@@ -394,11 +398,17 @@ void updateESPNowHubMacAddress() {
 void onESPNowDataRecv(const esp_now_recv_info_t* esp_now_info, const uint8_t* data, int dataLen) {
     // Check minimum packet size (header size)
     if (dataLen < sizeof(ESPNowPacketHeader)) {
+        Serial.printf("CHILD: ESP-NOW packet too small: %d bytes\n", dataLen);
         return; // Packet too small, ignore silently
     }
     
     // Extract header to determine packet type
     ESPNowPacketHeader* header = (ESPNowPacketHeader*)data;
+    
+    Serial.printf("CHILD: ESP-NOW packet received - type: 0x%02X, from: %02X:%02X:%02X:%02X:%02X:%02X\n",
+                 header->messageType,
+                 esp_now_info->src_addr[0], esp_now_info->src_addr[1], esp_now_info->src_addr[2],
+                 esp_now_info->src_addr[3], esp_now_info->src_addr[4], esp_now_info->src_addr[5]);
     
     // Handle different packet types
     if (header->messageType == MESSAGE_TYPE_CMD) {
@@ -407,21 +417,18 @@ void onESPNowDataRecv(const esp_now_recv_info_t* esp_now_info, const uint8_t* da
             ESPNowCommandPacket* cmd = (ESPNowCommandPacket*)data;
             
             if (cmd->commandType == 0x01) { // IMU reset command
-                Serial.println("=== CALIBRATION COMMAND RECEIVED ===");
+                Serial.println("CHILD: Calibration command received");
                 
                 if (imu.isAvailable()) {
-                    Serial.println("Resetting IMU...");
                     imu.reset();
-                    Serial.println("IMU reset completed successfully");
-                } else {
-                    Serial.println("ERROR: IMU not available for reset");
                 }
             }
         }
     } else if (header->messageType == MESSAGE_TYPE_QUAT) {
         // Ignore quaternion packets silently
+    } else {
+        Serial.printf("CHILD: Unknown packet type: 0x%02X\n", header->messageType);
     }
-    // Silently ignore other message types
 }
 
 void sendESPNowQuaternionData() {
@@ -718,6 +725,12 @@ void loop() {
             ledState = false;
             ledLastUpdate = 0; // Force immediate update
             currentLEDPattern = LED_CONNECTED;
+            
+            // Reset polling disabled log flag for children
+            if (deviceConfig.isNodeMode()) {
+                // Reset the static flag by calling a function that can access it
+                // This will be handled in the polling update section
+            }
         } else {
             Serial.println("BLE: Disconnected");
             // Record disconnection time for child devices
@@ -745,8 +758,22 @@ void loop() {
         }
     }
     
-    // Update BLE polling system
-    pollingManager.update();
+    // Update BLE polling system (skip when BLE timeout is up on children)
+    if (!deviceConfig.isNodeMode() || deviceConnected || (!startupTimedOut && !disconnectTimedOut)) {
+        // Reset polling disabled log flag when polling is active
+        static bool pollingDisabledLogged = false;
+        if (pollingDisabledLogged) {
+            pollingDisabledLogged = false;
+        }
+        pollingManager.update();
+    } else if (deviceConfig.isNodeMode() && !deviceConnected) {
+        // Log once when polling is disabled for children
+        static bool pollingDisabledLogged = false;
+        if (!pollingDisabledLogged) {
+            Serial.println("CHILD: BLE polling disabled - ESP-NOW only mode active");
+            pollingDisabledLogged = true;
+        }
+    }
     
     // Update hub client service (only if we're a hub)
     if (deviceConfig.isHubMode()) {

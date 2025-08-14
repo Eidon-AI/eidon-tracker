@@ -55,17 +55,30 @@ void HubClientService::sendCalibrationCommand() {
     cmd.reserved[1] = 0;
     cmd.reserved[2] = 0;
     
-    // Send to all connected children
+    // Send to all registered children (ignore dataAvailable status for calibration)
+    int sentCount = 0;
+    Serial.printf("HUB: Attempting to send calibration to %d children\n", childDeviceCount);
+    
     for (int i = 0; i < childDeviceCount; i++) {
-        if (childDevices[i].dataAvailable) {
-            esp_err_t result = esp_now_send(childDevices[i].macAddress, (const uint8_t*)&cmd, sizeof(cmd));
-            if (result == ESP_OK) {
-                Serial.printf("HUB: Calibration command successfully sent to child %d\n", i);
-            } else {
-                Serial.printf("HUB: Failed to send calibration command to child %d, error: %d\n", i, result);
-            }
+        // Debug: Log each child's details
+        Serial.printf("HUB: Child %d - MAC: %02X:%02X:%02X:%02X:%02X:%02X, Role: %s\n", 
+                     i,
+                     childDevices[i].macAddress[0], childDevices[i].macAddress[1], childDevices[i].macAddress[2],
+                     childDevices[i].macAddress[3], childDevices[i].macAddress[4], childDevices[i].macAddress[5],
+                     deviceConfig.getRoleName(childDevices[i].role));
+        
+        // Send calibration command to all registered children, regardless of recent data status
+        esp_err_t result = esp_now_send(childDevices[i].macAddress, (const uint8_t*)&cmd, sizeof(cmd));
+        if (result == ESP_OK) {
+            sentCount++;
+            Serial.printf("HUB: Calibration sent successfully to child %d\n", i);
+        } else {
+            Serial.printf("HUB: Failed to send calibration to child %d, error: %d\n", i, result);
         }
     }
+    
+    // Debug: Log final result
+    Serial.printf("HUB: Calibration sent to %d/%d children\n", sentCount, childDeviceCount);
 }
 
 // Register a child device as an ESP-NOW peer so hub can send commands to it
