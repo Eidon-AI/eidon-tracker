@@ -8,3 +8,5 @@
 
 # macOS
 .DS_Store
+
+ pcb/eidon-tracker/eidon-tracker-backups/*
