@@ -1161,7 +1161,7 @@
 		(uuid "65c2cb9e-a13a-461b-80db-64e38cdc5b25")
 	)
 	(embedded_fonts no)
-	(model "/Users/robert/eidon/eidon-tracker/pcb/eidon-tracker/Seeed Studio XIAO ESP32-C6.step"
+	(model "${KIPRJMOD}/models/XIAO_ESP32C6.step"
 		(offset
 			(xyz 6.05 -1.75 0)
 		)
