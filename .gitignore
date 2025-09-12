@@ -9,4 +9,5 @@
 # macOS
 .DS_Store
 
- pcb/eidon-tracker/eidon-tracker-backups/*
+pcb/eidon-tracker/eidon-tracker-backups/*
+pcb/eidon-tracker/#auto_saved_files#
