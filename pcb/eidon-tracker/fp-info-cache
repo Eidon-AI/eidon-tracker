@@ -1,4 +1,4 @@
-24751555765579259
+24755073411437319
 Audio_Module
 Reverb_BTDR-1H
 Digital Reverberation Unit, http://www.belton.co.kr/inc/downfile.php?seq=17&file=pdf (footprint from http://www.uk-electronic.de/PDF/BTDR-1.pdf)
@@ -99561,12 +99561,26 @@ SS-12D00-G 4 E
 3
 3
 eidon-tracker
+EIDON_LOGO
+
+
+0
+0
+0
+eidon-tracker
 GY-BNO085
 
 
 0
 13
 13
+eidon-tracker
+SW_Slide_SPDT_Angled_CK_OS102011MA1Q
+CuK miniature slide switch, OS series, SPDT, right angle, http://www.ckswitches.com/media/1428/os.pdf
+switch SPDT
+0
+5
+4
 eidon-tracker
 XIAO-ESP32-C6
 
