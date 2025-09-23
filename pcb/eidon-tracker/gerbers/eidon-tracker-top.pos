@@ -1,8 +1,0 @@
-### Footprint positions - created on 2025-09-23T12:49:41-0500 ###
-### Printed by KiCad version 9.0.0
-## Unit = mm, Angle = deg.
-## Side : top
-# Ref     Val       Package                                       PosX       PosY       Rot  Side
-BT1       Battery   JST_PH_S2B-PH-K_1x02_P2.00mm_Horizontal   161.4800  -107.1000  180.0000  top
-SW1       SW_SPDT   SW_Slide_SPDT_Angled_CK_OS102011MA1Q      161.3500   -91.4000  180.0000  top
-## End
