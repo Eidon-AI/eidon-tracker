@@ -116,7 +116,7 @@
 				(justify right)
 			)
 		)
-		(property "Value" "XIAO-ESP32C6"
+		(property "Value" "XIAO-ESP32-C6"
 			(at 0.09 -9.25 0)
 			(unlocked yes)
 			(layer "F.SilkS")
@@ -154,10 +154,62 @@
 				)
 			)
 		)
+		(property "Manufacturer" "Seeed / Digi-Key"
+			(at 0 0 0)
+			(unlocked yes)
+			(layer "F.Fab")
+			(hide yes)
+			(uuid "ab7b22d0-187b-4e02-a69c-232d788be773")
+			(effects
+				(font
+					(size 1 1)
+					(thickness 0.15)
+				)
+			)
+		)
+		(property "MPN" "Seeed 113991114"
+			(at 0 0 0)
+			(unlocked yes)
+			(layer "F.Fab")
+			(hide yes)
+			(uuid "925b9c80-7f6e-49bb-90d5-b0e372e0ab74")
+			(effects
+				(font
+					(size 1 1)
+					(thickness 0.15)
+				)
+			)
+		)
+		(property "Supplier" "Seeed / Digi-Key"
+			(at 0 0 0)
+			(unlocked yes)
+			(layer "F.Fab")
+			(hide yes)
+			(uuid "b8791bb5-21e0-41a9-91a0-d22da3477235")
+			(effects
+				(font
+					(size 1 1)
+					(thickness 0.15)
+				)
+			)
+		)
+		(property "Description" "XIAO-ESP32C6 MCU Module"
+			(at 0 0 0)
+			(unlocked yes)
+			(layer "F.Fab")
+			(hide yes)
+			(uuid "ecc6fdcf-9ddd-48d1-b14b-45fbf9fa44f6")
+			(effects
+				(font
+					(size 1 1)
+					(thickness 0.15)
+				)
+			)
+		)
 		(path "/0423cdcb-a26b-4f66-8001-b3627f1e087a")
 		(sheetname "/")
 		(sheetfile "eidon-tracker.kicad_sch")
-		(attr through_hole)
+		(attr through_hole dnp)
 		(fp_line
 			(start -8.935 8.509)
 			(end -8.935 -8.636)
@@ -2795,7 +2847,7 @@
 		(path "/dfc1f9cc-53c9-44ab-91f4-791e566de294")
 		(sheetname "/")
 		(sheetfile "eidon-tracker.kicad_sch")
-		(attr through_hole)
+		(attr through_hole dnp)
 		(fp_line
 			(start 7.5 -12.7)
 			(end 7.5 12.7)

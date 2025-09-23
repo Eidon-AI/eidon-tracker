@@ -3263,8 +3263,8 @@
 		(at 86.36 68.58 0)
 		(unit 1)
 		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
+		(in_bom no)
+		(on_board no)
 		(dnp no)
 		(uuid "0423cdcb-a26b-4f66-8001-b3627f1e087a")
 		(property "Reference" "U1"
@@ -3276,7 +3276,7 @@
 				(justify left)
 			)
 		)
-		(property "Value" "XIAO-ESP32C6"
+		(property "Value" "XIAO-ESP32-C6"
 			(at 90.424 91.948 0)
 			(effects
 				(font
@@ -3305,6 +3305,24 @@
 			)
 		)
 		(property "Description" ""
+			(at 86.36 68.58 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Manufacturer Part Number (MPN)" "Seeed 113991114"
+			(at 86.36 68.58 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Supplier & Ref" "Seeed / Digi-Key"
 			(at 86.36 68.58 0)
 			(effects
 				(font
@@ -3560,7 +3578,7 @@
 				(hide yes)
 			)
 		)
-		(property "Datasheet" "~"
+		(property "Datasheet" ""
 			(at 149.86 132.08 0)
 			(effects
 				(font
@@ -3570,6 +3588,24 @@
 			)
 		)
 		(property "Description" "Resistor"
+			(at 149.86 132.08 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Manufacturer Part Number (MPN)" "Yageo RC0805FR-07220KL"
+			(at 149.86 132.08 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Supplier & Ref" "LCSC C25811"
 			(at 149.86 132.08 0)
 			(effects
 				(font
@@ -3628,7 +3664,7 @@
 				(hide yes)
 			)
 		)
-		(property "Datasheet" "~"
+		(property "Datasheet" ""
 			(at 149.86 142.24 0)
 			(effects
 				(font
@@ -3638,6 +3674,24 @@
 			)
 		)
 		(property "Description" "Resistor"
+			(at 149.86 142.24 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Manufacturer Part Number (MPN)" "Yageo RC0805FR-07220KL"
+			(at 149.86 142.24 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Supplier & Ref" "LCSC C25811"
 			(at 149.86 142.24 0)
 			(effects
 				(font
@@ -3715,6 +3769,24 @@
 				(hide yes)
 			)
 		)
+		(property "Manufacturer Part Number (MPN)" "CK OS102011MA1Q"
+			(at 101.6 137.16 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Supplier & Ref" "Mouser 611-OS102011MA1Q"
+			(at 101.6 137.16 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
 		(pin "3"
 			(uuid "92e52e97-f292-4303-a895-f5e699ebb5f9")
 		)
@@ -3773,7 +3845,7 @@
 				(hide yes)
 			)
 		)
-		(property "Datasheet" "~"
+		(property "Datasheet" ""
 			(at 248.92 137.16 0)
 			(effects
 				(font
@@ -3782,7 +3854,7 @@
 				(hide yes)
 			)
 		)
-		(property "Description" "Light emitting diode"
+		(property "Description" "Yellow LED, 0805, common cathode"
 			(at 248.92 137.16 0)
 			(effects
 				(font
@@ -3792,6 +3864,24 @@
 			)
 		)
 		(property "Sim.Pins" "1=K 2=A"
+			(at 248.92 137.16 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Manufacturer Part Number (MPN)" "Kingbright APT2012YC"
+			(at 248.92 137.16 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Supplier & Ref" "Digi-Key 754-1121-1-ND"
 			(at 248.92 137.16 0)
 			(effects
 				(font
@@ -4132,6 +4222,24 @@
 				(hide yes)
 			)
 		)
+		(property "Manufacturer Part Number (MPN)" "Alps SKRKACE010"
+			(at 196.85 137.16 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Supplier & Ref" "Mouser 688-SKRKACE010"
+			(at 196.85 137.16 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
 		(pin "2"
 			(uuid "bd95e25d-414c-416d-93df-9e951afb6f8b")
 		)
@@ -4283,8 +4391,8 @@
 		(at 212.09 67.31 0)
 		(unit 1)
 		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
+		(in_bom no)
+		(on_board no)
 		(dnp no)
 		(uuid "dfc1f9cc-53c9-44ab-91f4-791e566de294")
 		(property "Reference" "U2"
@@ -4323,13 +4431,30 @@
 				(hide yes)
 			)
 		)
-		(property "Description" ""
+		(property "Description" "Teyleten Robot GY- BNO085"
 			(at 212.09 67.31 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
 				(hide yes)
+			)
+		)
+		(property "Manufacturer Part Number (MPN)" "GY-BNO085"
+			(at 212.09 67.31 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Supplier & Ref" "Amazon / AliExpress"
+			(at 212.09 67.31 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
 			)
 		)
 		(pin "13"
@@ -4435,6 +4560,24 @@
 				(hide yes)
 			)
 		)
+		(property "Manufacturer Part Number (MPN)" "JST S2B-PH-K-S(LF)(SN)"
+			(at 54.61 138.43 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Supplier & Ref" "Digi-Key 455-S2B-PH-K"
+			(at 54.61 138.43 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
 		(pin "1"
 			(uuid "7f36c096-3421-4090-a361-142905b74620")
 		)
@@ -4484,7 +4627,7 @@
 				(hide yes)
 			)
 		)
-		(property "Datasheet" "~"
+		(property "Datasheet" ""
 			(at 240.03 137.16 0)
 			(effects
 				(font
@@ -4494,6 +4637,24 @@
 			)
 		)
 		(property "Description" "Resistor"
+			(at 240.03 137.16 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Manufacturer Part Number (MPN)" "Yageo RC0805FR-071K8L"
+			(at 240.03 137.16 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Supplier & Ref" "LCSC C22807"
 			(at 240.03 137.16 0)
 			(effects
 				(font
