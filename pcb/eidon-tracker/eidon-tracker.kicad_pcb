@@ -34,17 +34,18 @@
 		(45 "User.4" user)
 	)
 	(setup
-		(pad_to_mask_clearance 0)
+		(pad_to_mask_clearance 0.05)
+		(solder_mask_min_width 0.05)
 		(allow_soldermask_bridges_in_footprints no)
 		(tenting front back)
 		(pcbplotparams
 			(layerselection 0x00000000_00000000_55555555_5755f5ff)
 			(plot_on_all_layers_selection 0x00000000_00000000_00000000_00000000)
 			(disableapertmacros no)
-			(usegerberextensions no)
-			(usegerberattributes yes)
-			(usegerberadvancedattributes yes)
-			(creategerberjobfile yes)
+			(usegerberextensions yes)
+			(usegerberattributes no)
+			(usegerberadvancedattributes no)
+			(creategerberjobfile no)
 			(dashed_line_dash_ratio 12.000000)
 			(dashed_line_gap_ratio 3.000000)
 			(svgprecision 4)
@@ -70,12 +71,12 @@
 			(hidednponfab no)
 			(sketchdnponfab yes)
 			(crossoutdnponfab yes)
-			(subtractmaskfromsilk no)
+			(subtractmaskfromsilk yes)
 			(outputformat 1)
 			(mirror no)
-			(drillshape 1)
+			(drillshape 0)
 			(scaleselection 1)
-			(outputdirectory "")
+			(outputdirectory "gerbers/")
 		)
 	)
 	(net 0 "")
@@ -773,7 +774,7 @@
 			(net 16 "/BAT_LVL")
 			(pinfunction "GPIO0_A0_D0")
 			(pintype "passive")
-			(uuid "6ba81d2b-c413-4bd3-83a4-a60172d6d543")
+			(uuid "8fee740e-591a-45ac-bcf6-842f52c80bca")
 		)
 		(pad "2" smd roundrect
 			(at -8.5 -5.08 180)
@@ -795,7 +796,7 @@
 			(net 12 "/LED")
 			(pinfunction "GPIO1_A1_D1")
 			(pintype "passive")
-			(uuid "25a27316-ceb3-4369-b9a9-4bdf3c5db8d2")
+			(uuid "4680af14-e99e-4591-8df9-5a4ac8548601")
 		)
 		(pad "3" smd roundrect
 			(at -8.5 -2.54 180)
@@ -817,7 +818,7 @@
 			(net 5 "/PS0")
 			(pinfunction "GPIO2_A2_D2")
 			(pintype "passive")
-			(uuid "641717b8-e001-4d81-bcfd-3e6e9b93357a")
+			(uuid "cbb83109-e864-40d1-8b20-2046f4d882c6")
 		)
 		(pad "4" smd roundrect
 			(at -8.5 0 180)
@@ -839,7 +840,7 @@
 			(net 3 "/PS1")
 			(pinfunction "GPIO21_D3")
 			(pintype "passive")
-			(uuid "2164446f-ff63-4ecc-8215-1a7ce553cc92")
+			(uuid "6a9294a5-3c93-4f61-8f18-f340619fee19")
 		)
 		(pad "5" smd roundrect
 			(at -8.5 2.54 180)
@@ -861,7 +862,7 @@
 			(net 4 "/INT")
 			(pinfunction "GPIO22_D4_SDA")
 			(pintype "passive")
-			(uuid "40ca93e5-9bac-4568-9dc0-78cb6e42d186")
+			(uuid "e785183e-ce09-474d-8d3a-3ee4b014740a")
 		)
 		(pad "6" smd roundrect
 			(at -8.5 5.08 180)
@@ -883,7 +884,7 @@
 			(net 6 "/RST")
 			(pinfunction "GPIO23_D5_SCL")
 			(pintype "passive")
-			(uuid "f18c0de0-bb59-494f-a824-b568617cb33b")
+			(uuid "0a4e64da-c3f1-4476-88e3-041abd23ce23")
 		)
 		(pad "8" thru_hole circle
 			(at 7.575 7.62)
@@ -905,7 +906,7 @@
 			(pinfunction "GPIO17_D7_RX")
 			(pintype "passive")
 			(thermal_bridge_angle 45)
-			(uuid "82b11f0f-9a97-4550-b374-fc00107b635a")
+			(uuid "f9db649a-1b97-4046-a532-638a45c796c7")
 		)
 		(pad "9" thru_hole circle
 			(at 7.575 5.08)
@@ -927,7 +928,7 @@
 			(pinfunction "GPIO19_D8_SCK")
 			(pintype "passive")
 			(thermal_bridge_angle 45)
-			(uuid "51795604-498e-4ecf-b541-1ed69332fd4b")
+			(uuid "6960e88f-4a19-43e1-8df4-f1129e1413f5")
 		)
 		(pad "10" thru_hole circle
 			(at 7.575 2.54)
@@ -949,7 +950,7 @@
 			(pinfunction "GPIO20_D9_MISO")
 			(pintype "passive")
 			(thermal_bridge_angle 45)
-			(uuid "8614491e-0e0f-47e7-ae77-67c302794743")
+			(uuid "c9493df7-7fed-4cfc-b702-626007e9957f")
 		)
 		(pad "11" thru_hole circle
 			(at 7.575 0)
@@ -971,7 +972,7 @@
 			(pinfunction "GPIO18_D10_MOSI")
 			(pintype "passive")
 			(thermal_bridge_angle 45)
-			(uuid "62e7032e-26ab-4aa6-957a-65b561cc161b")
+			(uuid "54b65f8c-8418-4fd7-88f8-3b5e83649ada")
 		)
 		(pad "12" thru_hole circle
 			(at 7.575 -2.54)
@@ -993,7 +994,7 @@
 			(pinfunction "3V3")
 			(pintype "passive")
 			(thermal_bridge_angle 45)
-			(uuid "f4313ec7-685a-456f-b1ab-c9a046ff7c26")
+			(uuid "16763836-23ef-49d0-b578-e7737767646c")
 		)
 		(pad "13" thru_hole circle
 			(at 7.575 -5.08)
@@ -1015,7 +1016,7 @@
 			(pinfunction "GND")
 			(pintype "passive")
 			(thermal_bridge_angle 45)
-			(uuid "f79f2857-0ec7-4945-becb-78c17050daf9")
+			(uuid "d0ad98b7-72d8-40a0-937a-52647d082956")
 		)
 		(pad "15" smd roundrect
 			(at -2.75 5.5 180)
@@ -1038,7 +1039,7 @@
 			(net 17 "/BAT_INT")
 			(pinfunction "BAT")
 			(pintype "passive")
-			(uuid "808000dd-afac-4aa2-8999-0c241b37e20d")
+			(uuid "35b973e9-fe7e-410a-bb7f-b634dafc6d09")
 		)
 		(pad "16" thru_hole roundrect
 			(at 1 5.5)
@@ -1061,7 +1062,7 @@
 			(pinfunction "GND")
 			(pintype "passive")
 			(thermal_bridge_angle 45)
-			(uuid "4c30d6b0-b4ea-4a95-a34e-db6e1b8ddd1d")
+			(uuid "edf3f0f8-2aa8-4dbd-a84a-1cbf21025002")
 		)
 		(pad "23" smd roundrect
 			(at -2.688472 -1.021787 180)
@@ -1084,7 +1085,7 @@
 			(net 13 "/BOOT")
 			(pinfunction "BOOT")
 			(pintype "passive")
-			(uuid "d68c8902-b47b-4548-a0b2-2397a9edc254")
+			(uuid "dc4da492-f823-4070-8cd6-9dee8fa1aa75")
 		)
 		(embedded_fonts no)
 		(model "${KIPRJMOD}/models/XIAO_ESP32C6.step"
@@ -1560,7 +1561,7 @@
 			(uuid "42199019-54bc-4227-803e-97b365698fda")
 		)
 		(fp_text user "-"
-			(at 1.98 -0.9 -180)
+			(at 1.98 -0.9 180)
 			(unlocked yes)
 			(layer "F.SilkS")
 			(uuid "912fde67-905c-4202-9fb2-116c125bea35")
@@ -1573,7 +1574,7 @@
 			)
 		)
 		(fp_text user "+"
-			(at 0 -0.9 -180)
+			(at 0 -0.9 180)
 			(unlocked yes)
 			(layer "F.SilkS")
 			(uuid "f2513274-a919-48e3-9d65-a230a0a1dfa1")
