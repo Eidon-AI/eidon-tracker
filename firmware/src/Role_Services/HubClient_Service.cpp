@@ -402,7 +402,7 @@ void HubClientService::checkChildDisconnections() {
     
     // Increment hand missed polls
     handMissedPolls++;
-    if (handMissedPolls >= 4) {
+    if (handMissedPolls >= CHILD_DISCONNECT_TIMEOUT_SECONDS) {
         // Mark all hand children as disconnected
         for (int i = 0; i < childDeviceCount; i++) {
             ESPNowChildDevice& child = childDevices[i];
@@ -414,7 +414,7 @@ void HubClientService::checkChildDisconnections() {
     
     // Increment forearm missed polls
     forearmMissedPolls++;
-    if (forearmMissedPolls >= 4) {
+    if (forearmMissedPolls >= CHILD_DISCONNECT_TIMEOUT_SECONDS) {
         // Mark all forearm children as disconnected
         for (int i = 0; i < childDeviceCount; i++) {
             ESPNowChildDevice& child = childDevices[i];
