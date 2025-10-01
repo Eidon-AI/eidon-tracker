@@ -503,7 +503,7 @@
       "plot": "gerbers/",
       "pos_files": "gerbers/",
       "specctra_dsn": "",
-      "step": "",
+      "step": "eidon-tracker.step",
       "svg": "",
       "vrml": ""
     },
