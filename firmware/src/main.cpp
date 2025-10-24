@@ -16,9 +16,13 @@
 // Function declarations
 void sendQuaternionReport();
 void updateLEDStatus();
+void updateStatusLED();
 void startIMUResetPattern();
 bool isConnected();
 void updateAdvertisingData();
+float readBatteryVoltage();
+uint8_t calculateBatteryPercentage(float voltage);
+void updateBatteryLevel();
 
 // ESP-NOW sender functions for child devices
 bool initializeESPNowSender();
@@ -114,8 +118,32 @@ bool disconnectTimedOut = false;
 unsigned long lastIMUUpdate = 0;
 const unsigned long IMU_UPDATE_INTERVAL = 21; // 48 Hz (20.83ms interval) - matches ESP-NOW rate for redundancy
 
-// LED pin - changed from 5 to 2 to avoid conflict with switch pin
-#define LED_PIN 2
+// LED pin - Seeed XIAO ESP32-C6 onboard LED is on GPIO15
+#define LED_PIN 15
+
+// Status LED pin (second LED for simple status indication on GPIO1)
+#define STATUS_LED_PIN A1
+
+// Status LED variables
+unsigned long statusLedLastUpdate = 0;
+bool statusLedState = false;
+const unsigned long STATUS_LED_BLINK_INTERVAL = 500; // Blink every 500ms when advertising
+
+// Battery level monitoring (following Seeed XIAO ESP32 wiki)
+#define BATTERY_ADC_PIN 0  // GPIO0 (A0)
+const float VOLTAGE_DIVIDER_RATIO = 2.0;  // Voltage divider with two equal resistors (R1 = R2)
+const float ADC_REFERENCE_VOLTAGE = 3.3;  // ESP32-C3 ADC reference voltage
+const int ADC_RESOLUTION = 4095;  // 12-bit ADC (0-4095)
+unsigned long lastBatteryRead = 0;
+const unsigned long BATTERY_READ_INTERVAL = 5000; // Read battery every 5 seconds (for debugging)
+float batteryVoltage = 0.0;
+uint8_t batteryPercentage = 100;
+bool batteryPresent = true;
+
+// Battery detection thresholds
+const float BATTERY_MIN_VALID_VOLTAGE = 2.5;  // Below this = no battery present
+const float BATTERY_FLOATING_MIN = 3.8;       // Floating ADC typically reads in this range
+const float BATTERY_FLOATING_MAX = 4.0;       // when USB powered but no battery
 
 // LED status variables
 unsigned long ledLastUpdate = 0;
@@ -198,6 +226,98 @@ void updateLEDStatus() {
 void startIMUResetPattern() {
     currentLEDPattern = LED_IMU_RESET;
     imuResetStartTime = millis();
+}
+
+// Function to update status LED (second LED) - simple on/off control
+// Blinks when advertising, solid when connected
+void updateStatusLED() {
+    unsigned long currentTime = millis();
+    static unsigned long lastDebug = 0;
+    static bool lastConnectedState = false;
+
+    // Debug output every 5 seconds
+    if (currentTime - lastDebug >= 5000) {
+        Serial.printf("LED: Connected=%d, State=%d, Pin=%d\n", isConnected(), statusLedState, STATUS_LED_PIN);
+        lastDebug = currentTime;
+    }
+
+    if (isConnected()) {
+        // Solid ON when connected
+        if (!lastConnectedState) {
+            Serial.println("LED: Switching to SOLID (connected)");
+        }
+        digitalWrite(STATUS_LED_PIN, HIGH);
+        lastConnectedState = true;
+    } else {
+        // Blink when advertising (not connected)
+        if (lastConnectedState) {
+            Serial.println("LED: Switching to BLINK (advertising)");
+        }
+        if (currentTime - statusLedLastUpdate >= STATUS_LED_BLINK_INTERVAL) {
+            statusLedLastUpdate = currentTime;
+            statusLedState = !statusLedState;
+            digitalWrite(STATUS_LED_PIN, statusLedState ? HIGH : LOW);
+        }
+        lastConnectedState = false;
+    }
+}
+
+// Function to read battery voltage from ADC
+// Returns battery voltage in volts
+// Following official Seeed XIAO ESP32C6 wiki example
+float readBatteryVoltage() {
+    // Read ADC value in millivolts (average of 16 samples as per Seeed wiki)
+    uint32_t Vbatt = 0;
+    const int numSamples = 16;
+
+    for (int i = 0; i < numSamples; i++) {
+        Vbatt += analogReadMilliVolts(A0); // Read and accumulate ADC voltage in mV
+    }
+
+    // Adjust for 1:2 voltage divider and convert to volts
+    float Vbattf = 2.0 * Vbatt / numSamples / 1000.0;
+
+    // Detect battery presence
+    // When USB powered but no battery, ADC floats around 3.8-4.0V (giving false 80% reading)
+    if (Vbattf < BATTERY_MIN_VALID_VOLTAGE) {
+        batteryPresent = false;
+        Serial.printf("BATTERY DEBUG: Total ADC mV=%u, Average mV=%u, Battery Voltage=%.3fV - NO BATTERY (too low)\n",
+                      Vbatt, Vbatt / numSamples, Vbattf);
+    } else if (Vbattf >= BATTERY_FLOATING_MIN && Vbattf <= BATTERY_FLOATING_MAX) {
+        // Likely floating ADC reading (USB powered, no battery)
+        batteryPresent = false;
+        Serial.printf("BATTERY DEBUG: Total ADC mV=%u, Average mV=%u, Battery Voltage=%.3fV - NO BATTERY (floating ADC)\n",
+                      Vbatt, Vbatt / numSamples, Vbattf);
+    } else {
+        batteryPresent = true;
+        Serial.printf("BATTERY DEBUG: Total ADC mV=%u, Average mV=%u, Battery Voltage=%.3fV - Battery present\n",
+                      Vbatt, Vbatt / numSamples, Vbattf);
+    }
+
+    return Vbattf;
+}
+
+// Function to calculate battery percentage from voltage
+// LiPo battery: 4.2V (100%) to 3.0V (0%)
+uint8_t calculateBatteryPercentage(float voltage) {
+    const float BATTERY_MAX_VOLTAGE = 4.2;  // Fully charged LiPo
+    const float BATTERY_MIN_VOLTAGE = 3.0;  // Discharged LiPo (safe cutoff)
+
+    uint8_t result;
+    if (voltage >= BATTERY_MAX_VOLTAGE) {
+        result = 100;
+    } else if (voltage <= BATTERY_MIN_VOLTAGE) {
+        result = 0;
+    } else {
+        // Linear interpolation
+        float percentage = ((voltage - BATTERY_MIN_VOLTAGE) / (BATTERY_MAX_VOLTAGE - BATTERY_MIN_VOLTAGE)) * 100.0;
+        result = (uint8_t)percentage;
+    }
+
+    Serial.printf("BATTERY DEBUG: Voltage=%.3fV -> Percentage=%d%% (range: %.1fV-%.1fV)\n",
+                  voltage, result, BATTERY_MIN_VOLTAGE, BATTERY_MAX_VOLTAGE);
+
+    return result;
 }
 
 // BLE objects
@@ -337,6 +457,43 @@ void sendQuaternionReport() {
         }
         
         // LED is now controlled by updateLEDStatus() in the main loop
+    }
+}
+
+// Function to update battery level (called periodically)
+void updateBatteryLevel() {
+    unsigned long currentTime = millis();
+
+    if (currentTime - lastBatteryRead >= BATTERY_READ_INTERVAL) {
+        lastBatteryRead = currentTime;
+
+        // Read battery voltage
+        batteryVoltage = readBatteryVoltage();
+
+        // Only calculate percentage if battery is present
+        if (batteryPresent) {
+            batteryPercentage = calculateBatteryPercentage(batteryVoltage);
+            Serial.printf("BATTERY: Voltage: %.2fV, Percentage: %d%%\n", batteryVoltage, batteryPercentage);
+        } else {
+            // No battery detected (USB powered only or disconnected)
+            batteryPercentage = 0;
+            Serial.printf("BATTERY: NO BATTERY DETECTED (USB powered only or disconnected)\n");
+        }
+
+        // Update device info characteristic with new battery level
+        if (deviceInfoChar != nullptr) {
+            uint8_t deviceMac[6];
+            WiFi.macAddress(deviceMac);
+
+            uint8_t deviceInfo[14] = {
+                0x01, 0x00,  // Device ID
+                0x01, 0x02,  // Firmware version 1.2
+                batteryPercentage,  // Updated battery level (0 if no battery)
+                (uint8_t)deviceConfig.getRole(),  // Device role
+                deviceMac[0], deviceMac[1], deviceMac[2], deviceMac[3], deviceMac[4], deviceMac[5]  // MAC address
+            };
+            deviceInfoChar->setValue(deviceInfo, sizeof(deviceInfo));
+        }
     }
 }
 
@@ -520,14 +677,35 @@ void sendESPNowQuaternionData() {
 }
 
 void setup() {
+    // Setup LED pins
+    pinMode(LED_PIN, OUTPUT);
+    pinMode(STATUS_LED_PIN, OUTPUT);
+
+    // LED TEST CODE - Commented out but kept for hardware debugging
+    // Uncomment below to test LED functionality with different resistor values
+    /*
+    // Rapid blinking test - should be visible even without serial
+    for (int i = 0; i < 5; i++) {
+        digitalWrite(LED_PIN, HIGH);
+        digitalWrite(STATUS_LED_PIN, HIGH);
+        delay(200);
+        digitalWrite(LED_PIN, LOW);
+        digitalWrite(STATUS_LED_PIN, LOW);
+        delay(200);
+    }
+    */
+
     Serial.begin(115200);
-    delay(1000);
-    
+    delay(2000); // Longer delay for serial to initialize
+
     Serial.println("\n\n----- Eidon Tracker Starting -----");
-    
+    Serial.flush();
+    // Serial.printf("LED: Onboard LED pin = %d, Status LED pin = %d\n", LED_PIN, STATUS_LED_PIN);
+    // Serial.flush();
+
     // Record startup time for advertising timeout
     startupTime = millis();
-    
+
     // Initialize device configuration first
     if (!deviceConfig.begin()) {
         Serial.println("Failed to initialize device configuration!");
@@ -538,13 +716,55 @@ void setup() {
             delay(100);
         }
     }
-    
+
     // Initialize WiFi for ESP-NOW support and MAC address retrieval
     WiFi.mode(WIFI_MODE_STA);
     WiFi.begin(); // Start WiFi (no need to connect to network for ESP-NOW)
-    
-    // Setup LED pin
-    pinMode(LED_PIN, OUTPUT);
+
+    // LED TEST CODE - Commented out but kept for hardware debugging
+    /*
+    // Longer LED test with serial logging
+    Serial.println("LED: Extended test - both LEDs should blink 3 times");
+    Serial.flush();
+    for (int i = 0; i < 3; i++) {
+        digitalWrite(LED_PIN, HIGH);
+        digitalWrite(STATUS_LED_PIN, HIGH);
+        Serial.printf("LED: ON - GPIO15=%d, GPIO1=%d\n", digitalRead(LED_PIN), digitalRead(STATUS_LED_PIN));
+        Serial.flush();
+        delay(500);
+        digitalWrite(LED_PIN, LOW);
+        digitalWrite(STATUS_LED_PIN, LOW);
+        Serial.printf("LED: OFF - GPIO15=%d, GPIO1=%d\n", digitalRead(LED_PIN), digitalRead(STATUS_LED_PIN));
+        Serial.flush();
+        delay(500);
+    }
+
+    // Test GPIO1 specifically with more aggressive toggling
+    Serial.println("LED: Testing GPIO1 specifically (watch external LED)");
+    Serial.flush();
+    for (int i = 0; i < 10; i++) {
+        digitalWrite(STATUS_LED_PIN, HIGH);
+        Serial.printf("GPIO1 set HIGH, read=%d\n", digitalRead(STATUS_LED_PIN));
+        Serial.flush();
+        delay(300);
+        digitalWrite(STATUS_LED_PIN, LOW);
+        Serial.printf("GPIO1 set LOW, read=%d\n", digitalRead(STATUS_LED_PIN));
+        Serial.flush();
+        delay(300);
+    }
+
+    Serial.println("LED: Startup test complete");
+    Serial.flush();
+    */
+
+    // Setup battery ADC pin (following Seeed wiki)
+    pinMode(A0, INPUT); // Configure A0 as ADC input
+
+    // Initial battery reading
+    Serial.println("BATTERY: Taking initial reading...");
+    batteryVoltage = readBatteryVoltage();
+    batteryPercentage = calculateBatteryPercentage(batteryVoltage);
+    Serial.printf("BATTERY: Initial reading - Voltage: %.2fV, Percentage: %d%%\n", batteryVoltage, batteryPercentage);
 
     // Initialize IMU
     if (!imu.begin()) {
@@ -606,7 +826,7 @@ void setup() {
     uint8_t deviceInfo[14] = {
         0x01, 0x00,  // Device ID
         0x01, 0x02,  // Firmware version 1.2
-        100,         // Battery level
+        batteryPercentage,  // Battery level (actual reading from ADC)
         (uint8_t)deviceConfig.getRole(),  // Device role
         deviceMac[0], deviceMac[1], deviceMac[2], deviceMac[3], deviceMac[4], deviceMac[5]  // MAC address
     };
@@ -715,10 +935,16 @@ void setup() {
 void loop() {
     // Single millis() call for all timing operations
     unsigned long currentTime = millis();
-    
+
     // Update LED status first - DISABLED for performance
     // updateLEDStatus();
-    
+
+    // Update status LED (second LED) - simple on/off control
+    updateStatusLED();
+
+    // Update battery level (periodic reading every 60 seconds)
+    updateBatteryLevel();
+
     // Simplified connection state management for maximum performance (like reference code)
     bool actuallyConnected = (pServer->getConnectedCount() > 0);
     if (actuallyConnected != deviceConnected) {
