@@ -11,6 +11,7 @@
 #include "freertos/task.h"
 #include "button.h"
 #include "led.h"
+#include "battery.h"
 #include "storage.h"
 #include "config.h"
 #include <string.h>
@@ -233,9 +234,24 @@ void hid_reporting_task(void *pvParameters)
 {
     ESP_LOGI(TAG, "HID reporting task started at %dHz (delay: %dms)", HID_REPORT_FREQ_HZ, HID_REPORT_DELAY_MS);
 
+    // Battery update counter (update battery every ~5 seconds)
+    int battery_update_counter = 0;
+    #define BATTERY_UPDATE_INTERVAL 250  // Update battery every 250 iterations (5 seconds at 50Hz)
+
     // High-speed reporting loop
     while (1) {
         if (s_ble_hid_param.hid_dev && esp_hidd_dev_connected(s_ble_hid_param.hid_dev)) {
+            // Update battery level periodically
+            if (++battery_update_counter >= BATTERY_UPDATE_INTERVAL) {
+                battery_update_counter = 0;
+                battery_state_t bat_state = battery_get_state();
+                esp_err_t ret = esp_hidd_dev_battery_set(s_ble_hid_param.hid_dev, bat_state.percentage);
+                if (ret == ESP_OK) {
+                    ESP_LOGI(TAG, "BLE battery level updated: %d%%", bat_state.percentage);
+                } else {
+                    ESP_LOGW(TAG, "Failed to update BLE battery level: %s", esp_err_to_name(ret));
+                }
+            }
             // Get current button state
             bool current_button = button_is_pressed();
             // Create report with current state
@@ -284,6 +300,8 @@ void hid_reporting_task(void *pvParameters)
         } else {
             ESP_LOGW(TAG, "HID device not connected");
             led_set_state(LED_STATE_PAIRED);
+            // Reset battery counter so it updates immediately on reconnection
+            battery_update_counter = 0;
         }
         // High-speed reporting interval
         vTaskDelay(pdMS_TO_TICKS(HID_REPORT_DELAY_MS));

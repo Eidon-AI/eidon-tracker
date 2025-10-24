@@ -13,6 +13,7 @@
 #include "button.h"
 #include "storage.h"
 #include "imu.h"
+#include "battery.h"
 #include "config.h"
 #include "esp_mac.h"
 #include <stdio.h>
@@ -228,6 +229,16 @@ void ble_hidd_event_callback(void *handler_args, esp_event_base_t base, int32_t 
         ESP_LOGI(TAG, "HID device connected, protocol mode initialized to BOOT (0)");
         // Set LED to paired state (dim)
         led_set_state(LED_STATE_PAIRED);
+
+        // Set initial battery level immediately on connection
+        battery_state_t bat_state = battery_get_state();
+        esp_err_t bat_ret = esp_hidd_dev_battery_set(param->connect.dev, bat_state.percentage);
+        if (bat_ret == ESP_OK) {
+            ESP_LOGI(TAG, "Initial battery level set on connect: %d%%", bat_state.percentage);
+        } else {
+            ESP_LOGW(TAG, "Failed to set initial battery level: %s", esp_err_to_name(bat_ret));
+        }
+
         ble_hid_task_start_up();
         
         // Proactively update GATT attribute if handle is already known

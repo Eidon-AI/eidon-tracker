@@ -8,6 +8,7 @@
 #include "freertos/task.h"
 #include "freertos/event_groups.h"
 
+#include "battery.h"
 #include "button.h"
 #include "ble_hid.h"
 #include "imu.h"
@@ -29,7 +30,14 @@ void app_main(void)
     if (ret != ESP_OK) {
         ESP_LOGW(TAG, "LED initialization failed, continuing without LED control");
     }
-    
+
+    // Initialize battery monitoring
+    ESP_LOGI(TAG, "*** Initializing battery monitoring ***");
+    ret = battery_init();
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "Battery monitoring initialization failed, continuing without battery monitoring");
+    }
+
     // Initialize storage module (includes NVS flash initialization)
     ESP_LOGI(TAG, "*** Initializing storage module ***");
     ret = storage_init();

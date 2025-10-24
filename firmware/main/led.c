@@ -13,10 +13,12 @@
 static const char *TAG = "LED";
 
 // LED configuration
-#define LED_GPIO          15  // Single LED GPIO (D15)
+#define LED_GPIO          15  // Onboard LED GPIO (D15)
+#define STATUS_LED_GPIO   1   // Status LED GPIO (D1/A1)
 #define LEDC_TIMER        LEDC_TIMER_0
 #define LEDC_MODE         LEDC_LOW_SPEED_MODE
 #define LEDC_CHANNEL      LEDC_CHANNEL_0
+#define STATUS_LED_CHANNEL LEDC_CHANNEL_1  // Second channel for status LED
 #define LEDC_DUTY_RES     LEDC_TIMER_8_BIT   // 8-bit resolution (simpler)
 #define LEDC_FREQ         1000               // 1kHz frequency (lower)
 
@@ -54,7 +56,7 @@ esp_err_t led_init(void)
         return ret;
     }
     
-    // Configure single LED channel
+    // Configure onboard LED channel
     ledc_channel_config_t ledc_channel = {
         .speed_mode     = LEDC_MODE,
         .channel        = LEDC_CHANNEL,
@@ -66,11 +68,27 @@ esp_err_t led_init(void)
     };
     ret = ledc_channel_config(&ledc_channel);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to configure LEDC channel: %s", esp_err_to_name(ret));
+        ESP_LOGE(TAG, "Failed to configure onboard LEDC channel: %s", esp_err_to_name(ret));
         return ret;
     }
-    
-    ESP_LOGI(TAG, "Single LED initialized successfully with LEDC PWM on GPIO %d", LED_GPIO);
+
+    // Configure status LED channel (GPIO1)
+    ledc_channel_config_t status_led_channel = {
+        .speed_mode     = LEDC_MODE,
+        .channel        = STATUS_LED_CHANNEL,
+        .timer_sel      = LEDC_TIMER,
+        .intr_type      = LEDC_INTR_DISABLE,
+        .gpio_num       = STATUS_LED_GPIO,
+        .duty          = 0, // Set duty to 0%
+        .hpoint        = 0
+    };
+    ret = ledc_channel_config(&status_led_channel);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to configure status LEDC channel: %s", esp_err_to_name(ret));
+        return ret;
+    }
+
+    ESP_LOGI(TAG, "LEDs initialized successfully with LEDC PWM on GPIO %d and %d", LED_GPIO, STATUS_LED_GPIO);
     
     // Start LED state management task
     TaskHandle_t led_task_handle = NULL;
@@ -84,24 +102,37 @@ esp_err_t led_init(void)
     return ESP_OK;
 }
 
-// Function to set single LED brightness (for state management)
+// Function to set LED brightness for both LEDs (for state management)
 void led_set_brightness(uint32_t brightness)
 {
     // ESP_LOGI(TAG, "Setting LED brightness to %lu", brightness); // Commented out for reduced log noise
-    
-    // Use the single LED channel
+
+    // Set onboard LED
     esp_err_t ret = ledc_set_duty(LEDC_MODE, LEDC_CHANNEL, brightness);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to set LED duty: %s", esp_err_to_name(ret));
+        ESP_LOGE(TAG, "Failed to set onboard LED duty: %s", esp_err_to_name(ret));
         return;
     }
-    
+
     ret = ledc_update_duty(LEDC_MODE, LEDC_CHANNEL);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to update LED duty: %s", esp_err_to_name(ret));
+        ESP_LOGE(TAG, "Failed to update onboard LED duty: %s", esp_err_to_name(ret));
         return;
     }
-    
+
+    // Set status LED (mirrors onboard LED)
+    ret = ledc_set_duty(LEDC_MODE, STATUS_LED_CHANNEL, brightness);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to set status LED duty: %s", esp_err_to_name(ret));
+        return;
+    }
+
+    ret = ledc_update_duty(LEDC_MODE, STATUS_LED_CHANNEL);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to update status LED duty: %s", esp_err_to_name(ret));
+        return;
+    }
+
     // ESP_LOGI(TAG, "LED brightness set successfully to %lu", brightness); // Commented out for reduced log noise
 }
 
