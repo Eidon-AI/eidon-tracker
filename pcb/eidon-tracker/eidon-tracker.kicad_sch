@@ -4610,7 +4610,7 @@
 				)
 			)
 		)
-		(property "Value" "1.8k"
+		(property "Value" "1k"
 			(at 240.03 139.7 90)
 			(effects
 				(font
@@ -4645,7 +4645,7 @@
 				(hide yes)
 			)
 		)
-		(property "Manufacturer Part Number (MPN)" "Yageo RC0805FR-071K8L"
+		(property "Manufacturer Part Number (MPN)" "Yageo RC0805FR-071KL"
 			(at 240.03 137.16 0)
 			(effects
 				(font
@@ -4654,7 +4654,7 @@
 				(hide yes)
 			)
 		)
-		(property "Supplier & Ref" "LCSC C22807"
+		(property "Supplier & Ref" "LCSC C95781; Digi-Key 311-1.00KCRCT-ND"
 			(at 240.03 137.16 0)
 			(effects
 				(font
