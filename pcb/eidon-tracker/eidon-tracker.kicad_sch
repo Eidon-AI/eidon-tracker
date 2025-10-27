@@ -3854,7 +3854,7 @@
 				(hide yes)
 			)
 		)
-		(property "Description" "Very common high-eff blue"
+		(property "Description" "Yellow LED, 0805, common cathode"
 			(at 248.92 137.16 0)
 			(effects
 				(font
@@ -3872,7 +3872,7 @@
 				(hide yes)
 			)
 		)
-		(property "Manufacturer Part Number (MPN)" "Kingbright APT2012QBC/D"
+		(property "Manufacturer Part Number (MPN)" "Kingbright APT2012YC"
 			(at 248.92 137.16 0)
 			(effects
 				(font
@@ -3881,7 +3881,7 @@
 				(hide yes)
 			)
 		)
-		(property "Supplier & Ref" "Digi-Key 754-1137-1-ND"
+		(property "Supplier & Ref" "Digi-Key 754-1121-1-ND"
 			(at 248.92 137.16 0)
 			(effects
 				(font
@@ -4610,7 +4610,7 @@
 				)
 			)
 		)
-		(property "Value" "330 Ω, 1%"
+		(property "Value" "1.8k"
 			(at 240.03 139.7 90)
 			(effects
 				(font
@@ -4645,7 +4645,7 @@
 				(hide yes)
 			)
 		)
-		(property "Manufacturer Part Number (MPN)" "Yageo RC0805FR-07330RL"
+		(property "Manufacturer Part Number (MPN)" "Yageo RC0805FR-071K8L"
 			(at 240.03 137.16 0)
 			(effects
 				(font
@@ -4654,7 +4654,7 @@
 				(hide yes)
 			)
 		)
-		(property "Supplier & Ref" "Digi-Key 311-330CRCT-ND"
+		(property "Supplier & Ref" "LCSC C22807"
 			(at 240.03 137.16 0)
 			(effects
 				(font
