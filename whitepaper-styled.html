@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EIDON TRACKER SYSTEM - Technical Whitepaper</title>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --secondary-color: #1e40af;
+            --text-color: #1f2937;
+            --text-light: #6b7280;
+            --bg-color: #ffffff;
+            --bg-alt: #f9fafb;
+            --border-color: #e5e7eb;
+            --code-bg: #f3f4f6;
+            --heading-color: #111827;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+            line-height: 1.7;
+            color: var(--text-color);
+            background: var(--bg-color);
+            font-size: 16px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        /* Header / Title Page */
+        .title-page {
+            text-align: center;
+            padding: 80px 0 60px;
+            border-bottom: 3px solid var(--primary-color);
+            margin-bottom: 60px;
+        }
+
+        .title-page h1 {
+            font-size: 3em;
+            font-weight: 800;
+            color: var(--heading-color);
+            margin-bottom: 20px;
+            letter-spacing: -0.5px;
+        }
+
+        .title-page .subtitle {
+            font-size: 1.4em;
+            color: var(--text-light);
+            font-weight: 400;
+            margin-bottom: 40px;
+            line-height: 1.5;
+        }
+
+        .title-page .meta {
+            font-size: 0.95em;
+            color: var(--text-light);
+            margin-top: 30px;
+        }
+
+        /* Table of Contents */
+        .toc {
+            background: var(--bg-alt);
+            border-left: 4px solid var(--primary-color);
+            padding: 30px 40px;
+            margin: 40px 0;
+            border-radius: 8px;
+        }
+
+        .toc h2 {
+            font-size: 1.5em;
+            margin-bottom: 20px;
+            color: var(--heading-color);
+        }
+
+        .toc ol {
+            list-style: none;
+            counter-reset: toc-counter;
+        }
+
+        .toc li {
+            counter-increment: toc-counter;
+            margin: 12px 0;
+            padding-left: 30px;
+            position: relative;
+        }
+
+        .toc li::before {
+            content: counter(toc-counter) ".";
+            position: absolute;
+            left: 0;
+            font-weight: 600;
+            color: var(--primary-color);
+        }
+
+        .toc a {
+            color: var(--text-color);
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        .toc a:hover {
+            color: var(--primary-color);
+        }
+
+        /* Headings */
+        h1, h2, h3, h4, h5, h6 {
+            color: var(--heading-color);
+            font-weight: 700;
+            margin-top: 2em;
+            margin-bottom: 0.8em;
+            line-height: 1.3;
+        }
+
+        h1 {
+            font-size: 2.5em;
+            border-bottom: 2px solid var(--border-color);
+            padding-bottom: 0.3em;
+            margin-top: 1.5em;
+        }
+
+        h2 {
+            font-size: 2em;
+            color: var(--secondary-color);
+        }
+
+        h3 {
+            font-size: 1.5em;
+            color: var(--text-color);
+        }
+
+        h4 {
+            font-size: 1.25em;
+        }
+
+        /* Paragraphs */
+        p {
+            margin: 1em 0;
+        }
+
+        /* Lists */
+        ul, ol {
+            margin: 1em 0;
+            padding-left: 2em;
+        }
+
+        li {
+            margin: 0.5em 0;
+        }
+
+        /* Links */
+        a {
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+        /* Code blocks */
+        code {
+            background: var(--code-bg);
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+            font-size: 0.9em;
+            color: #e11d48;
+        }
+
+        pre {
+            background: var(--code-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 20px;
+            overflow-x: auto;
+            margin: 1.5em 0;
+        }
+
+        pre code {
+            background: none;
+            padding: 0;
+            color: var(--text-color);
+            font-size: 0.85em;
+            line-height: 1.6;
+        }
+
+        /* Tables */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 2em 0;
+            font-size: 0.95em;
+        }
+
+        thead {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        th, td {
+            padding: 12px 15px;
+            text-align: left;
+            border: 1px solid var(--border-color);
+        }
+
+        tbody tr:nth-child(even) {
+            background: var(--bg-alt);
+        }
+
+        tbody tr:hover {
+            background: #e0e7ff;
+        }
+
+        /* Blockquotes */
+        blockquote {
+            border-left: 4px solid var(--primary-color);
+            padding: 15px 20px;
+            margin: 1.5em 0;
+            background: var(--bg-alt);
+            font-style: italic;
+            color: var(--text-light);
+        }
+
+        /* Image placeholders */
+        .image-placeholder {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: 2px dashed var(--primary-color);
+            border-radius: 8px;
+            padding: 40px 30px;
+            margin: 2em 0;
+            text-align: center;
+        }
+
+        .image-placeholder strong {
+            display: block;
+            font-size: 1.1em;
+            color: white;
+            margin-bottom: 10px;
+        }
+
+        .image-placeholder em {
+            display: block;
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 0.95em;
+            line-height: 1.6;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        /* Horizontal rules */
+        hr {
+            border: none;
+            border-top: 2px solid var(--border-color);
+            margin: 3em 0;
+        }
+
+        /* Special sections */
+        .section {
+            margin: 3em 0;
+        }
+
+        /* Print styles */
+        @media print {
+            body {
+                font-size: 12pt;
+            }
+
+            .container {
+                max-width: 100%;
+                padding: 0;
+            }
+
+            h1, h2, h3 {
+                page-break-after: avoid;
+            }
+
+            table, pre, blockquote {
+                page-break-inside: avoid;
+            }
+
+            .title-page {
+                page-break-after: always;
+            }
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px 15px;
+            }
+
+            .title-page h1 {
+                font-size: 2em;
+            }
+
+            .title-page .subtitle {
+                font-size: 1.1em;
+            }
+
+            h1 {
+                font-size: 1.8em;
+            }
+
+            h2 {
+                font-size: 1.5em;
+            }
+
+            table {
+                font-size: 0.85em;
+            }
+
+            th, td {
+                padding: 8px 10px;
+            }
+        }
+
+        /* Utility classes */
+        .text-center {
+            text-align: center;
+        }
+
+        .mt-4 {
+            margin-top: 2em;
+        }
+
+        .mb-4 {
+            margin-bottom: 2em;
+        }
+
+        strong {
+            font-weight: 600;
+            color: var(--heading-color);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Title Page -->
+        <div class="title-page">
+            <h1>EIDON TRACKER SYSTEM</h1>
+            <div class="subtitle">A High-Precision Wearable IMU Platform for Embodied AI Training Data Collection</div>
+            <div class="meta">
+                <p><strong>Version 1.0</strong></p>
+                <p><strong>Date: January 2025</strong></p>
+            </div>
+        </div>
+
+        <!-- Table of Contents -->
+        <div class="toc">
+            <h2>Table of Contents</h2>
+            <ol>
+                <li><a href="#executive-summary">Executive Summary</a></li>
+                <li><a href="#system-overview">System Overview</a></li>
+                <li><a href="#hardware-platform">Hardware Platform</a></li>
+                <li><a href="#firmware-software">Firmware & Embedded Software</a></li>
+                <li><a href="#data-pipeline">Data Collection & Processing Pipeline</a></li>
+                <li><a href="#mathematical-framework">Mathematical Framework</a></li>
+                <li><a href="#integration-ecosystem">Integration Ecosystem</a></li>
+                <li><a href="#applications">Applications & Use Cases</a></li>
+                <li><a href="#specifications">Technical Specifications</a></li>
+                <li><a href="#conclusion">Conclusion</a></li>
+            </ol>
+        </div>
+
+        <!-- Content will be inserted here by Pandoc -->
+        <div id="content">
+            <!-- Pandoc will fill this -->
+        </div>
+    </div>
+
+    <script>
+        // Add smooth scrolling for anchor links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }
+            });
+        });
+
+        // Convert image placeholders
+        document.addEventListener('DOMContentLoaded', function() {
+            const content = document.getElementById('content').innerHTML;
+            const replaced = content.replace(
+                /\*\*IMAGE PLACEHOLDER: ([^*]+)\*\*\s*\n\s*\*Description: ([^*]+)\*/g,
+                '<div class="image-placeholder"><strong>IMAGE PLACEHOLDER: $1</strong><em>Description: $2</em></div>'
+            );
+            document.getElementById('content').innerHTML = replaced;
+        });
+    </script>
+</body>
+</html>

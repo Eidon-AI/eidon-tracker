@@ -1,0 +1,3000 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="" xml:lang="">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>WHITEPAPER</title>
+  <style>
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    html {
+      color: #1a1a1a;
+      background-color: #fdfdfd;
+    }
+    body {
+      margin: 0 auto;
+      max-width: 36em;
+      padding-left: 50px;
+      padding-right: 50px;
+      padding-top: 50px;
+      padding-bottom: 50px;
+      hyphens: auto;
+      overflow-wrap: break-word;
+      text-rendering: optimizeLegibility;
+      font-kerning: normal;
+    }
+    @media (max-width: 600px) {
+      body {
+        font-size: 0.9em;
+        padding: 12px;
+      }
+      h1 {
+        font-size: 1.8em;
+      }
+    }
+    @media print {
+      html {
+        background-color: white;
+      }
+      body {
+        background-color: transparent;
+        color: black;
+        font-size: 12pt;
+      }
+      p, h2, h3 {
+        orphans: 3;
+        widows: 3;
+      }
+      h2, h3, h4 {
+        page-break-after: avoid;
+      }
+    }
+    p {
+      margin: 1em 0;
+    }
+    a {
+      color: #1a1a1a;
+    }
+    a:visited {
+      color: #1a1a1a;
+    }
+    img {
+      max-width: 100%;
+    }
+    svg {
+      height: auto;
+      max-width: 100%;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      margin-top: 1.4em;
+    }
+    h5, h6 {
+      font-size: 1em;
+      font-style: italic;
+    }
+    h6 {
+      font-weight: normal;
+    }
+    ol, ul {
+      padding-left: 1.7em;
+      margin-top: 1em;
+    }
+    li > ol, li > ul {
+      margin-top: 0;
+    }
+    blockquote {
+      margin: 1em 0 1em 1.7em;
+      padding-left: 1em;
+      border-left: 2px solid #e6e6e6;
+      color: #606060;
+    }
+    code {
+      font-family: Menlo, Monaco, Consolas, 'Lucida Console', monospace;
+      font-size: 85%;
+      margin: 0;
+      hyphens: manual;
+    }
+    pre {
+      margin: 1em 0;
+      overflow: auto;
+    }
+    pre code {
+      padding: 0;
+      overflow: visible;
+      overflow-wrap: normal;
+    }
+    .sourceCode {
+     background-color: transparent;
+     overflow: visible;
+    }
+    hr {
+      border: none;
+      border-top: 1px solid #1a1a1a;
+      height: 1px;
+      margin: 1em 0;
+    }
+    table {
+      margin: 1em 0;
+      border-collapse: collapse;
+      width: 100%;
+      overflow-x: auto;
+      display: block;
+      font-variant-numeric: lining-nums tabular-nums;
+    }
+    table caption {
+      margin-bottom: 0.75em;
+    }
+    tbody {
+      margin-top: 0.5em;
+      border-top: 1px solid #1a1a1a;
+      border-bottom: 1px solid #1a1a1a;
+    }
+    th {
+      border-top: 1px solid #1a1a1a;
+      padding: 0.25em 0.5em 0.25em 0.5em;
+    }
+    td {
+      padding: 0.125em 0.5em 0.25em 0.5em;
+    }
+    header {
+      margin-bottom: 4em;
+      text-align: center;
+    }
+    #TOC li {
+      list-style: none;
+    }
+    #TOC ul {
+      padding-left: 1.3em;
+    }
+    #TOC > ul {
+      padding-left: 0;
+    }
+    #TOC a:not(:hover) {
+      text-decoration: none;
+    }
+    code{white-space: pre-wrap;}
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+    /* CSS for syntax highlighting */
+    html { -webkit-text-size-adjust: 100%; }
+    pre > code.sourceCode { white-space: pre; position: relative; }
+    pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+    pre > code.sourceCode > span:empty { height: 1.2em; }
+    .sourceCode { overflow: visible; }
+    code.sourceCode > span { color: inherit; text-decoration: inherit; }
+    div.sourceCode { margin: 1em 0; }
+    pre.sourceCode { margin: 0; }
+    @media screen {
+    div.sourceCode { overflow: auto; }
+    }
+    @media print {
+    pre > code.sourceCode { white-space: pre-wrap; }
+    pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+    }
+    pre.numberSource code
+      { counter-reset: source-line 0; }
+    pre.numberSource code > span
+      { position: relative; left: -4em; counter-increment: source-line; }
+    pre.numberSource code > span > a:first-child::before
+      { content: counter(source-line);
+        position: relative; left: -1em; text-align: right; vertical-align: baseline;
+        border: none; display: inline-block;
+        -webkit-touch-callout: none; -webkit-user-select: none;
+        -khtml-user-select: none; -moz-user-select: none;
+        -ms-user-select: none; user-select: none;
+        padding: 0 4px; width: 4em;
+        color: #aaaaaa;
+      }
+    pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa;  padding-left: 4px; }
+    div.sourceCode
+      {   }
+    @media screen {
+    pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+    }
+    code span.al { color: #ff0000; font-weight: bold; } /* Alert */
+    code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+    code span.at { color: #7d9029; } /* Attribute */
+    code span.bn { color: #40a070; } /* BaseN */
+    code span.bu { color: #008000; } /* BuiltIn */
+    code span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+    code span.ch { color: #4070a0; } /* Char */
+    code span.cn { color: #880000; } /* Constant */
+    code span.co { color: #60a0b0; font-style: italic; } /* Comment */
+    code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+    code span.do { color: #ba2121; font-style: italic; } /* Documentation */
+    code span.dt { color: #902000; } /* DataType */
+    code span.dv { color: #40a070; } /* DecVal */
+    code span.er { color: #ff0000; font-weight: bold; } /* Error */
+    code span.ex { } /* Extension */
+    code span.fl { color: #40a070; } /* Float */
+    code span.fu { color: #06287e; } /* Function */
+    code span.im { color: #008000; font-weight: bold; } /* Import */
+    code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+    code span.kw { color: #007020; font-weight: bold; } /* Keyword */
+    code span.op { color: #666666; } /* Operator */
+    code span.ot { color: #007020; } /* Other */
+    code span.pp { color: #bc7a00; } /* Preprocessor */
+    code span.sc { color: #4070a0; } /* SpecialChar */
+    code span.ss { color: #bb6688; } /* SpecialString */
+    code span.st { color: #4070a0; } /* String */
+    code span.va { color: #19177c; } /* Variable */
+    code span.vs { color: #4070a0; } /* VerbatimString */
+    code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+  </style>
+</head>
+<body>
+<nav id="TOC" role="doc-toc">
+<ul>
+<li><a href="#eidon-tracker-system" id="toc-eidon-tracker-system">EIDON
+TRACKER SYSTEM</a>
+<ul>
+<li><a
+href="#a-high-precision-wearable-imu-platform-for-embodied-ai-training-data-collection"
+id="toc-a-high-precision-wearable-imu-platform-for-embodied-ai-training-data-collection">A
+High-Precision Wearable IMU Platform for Embodied AI Training Data
+Collection</a></li>
+<li><a href="#table-of-contents" id="toc-table-of-contents">Table of
+Contents</a></li>
+<li><a href="#executive-summary" id="toc-executive-summary">1. Executive
+Summary</a>
+<ul>
+<li><a href="#the-embodied-ai-data-challenge"
+id="toc-the-embodied-ai-data-challenge">The Embodied AI Data
+Challenge</a></li>
+<li><a href="#the-eidon-solution" id="toc-the-eidon-solution">The Eidon
+Solution</a></li>
+<li><a href="#the-llm-moment-for-humanoid-robotics"
+id="toc-the-llm-moment-for-humanoid-robotics">The “LLM Moment” for
+Humanoid Robotics</a></li>
+</ul></li>
+<li><a href="#system-overview" id="toc-system-overview">2. System
+Overview</a>
+<ul>
+<li><a href="#architecture" id="toc-architecture">Architecture</a></li>
+<li><a href="#data-flow" id="toc-data-flow">Data Flow</a></li>
+<li><a href="#wearing-configuration"
+id="toc-wearing-configuration">Wearing Configuration</a></li>
+<li><a href="#key-system-specifications-summary"
+id="toc-key-system-specifications-summary">Key System Specifications
+(Summary)</a></li>
+</ul></li>
+<li><a href="#hardware-platform" id="toc-hardware-platform">3. Hardware
+Platform</a>
+<ul>
+<li><a href="#custom-pcb-design" id="toc-custom-pcb-design">3.1 Custom
+PCB Design</a></li>
+<li><a href="#mechanical-design" id="toc-mechanical-design">3.2
+Mechanical Design</a></li>
+<li><a href="#bill-of-materials-complete-device"
+id="toc-bill-of-materials-complete-device">3.3 Bill of Materials
+(Complete Device)</a></li>
+</ul></li>
+<li><a href="#firmware-embedded-software"
+id="toc-firmware-embedded-software">4. Firmware &amp; Embedded
+Software</a>
+<ul>
+<li><a href="#development-environment"
+id="toc-development-environment">4.1 Development Environment</a></li>
+<li><a href="#core-firmware-capabilities"
+id="toc-core-firmware-capabilities">4.2 Core Firmware
+Capabilities</a></li>
+<li><a href="#firmware-performance-metrics"
+id="toc-firmware-performance-metrics">4.3 Firmware Performance
+Metrics</a></li>
+<li><a href="#firmware-file-structure"
+id="toc-firmware-file-structure">4.4 Firmware File Structure</a></li>
+</ul></li>
+<li><a href="#data-collection-processing-pipeline"
+id="toc-data-collection-processing-pipeline">5. Data Collection &amp;
+Processing Pipeline</a>
+<ul>
+<li><a href="#mobile-application-hub-1"
+id="toc-mobile-application-hub-1">5.1 Mobile Application Hub</a></li>
+<li><a href="#quaternion-data-format"
+id="toc-quaternion-data-format">5.2 Quaternion Data Format</a></li>
+<li><a href="#eidon-sim-processing-engine"
+id="toc-eidon-sim-processing-engine">5.3 eidon-sim Processing
+Engine</a></li>
+<li><a href="#output-data-products" id="toc-output-data-products">5.4
+Output Data Products</a></li>
+</ul></li>
+<li><a href="#mathematical-framework" id="toc-mathematical-framework">6.
+Mathematical Framework</a>
+<ul>
+<li><a href="#quaternion-fundamentals"
+id="toc-quaternion-fundamentals">6.1 Quaternion Fundamentals</a></li>
+<li><a href="#quaternion-to-rotation-matrix"
+id="toc-quaternion-to-rotation-matrix">6.2 Quaternion to Rotation
+Matrix</a></li>
+<li><a href="#euler-angle-extraction"
+id="toc-euler-angle-extraction">6.3 Euler Angle Extraction</a></li>
+<li><a href="#vector-based-angle-calculations"
+id="toc-vector-based-angle-calculations">6.4 Vector-Based Angle
+Calculations</a></li>
+<li><a href="#forearm-roll-pronationsupination"
+id="toc-forearm-roll-pronationsupination">6.5 Forearm Roll
+(Pronation/Supination)</a></li>
+<li><a href="#relative-quaternion-method-wrist-angles"
+id="toc-relative-quaternion-method-wrist-angles">6.6 Relative Quaternion
+Method (Wrist Angles)</a></li>
+<li><a href="#complete-seven-angle-solver"
+id="toc-complete-seven-angle-solver">6.7 Complete Seven-Angle
+Solver</a></li>
+<li><a href="#forward-kinematics-vector-chaining"
+id="toc-forward-kinematics-vector-chaining">6.8 Forward Kinematics
+(Vector Chaining)</a></li>
+</ul></li>
+<li><a href="#integration-ecosystem" id="toc-integration-ecosystem">7.
+Integration Ecosystem</a>
+<ul>
+<li><a href="#vla-training-pipeline-integration"
+id="toc-vla-training-pipeline-integration">7.1 VLA Training Pipeline
+Integration</a></li>
+<li><a href="#robotic-platform-retargeting"
+id="toc-robotic-platform-retargeting">7.2 Robotic Platform
+Retargeting</a></li>
+<li><a href="#simulation-environment-integration"
+id="toc-simulation-environment-integration">7.3 Simulation Environment
+Integration</a></li>
+<li><a href="#real-time-teleoperation"
+id="toc-real-time-teleoperation">7.4 Real-Time Teleoperation</a></li>
+<li><a href="#data-annotation-labeling"
+id="toc-data-annotation-labeling">7.5 Data Annotation &amp;
+Labeling</a></li>
+<li><a href="#api-specification" id="toc-api-specification">7.6 API
+Specification</a></li>
+</ul></li>
+<li><a href="#applications-use-cases" id="toc-applications-use-cases">8.
+Applications &amp; Use Cases</a>
+<ul>
+<li><a href="#embodied-ai-training-data-collection"
+id="toc-embodied-ai-training-data-collection">8.1 Embodied AI Training
+Data Collection</a></li>
+<li><a href="#teleoperation-for-remote-robotics"
+id="toc-teleoperation-for-remote-robotics">8.2 Teleoperation for Remote
+Robotics</a></li>
+<li><a href="#biomechanics-research" id="toc-biomechanics-research">8.3
+Biomechanics Research</a></li>
+<li><a href="#animation-virtual-production"
+id="toc-animation-virtual-production">8.4 Animation &amp; Virtual
+Production</a></li>
+<li><a href="#physical-therapy-rehabilitation"
+id="toc-physical-therapy-rehabilitation">8.5 Physical Therapy &amp;
+Rehabilitation</a></li>
+</ul></li>
+<li><a href="#technical-specifications"
+id="toc-technical-specifications">9. Technical Specifications</a>
+<ul>
+<li><a href="#hardware-specifications"
+id="toc-hardware-specifications">9.1 Hardware Specifications</a></li>
+<li><a href="#firmware-specifications"
+id="toc-firmware-specifications">9.2 Firmware Specifications</a></li>
+<li><a href="#data-format-specifications"
+id="toc-data-format-specifications">9.3 Data Format
+Specifications</a></li>
+<li><a href="#system-requirements" id="toc-system-requirements">9.4
+System Requirements</a></li>
+<li><a href="#manufacturing-specifications"
+id="toc-manufacturing-specifications">9.5 Manufacturing
+Specifications</a></li>
+</ul></li>
+<li><a href="#conclusion" id="toc-conclusion">10. Conclusion</a>
+<ul>
+<li><a href="#key-innovations" id="toc-key-innovations">Key
+Innovations</a></li>
+<li><a href="#the-path-forward" id="toc-the-path-forward">The Path
+Forward</a></li>
+<li><a href="#closing-statement" id="toc-closing-statement">Closing
+Statement</a></li>
+</ul></li>
+<li><a href="#appendix-a-bill-of-materials-detailed"
+id="toc-appendix-a-bill-of-materials-detailed">Appendix A: Bill of
+Materials (Detailed)</a>
+<ul>
+<li><a href="#per-device-bom" id="toc-per-device-bom">Per-Device
+BOM</a></li>
+<li><a href="#device-system-bom" id="toc-device-system-bom">7-Device
+System BOM</a></li>
+</ul></li>
+<li><a href="#appendix-b-file-locations-reference"
+id="toc-appendix-b-file-locations-reference">Appendix B: File Locations
+Reference</a>
+<ul>
+<li><a href="#eidon-tracker-repository"
+id="toc-eidon-tracker-repository">eidon-tracker Repository</a></li>
+<li><a href="#eidon-sim-repository"
+id="toc-eidon-sim-repository">eidon-sim Repository</a></li>
+</ul></li>
+<li><a href="#appendix-c-uuid-reference"
+id="toc-appendix-c-uuid-reference">Appendix C: UUID Reference</a>
+<ul>
+<li><a href="#ble-service-uuids" id="toc-ble-service-uuids">BLE Service
+UUIDs</a></li>
+</ul></li>
+<li><a href="#appendix-d-glossary" id="toc-appendix-d-glossary">Appendix
+D: Glossary</a></li>
+<li><a href="#appendix-e-contact-licensing"
+id="toc-appendix-e-contact-licensing">Appendix E: Contact &amp;
+Licensing</a></li>
+</ul></li>
+</ul>
+</nav>
+<h1 id="eidon-tracker-system">EIDON TRACKER SYSTEM</h1>
+<h2
+id="a-high-precision-wearable-imu-platform-for-embodied-ai-training-data-collection">A
+High-Precision Wearable IMU Platform for Embodied AI Training Data
+Collection</h2>
+<p><strong>Version 1.0</strong> <strong>Date: January 2025</strong></p>
+<hr />
+<h2 id="table-of-contents">Table of Contents</h2>
+<ol type="1">
+<li><a href="#1-executive-summary">Executive Summary</a></li>
+<li><a href="#2-system-overview">System Overview</a></li>
+<li><a href="#3-hardware-platform">Hardware Platform</a></li>
+<li><a href="#4-firmware--embedded-software">Firmware &amp; Embedded
+Software</a></li>
+<li><a href="#5-data-collection--processing-pipeline">Data Collection
+&amp; Processing Pipeline</a></li>
+<li><a href="#6-mathematical-framework">Mathematical Framework</a></li>
+<li><a href="#7-integration-ecosystem">Integration Ecosystem</a></li>
+<li><a href="#8-applications--use-cases">Applications &amp; Use
+Cases</a></li>
+<li><a href="#9-technical-specifications">Technical
+Specifications</a></li>
+<li><a href="#10-conclusion">Conclusion</a></li>
+</ol>
+<hr />
+<h2 id="executive-summary">1. Executive Summary</h2>
+<h3 id="the-embodied-ai-data-challenge">The Embodied AI Data
+Challenge</h3>
+<p>The field of humanoid robotics stands at a critical inflection point.
+While Large Language Models (LLMs) have revolutionized AI through
+massive-scale training on web-scraped text data, embodied AI systems
+lack equivalent datasets. Current approaches to humanoid robot training
+rely on:</p>
+<ul>
+<li><strong>Laboratory teleoperation</strong>: Expensive, controlled
+environments with fixed capture systems</li>
+<li><strong>Limited mobility</strong>: Robots cannot learn tasks outside
+specialized facilities</li>
+<li><strong>Scale limitations</strong>: Data collection is slow, costly,
+and geographically constrained</li>
+<li><strong>Missing human context</strong>: Training data lacks the
+natural variability of real-world human movement</li>
+</ul>
+<h3 id="the-eidon-solution">The Eidon Solution</h3>
+<p>The <strong>Eidon Tracker System</strong> bridges this data gap by
+enabling <strong>field-deployable, full-body motion capture</strong> for
+creating Vision-Language-Action (VLA) training datasets. Our platform
+allows researchers to collect embodied AI training data anywhere humans
+perform tasks—from kitchens to construction sites to healthcare
+facilities.</p>
+<p><strong>Key Value Propositions:</strong></p>
+<ul>
+<li><strong>Wearable precision tracking</strong>: 7-device system
+captures full upper body kinematics with ±1-2° accuracy</li>
+<li><strong>High-speed data acquisition</strong>: 48Hz IMU sampling with
+real-time quaternion streaming via BLE</li>
+<li><strong>Field-deployable design</strong>: Battery-powered, wireless,
+robust 3D-printed enclosures with integrated mounting</li>
+<li><strong>Synchronized multimodal capture</strong>: IMU orientation
+data timestamped with head-mounted camera video</li>
+<li><strong>Complete vertical integration</strong>: Custom PCB,
+firmware, enclosure, and data processing pipeline</li>
+<li><strong>Open architecture</strong>: Integration-ready for
+third-party VLA training pipelines and robotic platforms</li>
+</ul>
+<h3 id="the-llm-moment-for-humanoid-robotics">The “LLM Moment” for
+Humanoid Robotics</h3>
+<p>Just as LLMs achieved breakthrough performance through massive-scale
+diverse training data, humanoid robots require rich datasets of human
+manipulation tasks paired with visual context. Eidon Tracker makes this
+data economically feasible to collect at scale, enabling:</p>
+<ul>
+<li><strong>Diverse task libraries</strong>: Collect thousands of task
+demonstrations across varied environments</li>
+<li><strong>Natural variability</strong>: Capture how different humans
+approach the same task</li>
+<li><strong>Context-rich training</strong>: Pair skeletal kinematics
+with egocentric video for multimodal learning</li>
+<li><strong>Rapid iteration</strong>: Quickly create bespoke datasets
+for new domains (healthcare, manufacturing, domestic, etc.)</li>
+</ul>
+<p><strong>Target Applications:</strong> - VLA model training for
+humanoid manipulation - Teleoperation interfaces for remote robotics -
+Biomechanics research and ergonomic analysis - Motion capture for
+animation and VR/AR - Physical therapy and rehabilitation monitoring</p>
+<hr />
+<h2 id="system-overview">2. System Overview</h2>
+<h3 id="architecture">Architecture</h3>
+<p>The Eidon ecosystem consists of three integrated subsystems:</p>
+<p><strong>IMAGE PLACEHOLDER: System Architecture Diagram</strong>
+<em>Description: High-level block diagram showing (1) Eidon Tracker
+wearable devices on human body, (2) Mobile app hub receiving BLE data +
+recording video, (3) Data processing pipeline, (4) Output to VLA
+training or robotic control systems</em></p>
+<h4 id="eidon-tracker-hardware-this-repository">2.1 Eidon Tracker
+Hardware (This Repository)</h4>
+<p>Seven wearable IMU devices providing real-time orientation
+tracking:</p>
+<ul>
+<li><strong>3 × Upper extremity pairs</strong>: Left/right hand,
+forearm, upper arm</li>
+<li><strong>1 × Torso tracker</strong>: Chest-mounted reference
+frame</li>
+</ul>
+<p>Each device contains: - Custom 2-layer PCB with ESP32-C6
+microcontroller - BNO085 9-DOF IMU with hardware sensor fusion - LiPo
+battery with voltage monitoring - Status LED indicators -
+Injection-moldable 3D-printed enclosure with integrated mounting -
+Multi-protocol wireless (BLE + ESP-NOW)</p>
+<h4 id="mobile-application-hub">2.2 Mobile Application Hub</h4>
+<p>Smartphone app serving as central data aggregator:</p>
+<ul>
+<li><strong>BLE connectivity</strong>: Receives 48Hz quaternion streams
+from all 7 trackers</li>
+<li><strong>Video capture</strong>: Records timestamped head-mounted POV
+video</li>
+<li><strong>Data synchronization</strong>: Aligns IMU and video
+timestamps</li>
+<li><strong>Storage &amp; export</strong>: Packages datasets for offline
+processing</li>
+</ul>
+<h4 id="data-processing-pipeline-eidon-sim">2.3 Data Processing Pipeline
+(eidon-sim)</h4>
+<p>Real-time and post-processing kinematics engine:</p>
+<ul>
+<li><strong>Quaternion-to-Euler conversion</strong>: Extract anatomical
+joint angles</li>
+<li><strong>Forward kinematics</strong>: Build 3D skeletal
+representation from orientation data</li>
+<li><strong>Inverse kinematics</strong>: Derive joint angles from
+chained vectors</li>
+<li><strong>Filtering &amp; smoothing</strong>: Temporal consistency and
+noise reduction</li>
+<li><strong>3D visualization</strong>: Real-time debugging and
+validation interface</li>
+</ul>
+<h3 id="data-flow">Data Flow</h3>
+<pre><code>┌─────────────────────────────────────────────────────────────────────┐
+│  CAPTURE PHASE (In-Field)                                           │
+├─────────────────────────────────────────────────────────────────────┤
+│  Human performs task wearing 7 Eidon Trackers + head-mounted phone │
+│                                                                      │
+│  IMU (48Hz) ──┬──► BLE ──┬──► Mobile App ──► Raw Dataset           │
+│               │          │                                          │
+│               └─ Quat ──┘                                          │
+│                                                                      │
+│  Phone Camera ───────────► Timestamped Video ──► Synchronized      │
+└─────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────┐
+│  PROCESSING PHASE (Post-Collection)                                 │
+├─────────────────────────────────────────────────────────────────────┤
+│  Raw Dataset ──► eidon-sim ──┬──► 7-DOF Joint Angles               │
+│                               │                                      │
+│                               ├──► 3D Skeletal Trajectory           │
+│                               │                                      │
+│                               └──► Aligned Video Frames             │
+└─────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────┐
+│  TRAINING PHASE (VLA Pipeline)                                      │
+├─────────────────────────────────────────────────────────────────────┤
+│  Processed Dataset ──► VLA Training ──► Humanoid Control Policy    │
+└─────────────────────────────────────────────────────────────────────┘</code></pre>
+<h3 id="wearing-configuration">Wearing Configuration</h3>
+<p><strong>IMAGE PLACEHOLDER: Body Tracking Layout</strong>
+<em>Description: Front and side view silhouette of human showing
+placement of 7 trackers:</em> - <em>Chest: Center of sternum</em> -
+<em>Left/Right Upper Arm: Lateral humerus (upper arm)</em> -
+<em>Left/Right Forearm: Posterior radius (back of forearm)</em> -
+<em>Left/Right Hand: Dorsal metacarpals (back of hand)</em></p>
+<p><strong>IMAGE PLACEHOLDER: Tracker Mounting Details</strong>
+<em>Description: Close-up photos/drawings showing:</em> - <em>Elastic
+strap mounting on arm (side profile)</em> - <em>Hook-and-loop closure
+mechanism</em> - <em>Proper IMU alignment with anatomical axes</em> -
+<em>Chest mount harness configuration</em></p>
+<h3 id="key-system-specifications-summary">Key System Specifications
+(Summary)</h3>
+<table>
+<colgroup>
+<col style="width: 66%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>Specification</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Number of tracking points</strong></td>
+<td>7 (chest, 2× upper arm, 2× forearm, 2× hand)</td>
+</tr>
+<tr>
+<td><strong>IMU sampling rate</strong></td>
+<td>48 Hz</td>
+</tr>
+<tr>
+<td><strong>Orientation accuracy</strong></td>
+<td>±1-2° RMS</td>
+</tr>
+<tr>
+<td><strong>Wireless protocol</strong></td>
+<td>BLE 5.0 (to mobile) + ESP-NOW (device-to-device)</td>
+</tr>
+<tr>
+<td><strong>Battery life</strong></td>
+<td>8-12 hours continuous operation</td>
+</tr>
+<tr>
+<td><strong>Latency</strong></td>
+<td>&lt;50ms end-to-end (IMU → mobile app)</td>
+</tr>
+<tr>
+<td><strong>Form factor</strong></td>
+<td>45×30×15mm per tracker</td>
+</tr>
+<tr>
+<td><strong>Weight</strong></td>
+<td>~25g per tracker with battery</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="hardware-platform">3. Hardware Platform</h2>
+<p>The Eidon Tracker hardware represents a complete custom solution
+optimized for wearable motion capture. Each of the seven devices is
+identical, with role assignment configured via software.</p>
+<h3 id="custom-pcb-design">3.1 Custom PCB Design</h3>
+<p><strong>IMAGE PLACEHOLDER: PCB Layout Renders</strong>
+<em>Description: Top and bottom view of assembled PCB with component
+callouts: (1) ESP32-C6 module, (2) BNO085 IMU, (3) Status LED, (4)
+Battery connector, (5) Voltage divider network, (6) User button</em></p>
+<p><strong>IMAGE PLACEHOLDER: KiCad Schematic (Simplified)</strong>
+<em>Description: Clean schematic diagram showing major functional
+blocks:</em> - <em>Power section (LiPo input, voltage monitoring
+circuit)</em> - <em>Microcontroller section (ESP32-C6 with key pins
+labeled)</em> - <em>IMU section (I2C interface, interrupt pin)</em> -
+<em>Status indicators (LED + current-limiting resistor)</em></p>
+<h4 id="pcb-specifications">PCB Specifications</h4>
+<ul>
+<li><strong>Board dimensions</strong>: 25×20mm</li>
+<li><strong>Layer count</strong>: 2-layer FR4</li>
+<li><strong>Thickness</strong>: 1.6mm</li>
+<li><strong>Copper weight</strong>: 1 oz (35µm)</li>
+<li><strong>Finish</strong>: ENIG (Electroless Nickel Immersion Gold)
+for reliable soldering</li>
+<li><strong>Assembly</strong>: PCBA-ready with pick-and-place files</li>
+</ul>
+<h4 id="key-components">Key Components</h4>
+<table>
+<colgroup>
+<col style="width: 24%" />
+<col style="width: 28%" />
+<col style="width: 22%" />
+<col style="width: 24%" />
+</colgroup>
+<thead>
+<tr>
+<th>Component</th>
+<th>Part Number</th>
+<th>Function</th>
+<th>Key Specs</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Microcontroller</strong></td>
+<td>Seeed XIAO ESP32-C6</td>
+<td>Dual-mode wireless + processing</td>
+<td>RISC-V 160MHz, 512KB SRAM, BLE 5.0, WiFi 6</td>
+</tr>
+<tr>
+<td><strong>IMU</strong></td>
+<td>Bosch BNO085</td>
+<td>9-DOF sensor fusion</td>
+<td>±2000°/s gyro, ±16g accel, hardware quaternion</td>
+</tr>
+<tr>
+<td><strong>LED</strong></td>
+<td>Kingbright APT2012YC</td>
+<td>Status indicator</td>
+<td>Yellow 0805 SMD, 20mcd @ 20mA</td>
+</tr>
+<tr>
+<td><strong>Resistors</strong></td>
+<td>Yageo RC0805</td>
+<td>Voltage divider + LED limiting</td>
+<td>220kΩ (×2), 1kΩ (×1), ±1% tolerance</td>
+</tr>
+<tr>
+<td><strong>Button</strong></td>
+<td>Alps SKRKAEE020</td>
+<td>User input</td>
+<td>Tactile, 50mA rating, 160gf actuation</td>
+</tr>
+</tbody>
+</table>
+<h4 id="power-subsystem">Power Subsystem</h4>
+<p><strong>Battery Monitoring Circuit:</strong> - <strong>Voltage
+divider</strong>: 2× 220kΩ resistors create 2:1 ratio - <strong>ADC
+input</strong>: ESP32-C6 GPIO0 (12-bit resolution) - <strong>Measurement
+range</strong>: 0-8.4V (accommodates 2S LiPo configurations) -
+<strong>Accuracy</strong>: ±50mV across battery discharge curve -
+<strong>Update rate</strong>: 5-second intervals to conserve power</p>
+<p><strong>Battery specification:</strong> - <strong>Chemistry</strong>:
+LiPo (Lithium Polymer) - <strong>Nominal voltage</strong>: 3.7V -
+<strong>Capacity</strong>: 150-300mAh (depending on size constraints) -
+<strong>Protection</strong>: Built-in overcharge/discharge/short circuit
+protection - <strong>Connector</strong>: JST PH 2.0mm</p>
+<h4 id="communication-interfaces">Communication Interfaces</h4>
+<p><strong>I2C Bus (IMU Interface):</strong> - <strong>Speed</strong>:
+400 kHz (Fast Mode) - <strong>Pins</strong>: GPIO19 (SCL), GPIO20 (SDA)
+- <strong>Pull-ups</strong>: Internal ESP32 pull-ups enabled -
+<strong>Address</strong>: 0x4B (configurable via GPIO18)</p>
+<p><strong>Status Outputs:</strong> - <strong>Main LED</strong>: GPIO15
+(connection state) - <strong>Aux LED</strong>: GPIO1/A1 (activity
+indicator) - <strong>Drive current</strong>: ~2mA per LED (optimized for
+visibility + battery life)</p>
+<h3 id="mechanical-design">3.2 Mechanical Design</h3>
+<p><strong>IMAGE PLACEHOLDER: Exploded View Assembly</strong>
+<em>Description: CAD explosion showing all components separated
+vertically:</em> - <em>Top lid with button access hole</em> - <em>Main
+enclosure body with PCB mounting posts</em> - <em>PCB with battery
+underneath</em> - <em>Integrated mounting strap channels</em> -
+<em>Bottom face with logo/ventilation</em></p>
+<p><strong>IMAGE PLACEHOLDER: Cross-Section View</strong>
+<em>Description: Cutaway showing internal component stacking:</em> -
+<em>PCB at top with IMU facing up</em> - <em>Battery in lower
+cavity</em> - <em>Wire routing channels</em> - <em>Snap-fit lid
+retention features</em></p>
+<h4 id="enclosure-specifications">Enclosure Specifications</h4>
+<p><strong>Current Design</strong>: Version 3b (eidon-tracker-v3b)</p>
+<ul>
+<li><strong>Overall dimensions</strong>: 45mm (L) × 30mm (W) × 15mm
+(H)</li>
+<li><strong>Volume</strong>: ~20 cm³</li>
+<li><strong>Material</strong>: PLA or ABS (3D printed),
+injection-mold-ready geometry</li>
+<li><strong>Wall thickness</strong>: 2.0mm (structural sections), 1.5mm
+(flexible clips)</li>
+<li><strong>Mounting</strong>: Integrated strap channels for 20mm
+elastic bands</li>
+<li><strong>Sealing</strong>: Friction-fit lid with overlapping lip
+(IP42 equivalent)</li>
+</ul>
+<p><strong>Design Features:</strong> - <strong>PCB mounting
+posts</strong>: Four 2mm diameter posts with press-fit or screw
+retention - <strong>Battery cavity</strong>: Optimized for 40×20×10mm
+LiPo cells - <strong>LED light pipes</strong>: Translucent channels
+guide status LED to external face - <strong>Button actuator</strong>:
+Sliding plunger transfers force to PCB-mounted switch - <strong>Cable
+routing</strong>: Strain relief channel for charging cable (if
+applicable) - <strong>Labeling surfaces</strong>: Recessed areas for
+role identification stickers</p>
+<h4 id="mounting-system">Mounting System</h4>
+<p><strong>IMAGE PLACEHOLDER: Mounting Bracket Designs</strong>
+<em>Description: Three mounting bracket types shown separately:</em> -
+<em>Arm bracket: Curved profile with elastic strap slots</em> -
+<em>Chest bracket: Flat with multiple strap anchor points</em> -
+<em>Hand bracket: Low-profile design for back-of-hand placement</em></p>
+<p><strong>Mounting brackets</strong> (separate STL files): -
+<code>eidon-tracker-mount-arm.stl</code>: Curved profile fits
+radius/ulna/humerus anatomy -
+<code>eidon-tracker-mount-chest.stl</code>: Flat plate with multiple
+strap routing options - <code>eidon-tracker-mount-chest-B.stl</code>:
+Alternative chest design with offset angle</p>
+<p><strong>Strap specifications:</strong> - <strong>Material</strong>:
+Elastic webbing or neoprene - <strong>Width</strong>: 20mm (standard) or
+25mm (chest) - <strong>Closure</strong>: Hook-and-loop (Velcro) or
+buckle - <strong>Tension</strong>: Adjustable to accommodate varied body
+sizes</p>
+<h4 id="manufacturing-considerations">Manufacturing Considerations</h4>
+<p><strong>3D Printing Parameters:</strong> - <strong>Layer
+height</strong>: 0.2mm (standard quality) - <strong>Infill</strong>: 20%
+gyroid or honeycomb - <strong>Supports</strong>: Required for button
+plunger and undercuts - <strong>Print time</strong>: ~1 hour per
+enclosure body, 20min per lid - <strong>Post-processing</strong>:
+Minimal; light sanding on mating surfaces</p>
+<p><strong>Injection Molding Readiness:</strong> - Draft angles: 2° on
+all vertical walls - No undercuts (except designed-in snap features) -
+Uniform wall thickness for even cooling - Ejector pin locations planned
+in non-cosmetic areas</p>
+<h3 id="bill-of-materials-complete-device">3.3 Bill of Materials
+(Complete Device)</h3>
+<table>
+<colgroup>
+<col style="width: 19%" />
+<col style="width: 11%" />
+<col style="width: 19%" />
+<col style="width: 35%" />
+<col style="width: 13%" />
+</colgroup>
+<thead>
+<tr>
+<th>Category</th>
+<th>Item</th>
+<th>Quantity</th>
+<th>Unit Cost (est.)</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>PCB</strong></td>
+<td>Fabricated bare board</td>
+<td>1</td>
+<td>$2.00</td>
+<td>Min order 5 pcs</td>
+</tr>
+<tr>
+<td><strong>PCBA</strong></td>
+<td>Component assembly</td>
+<td>1</td>
+<td>$5.00</td>
+<td>Automated pick-and-place</td>
+</tr>
+<tr>
+<td><strong>MCU</strong></td>
+<td>Seeed XIAO ESP32-C6</td>
+<td>1</td>
+<td>$5.50</td>
+<td>Includes castellated module</td>
+</tr>
+<tr>
+<td><strong>IMU</strong></td>
+<td>BNO085 breakout</td>
+<td>1</td>
+<td>$12.00</td>
+<td>Pre-calibrated module</td>
+</tr>
+<tr>
+<td><strong>Passives</strong></td>
+<td>Resistors, LED, button</td>
+<td>1 set</td>
+<td>$0.50</td>
+<td>Bulk pricing</td>
+</tr>
+<tr>
+<td><strong>Battery</strong></td>
+<td>200mAh LiPo</td>
+<td>1</td>
+<td>$3.00</td>
+<td>With protection circuit</td>
+</tr>
+<tr>
+<td><strong>Enclosure</strong></td>
+<td>3D-printed body + lid</td>
+<td>1</td>
+<td>$1.50</td>
+<td>Amortized printer cost</td>
+</tr>
+<tr>
+<td><strong>Mounting</strong></td>
+<td>Bracket + strap</td>
+<td>1</td>
+<td>$2.00</td>
+<td>Elastic webbing + 3D print</td>
+</tr>
+<tr>
+<td><strong>Misc</strong></td>
+<td>Screws, wiring</td>
+<td>1 set</td>
+<td>$0.50</td>
+<td>M2 fasteners</td>
+</tr>
+<tr>
+<td><strong>TOTAL</strong></td>
+<td></td>
+<td></td>
+<td><strong>~$32.00</strong></td>
+<td>Per device</td>
+</tr>
+<tr>
+<td><strong>7-device system</strong></td>
+<td></td>
+<td></td>
+<td><strong>~$224.00</strong></td>
+<td>Full upper body tracking</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Cost reduction at scale:</strong> - 100-unit production:
+~$25/device ($175 for 7-device system) - 1000-unit production:
+~$18/device ($126 for 7-device system)</p>
+<hr />
+<h2 id="firmware-embedded-software">4. Firmware &amp; Embedded
+Software</h2>
+<p>The Eidon Tracker firmware is a sophisticated real-time system
+managing sensor fusion, wireless communication, power optimization, and
+multi-device coordination.</p>
+<p><strong>IMAGE PLACEHOLDER: Firmware Architecture Diagram</strong>
+<em>Description: Block diagram showing firmware layers:</em> -
+<em>Bottom: Hardware abstraction (I2C, BLE, ESP-NOW drivers)</em> -
+<em>Middle: Core services (IMU manager, battery monitor, device
+config)</em> - <em>Top: Application logic (role management, data
+streaming, calibration)</em> - <em>Arrows showing data flow between
+blocks</em></p>
+<h3 id="development-environment">4.1 Development Environment</h3>
+<ul>
+<li><strong>Framework</strong>: Arduino (C/C++)</li>
+<li><strong>Build system</strong>: PlatformIO</li>
+<li><strong>Target</strong>: Espressif ESP32-C6 (RISC-V
+architecture)</li>
+<li><strong>Toolchain</strong>: GCC 11.2+ for RISC-V</li>
+<li><strong>Flash size</strong>: 4MB</li>
+<li><strong>OTA updates</strong>: Supported via BLE (future
+feature)</li>
+</ul>
+<p><strong>Key dependencies:</strong> - <code>Adafruit_BNO08x</code>
+v1.2.3+: IMU driver with quaternion output - <code>NimBLE-Arduino</code>
+v2.3.1+: Lightweight BLE stack - <code>ResponsiveAnalogRead</code>
+v1.2.1: Debounced ADC sampling</p>
+<h3 id="core-firmware-capabilities">4.2 Core Firmware Capabilities</h3>
+<h4 id="a.-imu-sensor-integration">A. IMU Sensor Integration</h4>
+<p><strong>Sensor configuration</strong> (from
+<code>firmware/lib/BNO085/BNO085.cpp</code>):</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Initialize I2C communication at 400kHz</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>Wire<span class="op">.</span>setPins<span class="op">(</span>SDA_PIN<span class="op">,</span> SCL_PIN<span class="op">);</span>  <span class="co">// GPIO20, GPIO19</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>Wire<span class="op">.</span>begin<span class="op">();</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>Wire<span class="op">.</span>setClock<span class="op">(</span><span class="dv">400000</span><span class="op">);</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="co">// Configure BNO085 for game rotation vector mode</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>bno08x<span class="op">.</span>enableReport<span class="op">(</span>SH2_GAME_ROTATION_VECTOR<span class="op">,</span> <span class="dv">20833</span><span class="op">);</span>  <span class="co">// 48Hz (20.83ms)</span></span></code></pre></div>
+<p><strong>Data acquisition loop</strong> (48Hz):</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="op">(</span>bno08x<span class="op">.</span>getSensorEvent<span class="op">(&amp;</span>sensorValue<span class="op">))</span> <span class="op">{</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>  <span class="cf">if</span> <span class="op">(</span>sensorValue<span class="op">.</span>sensorId <span class="op">==</span> SH2_GAME_ROTATION_VECTOR<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Extract quaternion components</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>    <span class="dt">float</span> qw <span class="op">=</span> sensorValue<span class="op">.</span>un<span class="op">.</span>gameRotationVector<span class="op">.</span>real<span class="op">;</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>    <span class="dt">float</span> qx <span class="op">=</span> sensorValue<span class="op">.</span>un<span class="op">.</span>gameRotationVector<span class="op">.</span>i<span class="op">;</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>    <span class="dt">float</span> qy <span class="op">=</span> sensorValue<span class="op">.</span>un<span class="op">.</span>gameRotationVector<span class="op">.</span>j<span class="op">;</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>    <span class="dt">float</span> qz <span class="op">=</span> sensorValue<span class="op">.</span>un<span class="op">.</span>gameRotationVector<span class="op">.</span>k<span class="op">;</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Apply 180° Z-axis rotation correction for mounting orientation</span></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>    currentQuaternion<span class="op">.</span>w <span class="op">=</span> qw<span class="op">;</span></span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>    currentQuaternion<span class="op">.</span>x <span class="op">=</span> <span class="op">-</span>qx<span class="op">;</span></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>    currentQuaternion<span class="op">.</span>y <span class="op">=</span> <span class="op">-</span>qy<span class="op">;</span></span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a>    currentQuaternion<span class="op">.</span>z <span class="op">=</span> qz<span class="op">;</span></span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a>  <span class="op">}</span></span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p><strong>Why game rotation vector?</strong> - Fuses gyroscope +
+accelerometer (no magnetometer) - Immune to magnetic interference
+(ferrous materials, electronics) - Lower latency than full sensor fusion
+- Ideal for relative tracking where absolute north is irrelevant</p>
+<p><strong>Calibration mechanism:</strong> - <strong>Trigger</strong>:
+BLE command (0x01) or double-tap gesture detected by IMU -
+<strong>Action</strong>: Send <code>MODE_SLEEP</code> →
+<code>MODE_ON</code> sequence to restart sensor fusion - <strong>LED
+feedback</strong>: 300ms solid indicator during reset -
+<strong>Multi-device</strong>: Hub role can broadcast calibration
+command to children via ESP-NOW</p>
+<h4 id="b.-dual-radio-wireless-architecture">B. Dual-Radio Wireless
+Architecture</h4>
+<p>The firmware implements a unique <strong>BLE + ESP-NOW</strong>
+dual-protocol system for efficient multi-device coordination.</p>
+<p><strong>BLE (Bluetooth Low Energy) - Primary Interface:</strong></p>
+<p>Custom GATT service:
+<code>E1D00001-8B5A-3E5B-9E23-4F9B5C91BBDE</code></p>
+<table>
+<colgroup>
+<col style="width: 42%" />
+<col style="width: 12%" />
+<col style="width: 20%" />
+<col style="width: 26%" />
+</colgroup>
+<thead>
+<tr>
+<th>Characteristic UUID</th>
+<th>Type</th>
+<th>Function</th>
+<th>Data Format</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>E1D00002</code></td>
+<td>Read/Notify</td>
+<td>Quaternion stream</td>
+<td>16 bytes: 4× float32 (w,x,y,z)</td>
+</tr>
+<tr>
+<td><code>E1D00003</code></td>
+<td>Read/Write</td>
+<td>Calibration command</td>
+<td>1 byte: 0x01 = reset</td>
+</tr>
+<tr>
+<td><code>E1D00005</code></td>
+<td>Read</td>
+<td>Device info</td>
+<td>14 bytes: ID, FW ver, battery%, role, MAC</td>
+</tr>
+<tr>
+<td><code>E1D00007</code></td>
+<td>Read/Write</td>
+<td>Role configuration</td>
+<td>7 bytes: role (1) + hub MAC (6)</td>
+</tr>
+<tr>
+<td><code>E1D00008</code></td>
+<td>Read/Notify</td>
+<td>Hand quaternion (hub aggregator)</td>
+<td>16 bytes</td>
+</tr>
+<tr>
+<td><code>E1D00009</code></td>
+<td>Read/Notify</td>
+<td>Forearm quaternion (hub aggregator)</td>
+<td>16 bytes</td>
+</tr>
+</tbody>
+</table>
+<p><strong>BLE notification rate</strong>: 24Hz (42ms intervals) to
+balance throughput and power</p>
+<p><strong>Connection parameters:</strong> - Advertising interval:
+100-200ms (discoverable mode) - Connection interval: 7.5-20ms (low
+latency) - Slave latency: 0 (no skipped events) - Supervision timeout:
+4000ms</p>
+<p><strong>ESP-NOW - Child-to-Hub Communication:</strong></p>
+<p><strong>When used:</strong> - Devices assigned forearm or hand roles
+- Hub device (upper arm) aggregates data from hand + forearm -
+Eliminates need for mobile app to manage 3× BLE connections per arm</p>
+<p><strong>Protocol details:</strong></p>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co">// ESP-NOW packet structure (20 bytes)</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="kw">struct</span> ESPNowQuaternionPacket <span class="op">{</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>  <span class="dt">uint8_t</span> messageType<span class="op">;</span>   <span class="co">// 0x01 = quaternion data, 0x02 = command</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>  <span class="dt">uint8_t</span> senderRole<span class="op">;</span>    <span class="co">// ROLE_LEFT_HAND, ROLE_RIGHT_FOREARM, etc.</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>  <span class="dt">uint8_t</span> reserved<span class="op">[</span><span class="dv">2</span><span class="op">];</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>  <span class="dt">float</span> qw<span class="op">,</span> qx<span class="op">,</span> qy<span class="op">,</span> qz<span class="op">;</span>  <span class="co">// 16 bytes</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a><span class="op">}</span> <span class="ex">__attribute__((packed))</span><span class="op">;</span></span></code></pre></div>
+<p><strong>Transmission rate</strong>: 48Hz (matches IMU sampling)
+<strong>Channel</strong>: WiFi Channel 1 (2412 MHz)
+<strong>Range</strong>: 20-50m line-of-sight <strong>Latency</strong>:
+&lt;5ms typical</p>
+<p><strong>Power optimization:</strong> - Children enter “ESP-NOW only”
+mode after 60s of BLE inactivity - Hub remains BLE-connected to mobile
+app - Reduces overall system power consumption by ~40%</p>
+<h4 id="c.-device-role-system">C. Device Role System</h4>
+<p><strong>Seven role types</strong> (configured via BLE characteristic
+<code>E1D00007</code>):</p>
+<div class="sourceCode" id="cb5"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="kw">enum</span> DeviceRole <span class="op">{</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>  ROLE_LEFT_HAND      <span class="op">=</span> <span class="dv">0</span><span class="op">,</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>  ROLE_RIGHT_HAND     <span class="op">=</span> <span class="dv">1</span><span class="op">,</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>  ROLE_LEFT_FOREARM   <span class="op">=</span> <span class="dv">2</span><span class="op">,</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>  ROLE_RIGHT_FOREARM  <span class="op">=</span> <span class="dv">3</span><span class="op">,</span></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>  ROLE_LEFT_HUB       <span class="op">=</span> <span class="dv">4</span><span class="op">,</span>  <span class="co">// Left upper arm (aggregator)</span></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>  ROLE_RIGHT_HUB      <span class="op">=</span> <span class="dv">5</span><span class="op">,</span>  <span class="co">// Right upper arm (aggregator)</span></span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>  ROLE_CHEST          <span class="op">=</span> <span class="dv">6</span><span class="op">,</span></span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>  ROLE_UNKNOWN        <span class="op">=</span> <span class="dv">255</span></span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a><span class="op">};</span></span></code></pre></div>
+<p><strong>Role assignment workflow:</strong> 1. Devices boot in
+<code>ROLE_UNKNOWN</code> (read from persistent NVS storage) 2. Mobile
+app scans for nearby trackers 3. User assigns roles via app UI (e.g.,
+“This is my left hand”) 4. App writes role + hub MAC address to
+characteristic <code>E1D00007</code> 5. Device saves to NVS, reboots
+with new configuration 6. Future power-ons remember role assignment</p>
+<p><strong>Hub role behavior:</strong> - Advertises BLE service with
+hand/forearm characteristics (<code>E1D00008</code>,
+<code>E1D00009</code>) - Listens for ESP-NOW packets from configured
+children - Aggregates: Hub’s own IMU (upper arm) + hand + forearm
+quaternions - Notifies mobile app with all three data streams at 24Hz -
+Forwards calibration commands to children</p>
+<p><strong>Child role behavior:</strong> - Connects to hub’s ESP-NOW
+address (stored during role assignment) - Sends local IMU quaternions
+via ESP-NOW at 48Hz - Timeouts BLE after 60s to save power - Re-enables
+BLE if ESP-NOW connection lost (failsafe)</p>
+<h4 id="d.-power-management">D. Power Management</h4>
+<p><strong>Battery monitoring</strong>
+(<code>firmware/src/main.cpp</code>):</p>
+<div class="sourceCode" id="cb6"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="pp">#define BAT_PIN </span>GPIO0</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="pp">#define BAT_R1 </span><span class="dv">220000</span><span class="pp">  </span><span class="co">// Upper resistor (Ω)</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a><span class="pp">#define BAT_R2 </span><span class="dv">220000</span><span class="pp">  </span><span class="co">// Lower resistor (Ω)</span></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a><span class="pp">#define BAT_MAX_V </span><span class="fl">4.2</span><span class="pp">  </span><span class="co">// Fully charged LiPo</span></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a><span class="pp">#define BAT_MIN_V </span><span class="fl">3.0</span><span class="pp">  </span><span class="co">// Safe discharge limit</span></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a><span class="dt">float</span> readBatteryVoltage<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>  <span class="dt">int</span> adcValue <span class="op">=</span> analogRead<span class="op">(</span>BAT_PIN<span class="op">);</span>  <span class="co">// 12-bit: 0-4095</span></span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>  <span class="dt">float</span> voltage <span class="op">=</span> <span class="op">(</span>adcValue <span class="op">/</span> <span class="fl">4095.0</span><span class="op">)</span> <span class="op">*</span> <span class="fl">3.3</span> <span class="op">*</span> <span class="fl">2.0</span><span class="op">;</span>  <span class="co">// Voltage divider correction</span></span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>  <span class="cf">return</span> voltage<span class="op">;</span></span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a><span class="dt">uint8_t</span> calculateBatteryPercent<span class="op">(</span><span class="dt">float</span> voltage<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a>  <span class="cf">if</span> <span class="op">(</span>voltage <span class="op">&gt;=</span> BAT_MAX_V<span class="op">)</span> <span class="cf">return</span> <span class="dv">100</span><span class="op">;</span></span>
+<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a>  <span class="cf">if</span> <span class="op">(</span>voltage <span class="op">&lt;=</span> BAT_MIN_V<span class="op">)</span> <span class="cf">return</span> <span class="dv">0</span><span class="op">;</span></span>
+<span id="cb6-16"><a href="#cb6-16" aria-hidden="true" tabindex="-1"></a>  <span class="cf">return</span> <span class="op">(</span><span class="dt">uint8_t</span><span class="op">)((</span>voltage <span class="op">-</span> BAT_MIN_V<span class="op">)</span> <span class="op">/</span> <span class="op">(</span>BAT_MAX_V <span class="op">-</span> BAT_MIN_V<span class="op">)</span> <span class="op">*</span> <span class="dv">100</span><span class="op">);</span></span>
+<span id="cb6-17"><a href="#cb6-17" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p><strong>Update interval</strong>: Every 5 seconds (balances accuracy
+and ADC power consumption)</p>
+<p><strong>Current consumption estimates</strong> (from
+<code>docs/HARDWARE_OVERVIEW.md</code>): - <strong>Active mode</strong>
+(BLE connected + IMU sampling): ~15mA average - <strong>ESP-NOW only
+mode</strong> (BLE off, hub children): ~10mA average - <strong>Deep
+sleep</strong> (future): &lt;10µA</p>
+<p><strong>Battery life calculation</strong> (200mAh cell): - Active
+mode: 200mAh / 15mA = <strong>13.3 hours</strong> - ESP-NOW mode: 200mAh
+/ 10mA = <strong>20 hours</strong> - Mixed usage (40% active, 60%
+ESP-NOW): <strong>~16 hours</strong></p>
+<h4 id="e.-led-status-indicators">E. LED Status Indicators</h4>
+<p><strong>Main LED (GPIO15)</strong> - Connection state: -
+<strong>Blinking (500ms on/off)</strong>: Advertising, not connected -
+<strong>Rapid toggle (100ms)</strong>: Connected to mobile app -
+<strong>Solid 300ms</strong>: IMU calibration in progress -
+<strong>Off</strong>: Deep sleep or error</p>
+<p><strong>Auxiliary LED (GPIO1)</strong> - Secondary indicator: -
+<strong>Blinking</strong>: Advertising - <strong>Solid</strong>:
+Connected</p>
+<h3 id="firmware-performance-metrics">4.3 Firmware Performance
+Metrics</h3>
+<table>
+<colgroup>
+<col style="width: 36%" />
+<col style="width: 31%" />
+<col style="width: 31%" />
+</colgroup>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Value</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>IMU sampling rate</strong></td>
+<td>48 Hz</td>
+<td>Hardware sensor fusion output</td>
+</tr>
+<tr>
+<td><strong>BLE notification rate</strong></td>
+<td>24 Hz</td>
+<td>Sufficient for smooth visualization</td>
+</tr>
+<tr>
+<td><strong>ESP-NOW transmission</strong></td>
+<td>48 Hz</td>
+<td>Child → hub, raw IMU rate</td>
+</tr>
+<tr>
+<td><strong>End-to-end latency</strong></td>
+<td>&lt;50ms</td>
+<td>IMU event → mobile app receipt</td>
+</tr>
+<tr>
+<td><strong>Packet loss</strong></td>
+<td>&lt;0.1%</td>
+<td>BLE in good signal conditions</td>
+</tr>
+<tr>
+<td><strong>CPU utilization</strong></td>
+<td>~40%</td>
+<td>Room for additional features</td>
+</tr>
+<tr>
+<td><strong>RAM usage</strong></td>
+<td>~80KB / 256KB</td>
+<td>31% utilization</td>
+</tr>
+<tr>
+<td><strong>Flash usage</strong></td>
+<td>~452KB / 4MB</td>
+<td>11% utilization</td>
+</tr>
+</tbody>
+</table>
+<h3 id="firmware-file-structure">4.4 Firmware File Structure</h3>
+<pre><code>firmware/
+├── src/
+│   ├── main.cpp                    # Entry point, core loop (1,191 lines)
+│   ├── DeviceConfig.h/cpp          # Persistent NVS storage for role
+│   ├── BLE_Services/
+│   │   ├── BLE_Callbacks.h/cpp    # Connection/disconnection handlers
+│   │   └── BLE_Polling_Service.h/cpp  # Periodic characteristic reads
+│   └── Role_Services/
+│       ├── HubClient_Service.h/cpp    # ESP-NOW receiver (hub role)
+│       ├── RoleConfig_Service.h/cpp   # Role assignment handler
+│       └── Hub_Structures.h           # Shared data structures
+├── lib/
+│   ├── BNO085/                     # IMU driver wrapper
+│   └── ColorManager/               # LED color control utilities
+├── platformio.ini                  # Build configuration
+└── ext_nimble_config.h             # NimBLE stack customization</code></pre>
+<p><strong>Key code locations:</strong> - Quaternion correction:
+<code>firmware/src/main.cpp:428-432</code> - Battery monitoring:
+<code>firmware/src/main.cpp:156-178</code> - Role configuration:
+<code>firmware/src/Role_Services/RoleConfig_Service.cpp</code> - Hub
+aggregation:
+<code>firmware/src/Role_Services/HubClient_Service.cpp</code></p>
+<hr />
+<h2 id="data-collection-processing-pipeline">5. Data Collection &amp;
+Processing Pipeline</h2>
+<p>The Eidon system transforms raw IMU quaternions into actionable
+skeletal kinematics through a sophisticated processing pipeline
+implemented in the <strong>eidon-sim</strong> repository.</p>
+<p><strong>IMAGE PLACEHOLDER: Data Pipeline Flowchart</strong>
+<em>Description: Flowchart showing:</em> 1. <em>Raw quaternions (7
+devices, 48Hz) → Mobile app aggregation</em> 2. <em>Timestamped video
+frames (30-60fps) → Mobile app storage</em> 3. <em>Synchronized dataset
+→ eidon-sim processing</em> 4. <em>Output: 7-DOF joint angles, 3D
+skeletal trajectory, aligned video</em></p>
+<h3 id="mobile-application-hub-1">5.1 Mobile Application Hub</h3>
+<p><strong>Platform</strong>: iOS/Android (Flutter framework)</p>
+<p><strong>Core functions:</strong> 1. <strong>Multi-device BLE
+management</strong> - Scans for Eidon Tracker devices - Connects to 3-5
+devices simultaneously (chest + left/right hubs + optional extras) -
+Subscribes to quaternion notification characteristics - Handles
+reconnection logic for dropped connections</p>
+<ol start="2" type="1">
+<li><strong>Data aggregation</strong>
+<ul>
+<li>Receives quaternion streams from 7 total IMUs (via direct connection
+or hub aggregation)</li>
+<li>Timestamps each quaternion packet with system monotonic clock</li>
+<li>Buffers data in memory (circular buffer, 10-second capacity)</li>
+</ul></li>
+<li><strong>Video capture</strong>
+<ul>
+<li>Records egocentric video at 30-60fps (device-dependent)</li>
+<li>Embeds timestamps in video metadata track</li>
+<li>Optional: Audio recording for task annotation</li>
+</ul></li>
+<li><strong>Synchronization</strong>
+<ul>
+<li>Aligns IMU timestamps with video frame timestamps</li>
+<li>Accounts for BLE latency variability (~5-50ms jitter)</li>
+<li>Uses device clock synchronization protocol</li>
+</ul></li>
+<li><strong>Dataset export</strong>
+<ul>
+<li>Packages IMU data (binary or JSON), video file, metadata into single
+archive</li>
+<li>Optional cloud upload (future feature)</li>
+</ul></li>
+</ol>
+<p><strong>IMAGE PLACEHOLDER: Mobile App Screenshot</strong>
+<em>Description: Mockup showing:</em> - <em>Connection status for 7
+devices (green checkmarks)</em> - <em>Battery levels for each
+tracker</em> - <em>Live 3D skeleton preview (simplified)</em> -
+<em>Record/Stop buttons</em> - <em>Session timer and dataset
+size</em></p>
+<h3 id="quaternion-data-format">5.2 Quaternion Data Format</h3>
+<p><strong>Raw quaternion packet</strong> (from BLE characteristic):</p>
+<pre><code>Byte offset | Field      | Type      | Description
+------------|------------|-----------|----------------------------
+0-3         | qw         | float32   | Quaternion scalar (real) component
+4-7         | qx         | float32   | Quaternion i (x) vector component
+8-11        | qy         | float32   | Quaternion j (y) vector component
+12-15       | qz         | float32   | Quaternion k (z) vector component</code></pre>
+<p><strong>Quaternion properties:</strong> - Normalized: w² + x² + y² +
+z² = 1.0 (enforced by BNO085 firmware) - Right-handed coordinate system
+- Mounting correction pre-applied (180° Z-rotation) - Represents
+rotation from sensor local frame → global reference frame</p>
+<p><strong>Device info packet</strong> (characteristic
+<code>E1D00005</code>):</p>
+<pre><code>Byte offset | Field         | Type    | Description
+------------|---------------|---------|----------------------------
+0           | device_id     | uint8   | Unique ID (0-255)
+1           | fw_major      | uint8   | Firmware version major (currently 1)
+2           | fw_minor      | uint8   | Firmware version minor (currently 2)
+3           | battery_pct   | uint8   | Battery percentage (0-100)
+4           | device_role   | uint8   | DeviceRole enum value
+5-10        | mac_address   | uint8×6 | Bluetooth MAC address</code></pre>
+<h3 id="eidon-sim-processing-engine">5.3 eidon-sim Processing
+Engine</h3>
+<p><strong>Repository</strong>: <code>~/eidon/eidon-sim</code>
+<strong>Framework</strong>: TypeScript + Three.js
+<strong>Execution</strong>: Web application (browser-based) or Node.js
+CLI</p>
+<p><strong>IMAGE PLACEHOLDER: eidon-sim Screenshot</strong>
+<em>Description: Screenshot showing:</em> - <em>3D viewport with
+skeletal avatar performing task</em> - <em>Left sidebar: Device
+connection status</em> - <em>Right sidebar: Real-time joint angle
+readouts (7-DOF per arm)</em> - <em>Bottom: Timeline scrubber with video
+playback</em></p>
+<h4 id="core-processing-modules">Core Processing Modules</h4>
+<p><strong>A. Quaternion Decoder</strong>
+(<code>src/core/reportParsers.ts</code>)</p>
+<p>Converts raw binary quaternion data to usable format:</p>
+<div class="sourceCode" id="cb10"><pre
+class="sourceCode typescript"><code class="sourceCode typescript"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> <span class="fu">decodeQuaternion</span>(buffer<span class="op">:</span> <span class="bu">ArrayBuffer</span><span class="op">,</span> offset<span class="op">:</span> <span class="dt">number</span>)<span class="op">:</span> quat {</span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>  <span class="kw">const</span> dv <span class="op">=</span> <span class="kw">new</span> <span class="bu">DataView</span>(buffer)<span class="op">;</span></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>  <span class="kw">const</span> qw <span class="op">=</span> dv<span class="op">.</span><span class="fu">getFloat32</span>(offset <span class="op">+</span> <span class="dv">0</span><span class="op">,</span> <span class="kw">true</span>)<span class="op">;</span>  <span class="co">// Little-endian</span></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>  <span class="kw">const</span> qx <span class="op">=</span> dv<span class="op">.</span><span class="fu">getFloat32</span>(offset <span class="op">+</span> <span class="dv">4</span><span class="op">,</span> <span class="kw">true</span>)<span class="op">;</span></span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>  <span class="kw">const</span> qy <span class="op">=</span> dv<span class="op">.</span><span class="fu">getFloat32</span>(offset <span class="op">+</span> <span class="dv">8</span><span class="op">,</span> <span class="kw">true</span>)<span class="op">;</span></span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>  <span class="kw">const</span> qz <span class="op">=</span> dv<span class="op">.</span><span class="fu">getFloat32</span>(offset <span class="op">+</span> <span class="dv">12</span><span class="op">,</span> <span class="kw">true</span>)<span class="op">;</span></span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a>  <span class="cf">return</span> [qx<span class="op">,</span> qy<span class="op">,</span> qz<span class="op">,</span> qw]<span class="op">;</span>  <span class="co">// gl-matrix format: [x, y, z, w]</span></span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<p><strong>Coordinate frame transformation</strong> (sensor → Three.js
+world):</p>
+<div class="sourceCode" id="cb11"><pre
+class="sourceCode typescript"><code class="sourceCode typescript"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Sensor coordinate frame: X=forward, Y=right, Z=up</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a><span class="co">// Three.js world frame: X=right, Y=up, Z=backward</span></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> upZ <span class="op">=</span> vec3<span class="op">.</span><span class="fu">transformQuat</span>(vec3<span class="op">.</span><span class="fu">create</span>()<span class="op">,</span> [<span class="dv">0</span><span class="op">,</span> <span class="dv">0</span><span class="op">,</span> <span class="dv">1</span>]<span class="op">,</span> quaternion)<span class="op">;</span></span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> up <span class="op">=</span> [upZ[<span class="dv">0</span>]<span class="op">,</span> upZ[<span class="dv">2</span>]<span class="op">,</span> <span class="op">-</span>upZ[<span class="dv">1</span>]]<span class="op">;</span>  <span class="co">// Swap Y↔Z, negate new Y</span></span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> fwdZ <span class="op">=</span> vec3<span class="op">.</span><span class="fu">transformQuat</span>(vec3<span class="op">.</span><span class="fu">create</span>()<span class="op">,</span> [<span class="dv">0</span><span class="op">,</span> <span class="dv">1</span><span class="op">,</span> <span class="dv">0</span>]<span class="op">,</span> quaternion)<span class="op">;</span></span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> fwd <span class="op">=</span> [fwdZ[<span class="dv">0</span>]<span class="op">,</span> fwdZ[<span class="dv">2</span>]<span class="op">,</span> <span class="op">-</span>fwdZ[<span class="dv">1</span>]]<span class="op">;</span></span></code></pre></div>
+<p><strong>B. Seven-Degree-of-Freedom Arm Solver</strong>
+(<code>src/core/ArmSolver.ts</code>)</p>
+<p>The ArmSolver class is the heart of the kinematics pipeline. It takes
+3 quaternions (upper arm, forearm, hand) and outputs 7 anatomical joint
+angles:</p>
+<p><strong>Shoulder joint (3-DOF):</strong> 1. <strong>Yaw</strong>
+(internal/external rotation) 2. <strong>Pitch</strong>
+(flexion/extension) 3. <strong>Roll</strong> (abduction/adduction)</p>
+<p><strong>Elbow joint (1-DOF):</strong> 4. <strong>Flex</strong>
+(flexion/extension angle)</p>
+<p><strong>Forearm (1-DOF):</strong> 5. <strong>Roll</strong>
+(pronation/supination)</p>
+<p><strong>Wrist joint (2-DOF):</strong> 6. <strong>Yaw</strong>
+(ulnar/radial deviation) 7. <strong>Pitch</strong>
+(flexion/extension)</p>
+<p><strong>Algorithmic approach</strong> (detailed in Section 6:
+Mathematical Framework)</p>
+<p><strong>C. 3D Skeletal Visualization</strong>
+(<code>src/ui/scene/</code>)</p>
+<p><strong>Two rendering modes:</strong></p>
+<ol type="1">
+<li><strong>Vector Arm Mode</strong> (<code>vectorArm.ts</code>):
+<ul>
+<li>Represents limbs as directional arrows</li>
+<li>Useful for debugging quaternion orientation</li>
+<li>Shows forward/up vectors for each segment</li>
+</ul></li>
+<li><strong>Skeletal Rig Mode</strong> (<code>skeletalRig.ts</code>):
+<ul>
+<li>Applies quaternions/angles to GLTF humanoid model</li>
+<li>Realistic avatar for validation</li>
+<li>Exports animation data (future: GLTF/FBX export)</li>
+</ul></li>
+</ol>
+<p><strong>IMAGE PLACEHOLDER: Side-by-Side Rendering Modes</strong>
+<em>Description: Split image showing:</em> - <em>Left: Vector arm mode
+(colored arrows showing humerus, radius, hand segments)</em> -
+<em>Right: Skeletal rig mode (textured humanoid model with same
+pose)</em></p>
+<p><strong>D. Temporal Filtering</strong></p>
+<p>To reduce high-frequency noise from IMU drift and vibration:</p>
+<p><strong>Angle unwrapping</strong> (prevents discontinuities at
+±180°):</p>
+<div class="sourceCode" id="cb12"><pre
+class="sourceCode typescript"><code class="sourceCode typescript"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> <span class="fu">unwrapAngle</span>(current<span class="op">:</span> <span class="dt">number</span><span class="op">,</span> previous<span class="op">:</span> <span class="dt">number</span>)<span class="op">:</span> <span class="dt">number</span> {</span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>  <span class="kw">const</span> diff <span class="op">=</span> current <span class="op">-</span> previous<span class="op">;</span></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>  <span class="cf">if</span> (diff <span class="op">&gt;</span> <span class="dv">180</span>) <span class="cf">return</span> current <span class="op">-</span> <span class="dv">360</span><span class="op">;</span></span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>  <span class="cf">if</span> (diff <span class="op">&lt;</span> <span class="op">-</span><span class="dv">180</span>) <span class="cf">return</span> current <span class="op">+</span> <span class="dv">360</span><span class="op">;</span></span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>  <span class="cf">return</span> current<span class="op">;</span></span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<p><strong>Exponential moving average</strong> (EMA smoothing):</p>
+<div class="sourceCode" id="cb13"><pre
+class="sourceCode typescript"><code class="sourceCode typescript"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> ALPHA <span class="op">=</span> <span class="fl">0.15</span><span class="op">;</span>  <span class="co">// Smoothing factor (0=none, 1=no smoothing)</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> filtered <span class="op">=</span> previous <span class="op">+</span> ALPHA <span class="op">*</span> (current <span class="op">-</span> previous)<span class="op">;</span></span></code></pre></div>
+<p><strong>Configurable parameters:</strong> - <code>ALPHA</code>:
+Adjustable via UI slider (0.05 for slow motion, 0.3 for fast motion) -
+Can disable smoothing for raw data export</p>
+<h3 id="output-data-products">5.4 Output Data Products</h3>
+<p>The eidon-sim pipeline generates multiple output formats:</p>
+<p><strong>1. Joint Angle Time Series (CSV)</strong></p>
+<pre class="csv"><code>timestamp_ms, shoulder_yaw_L, shoulder_pitch_L, shoulder_roll_L, elbow_flex_L, forearm_roll_L, wrist_yaw_L, wrist_pitch_L, [right arm angles...], chest_yaw, chest_pitch, chest_roll
+0, 12.4, -23.1, 5.7, 87.3, -15.2, 8.9, -12.1, ...
+21, 12.6, -23.5, 5.9, 88.1, -14.8, 9.2, -11.9, ...
+...</code></pre>
+<p><strong>2. 3D Skeletal Positions (JSON)</strong></p>
+<div class="sourceCode" id="cb15"><pre
+class="sourceCode json"><code class="sourceCode json"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span></span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;timestamp_ms&quot;</span><span class="fu">:</span> <span class="dv">0</span><span class="fu">,</span></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;left_arm&quot;</span><span class="fu">:</span> <span class="fu">{</span></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>    <span class="dt">&quot;shoulder&quot;</span><span class="fu">:</span> <span class="ot">[</span><span class="fl">0.3</span><span class="ot">,</span> <span class="fl">1.4</span><span class="ot">,</span> <span class="fl">0.0</span><span class="ot">]</span><span class="fu">,</span></span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>    <span class="dt">&quot;elbow&quot;</span><span class="fu">:</span> <span class="ot">[</span><span class="fl">0.45</span><span class="ot">,</span> <span class="fl">1.15</span><span class="ot">,</span> <span class="fl">0.12</span><span class="ot">]</span><span class="fu">,</span></span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>    <span class="dt">&quot;wrist&quot;</span><span class="fu">:</span> <span class="ot">[</span><span class="fl">0.52</span><span class="ot">,</span> <span class="fl">0.91</span><span class="ot">,</span> <span class="fl">0.08</span><span class="ot">]</span><span class="fu">,</span></span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a>    <span class="dt">&quot;fingertip&quot;</span><span class="fu">:</span> <span class="ot">[</span><span class="fl">0.58</span><span class="ot">,</span> <span class="fl">0.82</span><span class="ot">,</span> <span class="fl">0.05</span><span class="ot">]</span></span>
+<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">},</span></span>
+<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;right_arm&quot;</span><span class="fu">:</span> <span class="fu">{</span> <span class="er">...</span> <span class="fu">},</span></span>
+<span id="cb15-10"><a href="#cb15-10" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;chest&quot;</span><span class="fu">:</span> <span class="ot">[</span><span class="fl">0.0</span><span class="ot">,</span> <span class="fl">1.3</span><span class="ot">,</span> <span class="fl">0.0</span><span class="ot">]</span></span>
+<span id="cb15-11"><a href="#cb15-11" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div>
+<p><strong>3. Video with Overlay (MP4)</strong></p>
+<p>Synchronized video with: - On-screen joint angle readouts - Skeleton
+overlay (optional) - Timestamp and session metadata</p>
+<p><strong>4. VLA Training Format</strong></p>
+<p><strong>Proposed structure</strong> (compatible with common VLA
+frameworks):</p>
+<div class="sourceCode" id="cb16"><pre
+class="sourceCode json"><code class="sourceCode json"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span></span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;task&quot;</span><span class="fu">:</span> <span class="st">&quot;pick_and_place_cup&quot;</span><span class="fu">,</span></span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;episode_id&quot;</span><span class="fu">:</span> <span class="st">&quot;ep_00123&quot;</span><span class="fu">,</span></span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;frames&quot;</span><span class="fu">:</span> <span class="ot">[</span></span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>    <span class="fu">{</span></span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a>      <span class="dt">&quot;timestamp&quot;</span><span class="fu">:</span> <span class="fl">0.000</span><span class="fu">,</span></span>
+<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a>      <span class="dt">&quot;observation&quot;</span><span class="fu">:</span> <span class="fu">{</span></span>
+<span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a>        <span class="dt">&quot;image&quot;</span><span class="fu">:</span> <span class="st">&quot;frame_0000.jpg&quot;</span><span class="fu">,</span></span>
+<span id="cb16-9"><a href="#cb16-9" aria-hidden="true" tabindex="-1"></a>        <span class="dt">&quot;proprio&quot;</span><span class="fu">:</span> <span class="fu">{</span></span>
+<span id="cb16-10"><a href="#cb16-10" aria-hidden="true" tabindex="-1"></a>          <span class="dt">&quot;left_arm_7dof&quot;</span><span class="fu">:</span> <span class="ot">[</span><span class="fl">12.4</span><span class="ot">,</span> <span class="fl">-23.1</span><span class="ot">,</span> <span class="fl">5.7</span><span class="ot">,</span> <span class="fl">87.3</span><span class="ot">,</span> <span class="fl">-15.2</span><span class="ot">,</span> <span class="fl">8.9</span><span class="ot">,</span> <span class="fl">-12.1</span><span class="ot">]</span><span class="fu">,</span></span>
+<span id="cb16-11"><a href="#cb16-11" aria-hidden="true" tabindex="-1"></a>          <span class="dt">&quot;right_arm_7dof&quot;</span><span class="fu">:</span> <span class="ot">[</span><span class="er">...</span><span class="ot">]</span></span>
+<span id="cb16-12"><a href="#cb16-12" aria-hidden="true" tabindex="-1"></a>        <span class="fu">}</span></span>
+<span id="cb16-13"><a href="#cb16-13" aria-hidden="true" tabindex="-1"></a>      <span class="fu">},</span></span>
+<span id="cb16-14"><a href="#cb16-14" aria-hidden="true" tabindex="-1"></a>      <span class="dt">&quot;action&quot;</span><span class="fu">:</span> <span class="fu">{</span></span>
+<span id="cb16-15"><a href="#cb16-15" aria-hidden="true" tabindex="-1"></a>        <span class="dt">&quot;left_arm_delta&quot;</span><span class="fu">:</span> <span class="ot">[</span><span class="fl">0.1</span><span class="ot">,</span> <span class="fl">0.0</span><span class="ot">,</span> <span class="fl">-0.2</span><span class="ot">,</span> <span class="fl">1.5</span><span class="ot">,</span> <span class="fl">0.0</span><span class="ot">,</span> <span class="fl">0.0</span><span class="ot">,</span> <span class="fl">0.0</span><span class="ot">]</span><span class="fu">,</span></span>
+<span id="cb16-16"><a href="#cb16-16" aria-hidden="true" tabindex="-1"></a>        <span class="dt">&quot;right_arm_delta&quot;</span><span class="fu">:</span> <span class="ot">[</span><span class="er">...</span><span class="ot">]</span></span>
+<span id="cb16-17"><a href="#cb16-17" aria-hidden="true" tabindex="-1"></a>      <span class="fu">}</span></span>
+<span id="cb16-18"><a href="#cb16-18" aria-hidden="true" tabindex="-1"></a>    <span class="fu">}</span><span class="ot">,</span></span>
+<span id="cb16-19"><a href="#cb16-19" aria-hidden="true" tabindex="-1"></a>    <span class="er">...</span></span>
+<span id="cb16-20"><a href="#cb16-20" aria-hidden="true" tabindex="-1"></a>  <span class="ot">]</span></span>
+<span id="cb16-21"><a href="#cb16-21" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div>
+<p><strong>Action labeling:</strong> - Manual annotation via UI timeline
+- Future: GPT-4V automatic segmentation from video</p>
+<hr />
+<h2 id="mathematical-framework">6. Mathematical Framework</h2>
+<p>This section details the mathematical transformations that convert
+raw IMU quaternions into anatomically meaningful joint angles.</p>
+<p><strong>IMAGE PLACEHOLDER: Quaternion to Angles Overview</strong>
+<em>Description: Diagram showing transformation pipeline:</em> -
+<em>Device quaternion (4D hypersphere) →</em> - <em>Rotation matrix (3×3
+orthogonal) →</em> - <em>Euler angles (3 scalar rotations) →</em> -
+<em>Joint angles (anatomical degrees of freedom)</em></p>
+<h3 id="quaternion-fundamentals">6.1 Quaternion Fundamentals</h3>
+<p><strong>Definition:</strong></p>
+<p>A quaternion <strong>q</strong> is a 4-dimensional number
+representing 3D rotation:</p>
+<pre><code>q = w + xi + yj + zk</code></pre>
+<p>where <code>i² = j² = k² = ijk = -1</code></p>
+<p><strong>Vector form</strong>: <code>q = [x, y, z, w]</code> (or
+<code>[qx, qy, qz, qw]</code>)</p>
+<p><strong>Properties:</strong> - <strong>Unit quaternion</strong>: ‖q‖
+= √(w² + x² + y² + z²) = 1 - <strong>Identity rotation</strong>: q = [0,
+0, 0, 1] (no rotation) - <strong>Inverse</strong>: q⁻¹ = [−x, −y, −z, w]
+/ ‖q‖² (for unit quaternions: q⁻¹ = q*) - <strong>Composition</strong>:
+Rotate by q₁ then q₂: q_combined = q₂ ⊗ q₁ (note: non-commutative)</p>
+<p><strong>Quaternion multiplication</strong> (Hamilton product):</p>
+<pre><code>q₁ ⊗ q₂ = [
+  w₁w₂ − x₁x₂ − y₁y₂ − z₁z₂,
+  w₁x₂ + x₁w₂ + y₁z₂ − z₁y₂,
+  w₁y₂ − x₁z₂ + y₁w₂ + z₁x₂,
+  w₁z₂ + x₁y₂ − y₁x₂ + z₁w₂
+]</code></pre>
+<p><strong>Rotating a vector</strong> v by quaternion q:</p>
+<pre><code>v&#39; = q ⊗ [0, v] ⊗ q⁻¹</code></pre>
+<p>Implemented efficiently as:</p>
+<div class="sourceCode" id="cb20"><pre
+class="sourceCode typescript"><code class="sourceCode typescript"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a>vec3<span class="op">.</span><span class="fu">transformQuat</span>(out<span class="op">,</span> v<span class="op">,</span> q)</span></code></pre></div>
+<h3 id="quaternion-to-rotation-matrix">6.2 Quaternion to Rotation
+Matrix</h3>
+<p>The quaternion <code>q = [x, y, z, w]</code> converts to a 3×3
+rotation matrix:</p>
+<pre><code>     ⎡ 1−2(y²+z²)   2(xy−wz)     2(xz+wy)   ⎤
+R =  ⎢ 2(xy+wz)     1−2(x²+z²)   2(yz−wx)   ⎥
+     ⎣ 2(xz−wy)     2(yz+wx)     1−2(x²+y²) ⎦</code></pre>
+<p><strong>Code implementation</strong>
+(<code>src/core/mathUtils.ts</code>):</p>
+<div class="sourceCode" id="cb22"><pre
+class="sourceCode typescript"><code class="sourceCode typescript"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="im">export</span> <span class="kw">function</span> <span class="fu">quatToMat3</span>(q<span class="op">:</span> quat)<span class="op">:</span> mat3 {</span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>  <span class="kw">const</span> m <span class="op">=</span> mat3<span class="op">.</span><span class="fu">create</span>()<span class="op">;</span></span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>  mat3<span class="op">.</span><span class="fu">fromQuat</span>(m<span class="op">,</span> q)<span class="op">;</span></span>
+<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a>  <span class="cf">return</span> m<span class="op">;</span></span>
+<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<p><strong>Why convert to matrix?</strong> - Euler angle extraction
+requires matrix elements - Some angle calculations (gimbal-lock
+analysis) easier in matrix form - Compatibility with other graphics
+libraries</p>
+<h3 id="euler-angle-extraction">6.3 Euler Angle Extraction</h3>
+<p>Euler angles represent 3D rotation as three sequential rotations
+about fixed axes. The <strong>order matters</strong> due to
+non-commutativity.</p>
+<p><strong>IMAGE PLACEHOLDER: Euler Angle Convention Diagram</strong>
+<em>Description: 3D coordinate system showing Z-Y-X rotation
+sequence:</em> 1. <em>First rotate α about Z-axis (yaw)</em> 2. <em>Then
+rotate β about new Y-axis (pitch)</em> 3. <em>Finally rotate γ about new
+X-axis (roll)</em> <em>Show intermediate frames after each
+rotation</em></p>
+<h4 id="a.-z-y-x-euler-angles-shoulder">A. Z-Y-X Euler Angles
+(Shoulder)</h4>
+<p>Used for shoulder joint angles (ISB biomechanics convention).</p>
+<p><strong>Mathematical derivation:</strong></p>
+<p>Given rotation matrix R from quaternion, extract angles:</p>
+<pre><code>R = Rz(α) · Ry(β) · Rx(γ)
+
+     ⎡ cos(α)cos(β)   cos(α)sin(β)sin(γ)−sin(α)cos(γ)   cos(α)sin(β)cos(γ)+sin(α)sin(γ) ⎤
+  =  ⎢ sin(α)cos(β)   sin(α)sin(β)sin(γ)+cos(α)cos(γ)   sin(α)sin(β)cos(γ)−cos(α)sin(γ) ⎥
+     ⎣ −sin(β)        cos(β)sin(γ)                       cos(β)cos(γ)                     ⎦</code></pre>
+<p><strong>Solving for Euler angles:</strong></p>
+<pre><code>α (yaw)   = atan2(−R[1][0], R[0][0])
+β (pitch) = asin(R[2][0])
+γ (roll)  = atan2(−R[2][1], R[2][2])</code></pre>
+<p><strong>Code implementation</strong>
+(<code>src/core/mathUtils.ts:9-23</code>):</p>
+<div class="sourceCode" id="cb25"><pre
+class="sourceCode typescript"><code class="sourceCode typescript"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="im">export</span> <span class="kw">function</span> <span class="fu">eulerZYX</span>(q<span class="op">:</span> quat)<span class="op">:</span> [<span class="dt">number</span><span class="op">,</span> <span class="dt">number</span><span class="op">,</span> <span class="dt">number</span>] {</span>
+<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a>  <span class="kw">const</span> m <span class="op">=</span> mat3<span class="op">.</span><span class="fu">fromQuat</span>(mat3<span class="op">.</span><span class="fu">create</span>()<span class="op">,</span> q)<span class="op">;</span></span>
+<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a>  <span class="co">// Extract matrix elements (column-major indexing)</span></span>
+<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a>  <span class="kw">const</span> m00 <span class="op">=</span> m[<span class="dv">0</span>]<span class="op">,</span> m10 <span class="op">=</span> m[<span class="dv">1</span>]<span class="op">,</span> m20 <span class="op">=</span> m[<span class="dv">2</span>]<span class="op">;</span></span>
+<span id="cb25-6"><a href="#cb25-6" aria-hidden="true" tabindex="-1"></a>  <span class="kw">const</span> m21 <span class="op">=</span> m[<span class="dv">5</span>]<span class="op">,</span> m22 <span class="op">=</span> m[<span class="dv">8</span>]<span class="op">;</span></span>
+<span id="cb25-7"><a href="#cb25-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-8"><a href="#cb25-8" aria-hidden="true" tabindex="-1"></a>  <span class="kw">const</span> yaw   <span class="op">=</span> <span class="bu">Math</span><span class="op">.</span><span class="fu">atan2</span>(<span class="op">-</span>m10<span class="op">,</span> m00)<span class="op">;</span>   <span class="co">// Z rotation</span></span>
+<span id="cb25-9"><a href="#cb25-9" aria-hidden="true" tabindex="-1"></a>  <span class="kw">const</span> pitch <span class="op">=</span> <span class="bu">Math</span><span class="op">.</span><span class="fu">asin</span>(m20)<span class="op">;</span>           <span class="co">// Y rotation</span></span>
+<span id="cb25-10"><a href="#cb25-10" aria-hidden="true" tabindex="-1"></a>  <span class="kw">const</span> roll  <span class="op">=</span> <span class="bu">Math</span><span class="op">.</span><span class="fu">atan2</span>(<span class="op">-</span>m21<span class="op">,</span> m22)<span class="op">;</span>   <span class="co">// X rotation</span></span>
+<span id="cb25-11"><a href="#cb25-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-12"><a href="#cb25-12" aria-hidden="true" tabindex="-1"></a>  <span class="cf">return</span> [yaw<span class="op">,</span> pitch<span class="op">,</span> roll]<span class="op">;</span>  <span class="co">// Radians</span></span>
+<span id="cb25-13"><a href="#cb25-13" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<p><strong>Singularity handling:</strong> When pitch ≈ ±90°, yaw and
+roll become coupled (gimbal lock). Solution: - Clamp <code>asin</code>
+input to [-1, 1] to prevent NaN - Accept reduced accuracy near
+singularity (rare in human arm motion)</p>
+<h4 id="b.-x-y-z-euler-angles-wrist">B. X-Y-Z Euler Angles (Wrist)</h4>
+<p>Alternative convention for wrist joint (avoids gimbal lock in
+different configuration).</p>
+<p><strong>Direct quaternion formula</strong> (avoids matrix
+conversion):</p>
+<div class="sourceCode" id="cb26"><pre
+class="sourceCode typescript"><code class="sourceCode typescript"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="im">export</span> <span class="kw">function</span> <span class="fu">eulerXYZ</span>(q<span class="op">:</span> quat)<span class="op">:</span> [<span class="dt">number</span><span class="op">,</span> <span class="dt">number</span><span class="op">,</span> <span class="dt">number</span>] {</span>
+<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a>  <span class="kw">const</span> [x<span class="op">,</span> y<span class="op">,</span> z<span class="op">,</span> w] <span class="op">=</span> q<span class="op">;</span></span>
+<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a>  <span class="kw">const</span> yaw <span class="op">=</span> <span class="bu">Math</span><span class="op">.</span><span class="fu">atan2</span>(<span class="fl">2.0</span> <span class="op">*</span> (w <span class="op">*</span> z <span class="op">+</span> x <span class="op">*</span> y)<span class="op">,</span></span>
+<span id="cb26-5"><a href="#cb26-5" aria-hidden="true" tabindex="-1"></a>                        <span class="fl">1.0</span> <span class="op">-</span> <span class="fl">2.0</span> <span class="op">*</span> (y <span class="op">*</span> y <span class="op">+</span> z <span class="op">*</span> z))<span class="op">;</span></span>
+<span id="cb26-6"><a href="#cb26-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-7"><a href="#cb26-7" aria-hidden="true" tabindex="-1"></a>  <span class="kw">const</span> pitch <span class="op">=</span> <span class="bu">Math</span><span class="op">.</span><span class="fu">asin</span>(<span class="bu">Math</span><span class="op">.</span><span class="fu">max</span>(<span class="op">-</span><span class="dv">1</span><span class="op">,</span> <span class="bu">Math</span><span class="op">.</span><span class="fu">min</span>(<span class="dv">1</span><span class="op">,</span> <span class="fl">2.0</span> <span class="op">*</span> (w <span class="op">*</span> y <span class="op">-</span> z <span class="op">*</span> x))))<span class="op">;</span></span>
+<span id="cb26-8"><a href="#cb26-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-9"><a href="#cb26-9" aria-hidden="true" tabindex="-1"></a>  <span class="kw">const</span> roll <span class="op">=</span> <span class="bu">Math</span><span class="op">.</span><span class="fu">atan2</span>(<span class="fl">2.0</span> <span class="op">*</span> (w <span class="op">*</span> x <span class="op">+</span> y <span class="op">*</span> z)<span class="op">,</span></span>
+<span id="cb26-10"><a href="#cb26-10" aria-hidden="true" tabindex="-1"></a>                         <span class="fl">1.0</span> <span class="op">-</span> <span class="fl">2.0</span> <span class="op">*</span> (x <span class="op">*</span> x <span class="op">+</span> y <span class="op">*</span> y))<span class="op">;</span></span>
+<span id="cb26-11"><a href="#cb26-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-12"><a href="#cb26-12" aria-hidden="true" tabindex="-1"></a>  <span class="cf">return</span> [yaw<span class="op">,</span> roll<span class="op">,</span> pitch]<span class="op">;</span>  <span class="co">// Note: pitch/roll swapped to match convention</span></span>
+<span id="cb26-13"><a href="#cb26-13" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<h3 id="vector-based-angle-calculations">6.4 Vector-Based Angle
+Calculations</h3>
+<p>For single-axis joints (elbow flexion), vector dot product is simpler
+and more robust than Euler angles.</p>
+<h4 id="elbow-flexion-angle">Elbow Flexion Angle</h4>
+<p><strong>IMAGE PLACEHOLDER: Elbow Angle Diagram</strong>
+<em>Description: Side view of arm showing:</em> - <em>Upper arm forward
+vector (blue arrow from shoulder)</em> - <em>Forearm forward vector (red
+arrow from elbow)</em> - <em>Angle θ between vectors</em> - <em>Labels:
+0° = straight, 180° = fully bent</em></p>
+<p><strong>Mathematical formula:</strong></p>
+<p>Given unit vectors <strong>u</strong> (upper arm forward) and
+<strong>l</strong> (forearm forward):</p>
+<pre><code>θ = arccos(u · l)</code></pre>
+<p>where <code>u · l = ux·lx + uy·ly + uz·lz</code> (dot product)</p>
+<p><strong>Code implementation</strong>
+(<code>src/core/mathUtils.ts:74-79</code>):</p>
+<div class="sourceCode" id="cb28"><pre
+class="sourceCode typescript"><code class="sourceCode typescript"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a><span class="im">export</span> <span class="kw">function</span> <span class="fu">elbowFlexDeg</span>(fwdUpper<span class="op">:</span> vec3<span class="op">,</span> fwdLower<span class="op">:</span> vec3)<span class="op">:</span> <span class="dt">number</span> {</span>
+<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a>  <span class="kw">const</span> u <span class="op">=</span> vec3<span class="op">.</span><span class="fu">normalize</span>(vec3<span class="op">.</span><span class="fu">create</span>()<span class="op">,</span> fwdUpper)<span class="op">;</span></span>
+<span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a>  <span class="kw">const</span> l <span class="op">=</span> vec3<span class="op">.</span><span class="fu">normalize</span>(vec3<span class="op">.</span><span class="fu">create</span>()<span class="op">,</span> fwdLower)<span class="op">;</span></span>
+<span id="cb28-4"><a href="#cb28-4" aria-hidden="true" tabindex="-1"></a>  <span class="kw">const</span> cosAngle <span class="op">=</span> vec3<span class="op">.</span><span class="fu">dot</span>(u<span class="op">,</span> l)<span class="op">;</span></span>
+<span id="cb28-5"><a href="#cb28-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb28-6"><a href="#cb28-6" aria-hidden="true" tabindex="-1"></a>  <span class="co">// Clamp to [-1, 1] to prevent numerical errors in acos</span></span>
+<span id="cb28-7"><a href="#cb28-7" aria-hidden="true" tabindex="-1"></a>  <span class="kw">const</span> clampedCos <span class="op">=</span> <span class="bu">Math</span><span class="op">.</span><span class="fu">max</span>(<span class="op">-</span><span class="dv">1</span><span class="op">,</span> <span class="bu">Math</span><span class="op">.</span><span class="fu">min</span>(<span class="dv">1</span><span class="op">,</span> cosAngle))<span class="op">;</span></span>
+<span id="cb28-8"><a href="#cb28-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb28-9"><a href="#cb28-9" aria-hidden="true" tabindex="-1"></a>  <span class="cf">return</span> <span class="bu">Math</span><span class="op">.</span><span class="fu">acos</span>(clampedCos) <span class="op">*</span> <span class="dv">180</span> <span class="op">/</span> <span class="bu">Math</span><span class="op">.</span><span class="cn">PI</span><span class="op">;</span></span>
+<span id="cb28-10"><a href="#cb28-10" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<p><strong>Why this works:</strong> - Independent of shoulder
+orientation (only measures elbow bend) - No gimbal lock (single axis) -
+Output range: [0°, 180°] (0° = straight arm, 180° = maximally bent)</p>
+<p><strong>Anatomical interpretation:</strong> - 0° = Full extension
+(arm straight) - 90° = Right angle - 145° = Typical maximum flexion</p>
+<h3 id="forearm-roll-pronationsupination">6.5 Forearm Roll
+(Pronation/Supination)</h3>
+<p><strong>Challenge:</strong> Measuring twist of forearm about its long
+axis while elbow bends.</p>
+<p><strong>Naive approach fails:</strong> Simply comparing quaternions
+gives coupled elbow+roll motion.</p>
+<p><strong>Robust solution:</strong> Project “up” vectors onto plane
+perpendicular to forearm forward direction.</p>
+<p><strong>IMAGE PLACEHOLDER: Forearm Roll Geometry</strong>
+<em>Description: 3D diagram showing:</em> - <em>Forearm cylinder with
+forward axis (green)</em> - <em>Upper arm “up” vector (blue) and its
+projection (dashed blue) onto perpendicular plane</em> - <em>Forearm
+“up” vector (red) and its projection (dashed red) onto same plane</em> -
+<em>Angle θ between projections</em></p>
+<p><strong>Mathematical steps:</strong></p>
+<ol type="1">
+<li><p><strong>Extract up/forward vectors</strong> from upper arm and
+forearm quaternions</p></li>
+<li><p><strong>Project upper arm up vector</strong> onto plane
+perpendicular to forearm forward:</p>
+<pre><code>up_upper_proj = up_upper − (up_upper · fwd_forearm) · fwd_forearm</code></pre></li>
+<li><p><strong>Project forearm up vector</strong> onto same plane:</p>
+<pre><code>up_forearm_proj = up_forearm − (up_forearm · fwd_forearm) · fwd_forearm</code></pre></li>
+<li><p><strong>Calculate angle</strong> between projections:</p>
+<pre><code>θ = arccos(up_upper_proj · up_forearm_proj / (‖up_upper_proj‖ · ‖up_forearm_proj‖))</code></pre></li>
+<li><p><strong>Determine sign</strong> using cross product:</p>
+<pre><code>sign = (up_upper_proj × up_forearm_proj) · fwd_forearm ≥ 0 ? −1 : 1</code></pre></li>
+</ol>
+<p><strong>Code implementation</strong>
+(<code>src/core/ArmSolver.ts:114-158</code>):</p>
+<div class="sourceCode" id="cb33"><pre
+class="sourceCode typescript"><code class="sourceCode typescript"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Get up vectors from quaternions</span></span>
+<span id="cb33-2"><a href="#cb33-2" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> upperUp <span class="op">=</span> vec3<span class="op">.</span><span class="fu">transformQuat</span>(vec3<span class="op">.</span><span class="fu">create</span>()<span class="op">,</span> [<span class="dv">0</span><span class="op">,</span> <span class="dv">0</span><span class="op">,</span> <span class="dv">1</span>]<span class="op">,</span> Q_UpperArm)<span class="op">;</span></span>
+<span id="cb33-3"><a href="#cb33-3" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> lowerUp <span class="op">=</span> vec3<span class="op">.</span><span class="fu">transformQuat</span>(vec3<span class="op">.</span><span class="fu">create</span>()<span class="op">,</span> [<span class="dv">0</span><span class="op">,</span> <span class="dv">0</span><span class="op">,</span> <span class="dv">1</span>]<span class="op">,</span> Q_Forearm)<span class="op">;</span></span>
+<span id="cb33-4"><a href="#cb33-4" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> lowerFwd <span class="op">=</span> vec3<span class="op">.</span><span class="fu">transformQuat</span>(vec3<span class="op">.</span><span class="fu">create</span>()<span class="op">,</span> [<span class="dv">0</span><span class="op">,</span> <span class="dv">1</span><span class="op">,</span> <span class="dv">0</span>]<span class="op">,</span> Q_Forearm)<span class="op">;</span></span>
+<span id="cb33-5"><a href="#cb33-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb33-6"><a href="#cb33-6" aria-hidden="true" tabindex="-1"></a><span class="co">// Project onto plane perpendicular to forearm forward</span></span>
+<span id="cb33-7"><a href="#cb33-7" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> upperDot <span class="op">=</span> vec3<span class="op">.</span><span class="fu">dot</span>(upperUp<span class="op">,</span> lowerFwd)<span class="op">;</span></span>
+<span id="cb33-8"><a href="#cb33-8" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> lowerDot <span class="op">=</span> vec3<span class="op">.</span><span class="fu">dot</span>(lowerUp<span class="op">,</span> lowerFwd)<span class="op">;</span></span>
+<span id="cb33-9"><a href="#cb33-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb33-10"><a href="#cb33-10" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> upperUpProj <span class="op">=</span> vec3<span class="op">.</span><span class="fu">create</span>()<span class="op">;</span></span>
+<span id="cb33-11"><a href="#cb33-11" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> lowerUpProj <span class="op">=</span> vec3<span class="op">.</span><span class="fu">create</span>()<span class="op">;</span></span>
+<span id="cb33-12"><a href="#cb33-12" aria-hidden="true" tabindex="-1"></a>vec3<span class="op">.</span><span class="fu">scaleAndAdd</span>(upperUpProj<span class="op">,</span> upperUp<span class="op">,</span> lowerFwd<span class="op">,</span> <span class="op">-</span>upperDot)<span class="op">;</span></span>
+<span id="cb33-13"><a href="#cb33-13" aria-hidden="true" tabindex="-1"></a>vec3<span class="op">.</span><span class="fu">scaleAndAdd</span>(lowerUpProj<span class="op">,</span> lowerUp<span class="op">,</span> lowerFwd<span class="op">,</span> <span class="op">-</span>lowerDot)<span class="op">;</span></span>
+<span id="cb33-14"><a href="#cb33-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb33-15"><a href="#cb33-15" aria-hidden="true" tabindex="-1"></a>vec3<span class="op">.</span><span class="fu">normalize</span>(upperUpProj<span class="op">,</span> upperUpProj)<span class="op">;</span></span>
+<span id="cb33-16"><a href="#cb33-16" aria-hidden="true" tabindex="-1"></a>vec3<span class="op">.</span><span class="fu">normalize</span>(lowerUpProj<span class="op">,</span> lowerUpProj)<span class="op">;</span></span>
+<span id="cb33-17"><a href="#cb33-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb33-18"><a href="#cb33-18" aria-hidden="true" tabindex="-1"></a><span class="co">// Calculate angle</span></span>
+<span id="cb33-19"><a href="#cb33-19" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> cosAngle <span class="op">=</span> vec3<span class="op">.</span><span class="fu">dot</span>(upperUpProj<span class="op">,</span> lowerUpProj)<span class="op">;</span></span>
+<span id="cb33-20"><a href="#cb33-20" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> angle <span class="op">=</span> <span class="bu">Math</span><span class="op">.</span><span class="fu">acos</span>(<span class="bu">Math</span><span class="op">.</span><span class="fu">max</span>(<span class="op">-</span><span class="dv">1</span><span class="op">,</span> <span class="bu">Math</span><span class="op">.</span><span class="fu">min</span>(<span class="dv">1</span><span class="op">,</span> cosAngle)))<span class="op">;</span></span>
+<span id="cb33-21"><a href="#cb33-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb33-22"><a href="#cb33-22" aria-hidden="true" tabindex="-1"></a><span class="co">// Determine sign</span></span>
+<span id="cb33-23"><a href="#cb33-23" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> cross <span class="op">=</span> vec3<span class="op">.</span><span class="fu">cross</span>(vec3<span class="op">.</span><span class="fu">create</span>()<span class="op">,</span> upperUpProj<span class="op">,</span> lowerUpProj)<span class="op">;</span></span>
+<span id="cb33-24"><a href="#cb33-24" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> sign <span class="op">=</span> vec3<span class="op">.</span><span class="fu">dot</span>(cross<span class="op">,</span> lowerFwd) <span class="op">&gt;=</span> <span class="dv">0</span> <span class="op">?</span> <span class="op">-</span><span class="dv">1</span> <span class="op">:</span> <span class="dv">1</span><span class="op">;</span></span>
+<span id="cb33-25"><a href="#cb33-25" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb33-26"><a href="#cb33-26" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> forearmRollDeg <span class="op">=</span> sign <span class="op">*</span> angle <span class="op">*</span> <span class="dv">180</span> <span class="op">/</span> <span class="bu">Math</span><span class="op">.</span><span class="cn">PI</span><span class="op">;</span></span></code></pre></div>
+<p><strong>Anatomical interpretation:</strong> - <strong>Negative
+angles</strong>: Pronation (palm down) - <strong>Positive
+angles</strong>: Supination (palm up) - <strong>Range</strong>:
+Approximately −90° to +90°</p>
+<h3 id="relative-quaternion-method-wrist-angles">6.6 Relative Quaternion
+Method (Wrist Angles)</h3>
+<p>Wrist angles should be measured <strong>relative to forearm</strong>,
+not absolute. This cancels accumulated drift from shoulder/elbow.</p>
+<p><strong>Mathematical approach:</strong></p>
+<p>Given forearm quaternion <strong>q_forearm</strong> and hand
+quaternion <strong>q_hand</strong>:</p>
+<ol type="1">
+<li><p><strong>Calculate relative rotation:</strong></p>
+<pre><code>q_wrist = q_forearm⁻¹ ⊗ q_hand</code></pre></li>
+<li><p><strong>Extract Euler angles</strong> from <code>q_wrist</code>
+using Z-Y-X convention</p></li>
+</ol>
+<p><strong>Code implementation</strong>
+(<code>src/core/ArmSolver.ts:162-184</code>):</p>
+<div class="sourceCode" id="cb35"><pre
+class="sourceCode typescript"><code class="sourceCode typescript"><span id="cb35-1"><a href="#cb35-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Calculate relative quaternion: hand in forearm&#39;s reference frame</span></span>
+<span id="cb35-2"><a href="#cb35-2" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> Q_Wrist <span class="op">=</span> quat<span class="op">.</span><span class="fu">multiply</span>(</span>
+<span id="cb35-3"><a href="#cb35-3" aria-hidden="true" tabindex="-1"></a>  quat<span class="op">.</span><span class="fu">create</span>()<span class="op">,</span></span>
+<span id="cb35-4"><a href="#cb35-4" aria-hidden="true" tabindex="-1"></a>  quat<span class="op">.</span><span class="fu">invert</span>(quat<span class="op">.</span><span class="fu">create</span>()<span class="op">,</span> Q_Forearm)<span class="op">,</span></span>
+<span id="cb35-5"><a href="#cb35-5" aria-hidden="true" tabindex="-1"></a>  Q_Hand</span>
+<span id="cb35-6"><a href="#cb35-6" aria-hidden="true" tabindex="-1"></a>)<span class="op">;</span></span>
+<span id="cb35-7"><a href="#cb35-7" aria-hidden="true" tabindex="-1"></a>quat<span class="op">.</span><span class="fu">normalize</span>(Q_Wrist<span class="op">,</span> Q_Wrist)<span class="op">;</span></span>
+<span id="cb35-8"><a href="#cb35-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb35-9"><a href="#cb35-9" aria-hidden="true" tabindex="-1"></a><span class="co">// Extract wrist Euler angles</span></span>
+<span id="cb35-10"><a href="#cb35-10" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> [wristYaw<span class="op">,</span> wristRoll<span class="op">,</span> wristPitch] <span class="op">=</span> <span class="fu">eulerZYX</span>(Q_Wrist)<span class="op">;</span></span>
+<span id="cb35-11"><a href="#cb35-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb35-12"><a href="#cb35-12" aria-hidden="true" tabindex="-1"></a><span class="co">// Convert radians to degrees</span></span>
+<span id="cb35-13"><a href="#cb35-13" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> wristYawDeg <span class="op">=</span> wristYaw <span class="op">*</span> <span class="dv">180</span> <span class="op">/</span> <span class="bu">Math</span><span class="op">.</span><span class="cn">PI</span><span class="op">;</span></span>
+<span id="cb35-14"><a href="#cb35-14" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> wristPitchDeg <span class="op">=</span> wristPitch <span class="op">*</span> <span class="dv">180</span> <span class="op">/</span> <span class="bu">Math</span><span class="op">.</span><span class="cn">PI</span><span class="op">;</span></span></code></pre></div>
+<p><strong>Why relative quaternions?</strong> - <strong>Drift
+cancellation</strong>: Any IMU drift common to forearm and hand cancels
+out - <strong>Anatomical correctness</strong>: Wrist motion is
+inherently relative to forearm orientation - <strong>Gimbal lock
+avoidance</strong>: Wrist rarely reaches singularity in forearm-relative
+frame</p>
+<h3 id="complete-seven-angle-solver">6.7 Complete Seven-Angle
+Solver</h3>
+<p><strong>Summary of derivation pipeline for one arm:</strong></p>
+<pre><code>Inputs: Q_UpperArm, Q_Forearm, Q_Hand (3 quaternions)
+
+1. Shoulder angles (3-DOF):
+   [yaw, pitch, roll] = eulerZYX(Q_UpperArm) * 180/π
+
+2. Elbow flex (1-DOF):
+   fwd_upper = rotate([0,1,0], Q_UpperArm)
+   fwd_forearm = rotate([0,1,0], Q_Forearm)
+   flex = elbowFlexDeg(fwd_upper, fwd_forearm)
+
+3. Forearm roll (1-DOF):
+   up_upper = rotate([0,0,1], Q_UpperArm)
+   up_forearm = rotate([0,0,1], Q_Forearm)
+   roll = forearmRollProjectionMethod(up_upper, up_forearm, fwd_forearm)
+
+4. Wrist angles (2-DOF):
+   Q_wrist = Q_Forearm⁻¹ ⊗ Q_Hand
+   [yaw, pitch] = eulerZYX(Q_wrist)[0,2] * 180/π
+
+Outputs: [sh_yaw, sh_pitch, sh_roll, el_flex, fr_roll, wr_yaw, wr_pitch]</code></pre>
+<p><strong>IMAGE PLACEHOLDER: 7-DOF Arm Diagram</strong>
+<em>Description: Annotated arm illustration showing all 7 angles with
+arrows:</em> - <em>Shoulder: 3 curved arrows for yaw/pitch/roll</em> -
+<em>Elbow: 1 curved arrow for flexion</em> - <em>Forearm: 1 straight
+arrow for roll axis</em> - <em>Wrist: 2 curved arrows for
+yaw/pitch</em></p>
+<h3 id="forward-kinematics-vector-chaining">6.8 Forward Kinematics
+(Vector Chaining)</h3>
+<p>Once joint angles are known, we can reconstruct 3D joint positions
+using <strong>forward kinematics</strong>.</p>
+<p><strong>Chain structure:</strong></p>
+<pre><code>Shoulder (fixed) → [Upper Arm] → Elbow → [Forearm] → Wrist → [Hand] → Fingertips</code></pre>
+<p><strong>Position calculation:</strong></p>
+<pre><code>P_shoulder = [±0.3, 1.4, 0.0]  (left/right offset from chest)
+
+P_elbow = P_shoulder + L_humerus · fwd_upper
+
+P_wrist = P_elbow + L_radius · fwd_forearm
+
+P_fingertips = P_wrist + L_hand · fwd_hand</code></pre>
+<p><strong>Segment lengths</strong> (configurable via UI): -
+<code>L_humerus</code> = 0.30m (default) - <code>L_radius</code> = 0.26m
+(default) - <code>L_hand</code> = 0.10m (default)</p>
+<p><strong>Code implementation</strong>
+(<code>src/ui/scene/vectorArm.ts:144-154</code>):</p>
+<div class="sourceCode" id="cb39"><pre
+class="sourceCode typescript"><code class="sourceCode typescript"><span id="cb39-1"><a href="#cb39-1" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> shoulder<span class="op">:</span> vec3 <span class="op">=</span> <span class="kw">this</span><span class="op">.</span><span class="at">side</span> <span class="op">===</span> <span class="st">&#39;left&#39;</span> <span class="op">?</span> [<span class="op">-</span><span class="fl">0.3</span><span class="op">,</span> <span class="fl">1.4</span><span class="op">,</span> <span class="dv">0</span>] <span class="op">:</span> [<span class="fl">0.3</span><span class="op">,</span> <span class="fl">1.4</span><span class="op">,</span> <span class="dv">0</span>]<span class="op">;</span></span>
+<span id="cb39-2"><a href="#cb39-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb39-3"><a href="#cb39-3" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> elbowPos <span class="op">=</span> vec3<span class="op">.</span><span class="fu">scaleAndAdd</span>(</span>
+<span id="cb39-4"><a href="#cb39-4" aria-hidden="true" tabindex="-1"></a>  vec3<span class="op">.</span><span class="fu">create</span>()<span class="op">,</span></span>
+<span id="cb39-5"><a href="#cb39-5" aria-hidden="true" tabindex="-1"></a>  shoulder<span class="op">,</span></span>
+<span id="cb39-6"><a href="#cb39-6" aria-hidden="true" tabindex="-1"></a>  upperArmForward<span class="op">,</span></span>
+<span id="cb39-7"><a href="#cb39-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">HUM_LEN</span>()</span>
+<span id="cb39-8"><a href="#cb39-8" aria-hidden="true" tabindex="-1"></a>)<span class="op">;</span></span>
+<span id="cb39-9"><a href="#cb39-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb39-10"><a href="#cb39-10" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> wristPos <span class="op">=</span> vec3<span class="op">.</span><span class="fu">scaleAndAdd</span>(</span>
+<span id="cb39-11"><a href="#cb39-11" aria-hidden="true" tabindex="-1"></a>  vec3<span class="op">.</span><span class="fu">create</span>()<span class="op">,</span></span>
+<span id="cb39-12"><a href="#cb39-12" aria-hidden="true" tabindex="-1"></a>  elbowPos<span class="op">,</span></span>
+<span id="cb39-13"><a href="#cb39-13" aria-hidden="true" tabindex="-1"></a>  forearmForward<span class="op">,</span></span>
+<span id="cb39-14"><a href="#cb39-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">RAD_LEN</span>()</span>
+<span id="cb39-15"><a href="#cb39-15" aria-hidden="true" tabindex="-1"></a>)<span class="op">;</span></span>
+<span id="cb39-16"><a href="#cb39-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb39-17"><a href="#cb39-17" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> fingertipPos <span class="op">=</span> vec3<span class="op">.</span><span class="fu">scaleAndAdd</span>(</span>
+<span id="cb39-18"><a href="#cb39-18" aria-hidden="true" tabindex="-1"></a>  vec3<span class="op">.</span><span class="fu">create</span>()<span class="op">,</span></span>
+<span id="cb39-19"><a href="#cb39-19" aria-hidden="true" tabindex="-1"></a>  wristPos<span class="op">,</span></span>
+<span id="cb39-20"><a href="#cb39-20" aria-hidden="true" tabindex="-1"></a>  handForward<span class="op">,</span></span>
+<span id="cb39-21"><a href="#cb39-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">HAND_LEN</span>()</span>
+<span id="cb39-22"><a href="#cb39-22" aria-hidden="true" tabindex="-1"></a>)<span class="op">;</span></span></code></pre></div>
+<p><strong>Visualization:</strong> - Render cylinders/lines between
+joint positions - Color-code segments (blue = upper arm, green =
+forearm, yellow = hand)</p>
+<hr />
+<h2 id="integration-ecosystem">7. Integration Ecosystem</h2>
+<p>The Eidon Tracker is designed as an <strong>open platform</strong>
+for embodied AI research. This section describes integration points with
+external systems.</p>
+<p><strong>IMAGE PLACEHOLDER: Integration Ecosystem Diagram</strong>
+<em>Description: Hub-and-spoke diagram showing Eidon system (center)
+connecting to:</em> - <em>VLA training frameworks (OpenVLA, Octo,
+RT-1)</em> - <em>Robotic platforms (unitree, figure, 1x)</em> -
+<em>Simulation environments (Isaac Sim, MuJoCo)</em> - <em>Data
+annotation tools (CVAT, Label Studio)</em> - <em>Cloud storage (S3,
+GCS)</em></p>
+<h3 id="vla-training-pipeline-integration">7.1 VLA Training Pipeline
+Integration</h3>
+<p><strong>Common VLA frameworks:</strong> - <strong>OpenVLA</strong>:
+Open-source vision-language-action model - <strong>Octo</strong>:
+General-purpose robot policy trained on diverse datasets -
+<strong>RT-1/RT-2</strong>: Google’s Robotics Transformer models -
+<strong>Diffusion Policy</strong>: Behavior cloning via diffusion
+models</p>
+<p><strong>Integration approach:</strong></p>
+<ol type="1">
+<li><strong>Dataset format compatibility</strong>
+<ul>
+<li>Convert Eidon output to framework-specific format (e.g., RLDS for
+RT-1)</li>
+<li>Maintain original data as well for maximum flexibility</li>
+</ul></li>
+<li><strong>Action space mapping</strong>
+<ul>
+<li>7-DOF arm angles → robot joint targets</li>
+<li>Requires robot-specific kinematic mapping</li>
+</ul></li>
+<li><strong>Temporal alignment</strong>
+<ul>
+<li>Synchronize IMU data (48Hz) with video frames (30-60fps)</li>
+<li>Interpolate or subsample to common rate (typically 30Hz)</li>
+</ul></li>
+</ol>
+<p><strong>Example: OpenVLA integration pseudocode</strong></p>
+<div class="sourceCode" id="cb40"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb40-1"><a href="#cb40-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> eidon <span class="im">import</span> EidonDataset</span>
+<span id="cb40-2"><a href="#cb40-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> openvla <span class="im">import</span> VLATrainer</span>
+<span id="cb40-3"><a href="#cb40-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb40-4"><a href="#cb40-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Load Eidon dataset</span></span>
+<span id="cb40-5"><a href="#cb40-5" aria-hidden="true" tabindex="-1"></a>dataset <span class="op">=</span> EidonDataset(<span class="st">&quot;path/to/collected_data/&quot;</span>)</span>
+<span id="cb40-6"><a href="#cb40-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb40-7"><a href="#cb40-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Convert to OpenVLA format</span></span>
+<span id="cb40-8"><a href="#cb40-8" aria-hidden="true" tabindex="-1"></a>vla_episodes <span class="op">=</span> []</span>
+<span id="cb40-9"><a href="#cb40-9" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> episode <span class="kw">in</span> dataset:</span>
+<span id="cb40-10"><a href="#cb40-10" aria-hidden="true" tabindex="-1"></a>    frames <span class="op">=</span> []</span>
+<span id="cb40-11"><a href="#cb40-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> t <span class="kw">in</span> episode.timestamps:</span>
+<span id="cb40-12"><a href="#cb40-12" aria-hidden="true" tabindex="-1"></a>        frame <span class="op">=</span> {</span>
+<span id="cb40-13"><a href="#cb40-13" aria-hidden="true" tabindex="-1"></a>            <span class="st">&quot;observation&quot;</span>: {</span>
+<span id="cb40-14"><a href="#cb40-14" aria-hidden="true" tabindex="-1"></a>                <span class="st">&quot;image&quot;</span>: episode.get_video_frame(t),</span>
+<span id="cb40-15"><a href="#cb40-15" aria-hidden="true" tabindex="-1"></a>                <span class="st">&quot;proprio&quot;</span>: episode.get_joint_angles(t),  <span class="co"># 7-DOF per arm</span></span>
+<span id="cb40-16"><a href="#cb40-16" aria-hidden="true" tabindex="-1"></a>            },</span>
+<span id="cb40-17"><a href="#cb40-17" aria-hidden="true" tabindex="-1"></a>            <span class="st">&quot;action&quot;</span>: compute_action_label(episode, t),  <span class="co"># Delta angles</span></span>
+<span id="cb40-18"><a href="#cb40-18" aria-hidden="true" tabindex="-1"></a>            <span class="st">&quot;timestamp&quot;</span>: t,</span>
+<span id="cb40-19"><a href="#cb40-19" aria-hidden="true" tabindex="-1"></a>        }</span>
+<span id="cb40-20"><a href="#cb40-20" aria-hidden="true" tabindex="-1"></a>        frames.append(frame)</span>
+<span id="cb40-21"><a href="#cb40-21" aria-hidden="true" tabindex="-1"></a>    vla_episodes.append({<span class="st">&quot;task&quot;</span>: episode.task_label, <span class="st">&quot;frames&quot;</span>: frames})</span>
+<span id="cb40-22"><a href="#cb40-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb40-23"><a href="#cb40-23" aria-hidden="true" tabindex="-1"></a><span class="co"># Train VLA model</span></span>
+<span id="cb40-24"><a href="#cb40-24" aria-hidden="true" tabindex="-1"></a>trainer <span class="op">=</span> VLATrainer(config)</span>
+<span id="cb40-25"><a href="#cb40-25" aria-hidden="true" tabindex="-1"></a>trainer.train(vla_episodes)</span></code></pre></div>
+<h3 id="robotic-platform-retargeting">7.2 Robotic Platform
+Retargeting</h3>
+<p><strong>Challenge:</strong> Human arm kinematics ≠ robot arm
+kinematics</p>
+<p><strong>Solutions:</strong></p>
+<p><strong>A. Direct Joint Mapping (for humanoid robots)</strong></p>
+<p>If robot has similar kinematic structure (7-DOF arms):</p>
+<div class="sourceCode" id="cb41"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb41-1"><a href="#cb41-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Map human angles directly to robot joints</span></span>
+<span id="cb41-2"><a href="#cb41-2" aria-hidden="true" tabindex="-1"></a>robot_left_arm <span class="op">=</span> [</span>
+<span id="cb41-3"><a href="#cb41-3" aria-hidden="true" tabindex="-1"></a>    human_left_arm.sh_yaw,</span>
+<span id="cb41-4"><a href="#cb41-4" aria-hidden="true" tabindex="-1"></a>    human_left_arm.sh_pitch,</span>
+<span id="cb41-5"><a href="#cb41-5" aria-hidden="true" tabindex="-1"></a>    human_left_arm.sh_roll,</span>
+<span id="cb41-6"><a href="#cb41-6" aria-hidden="true" tabindex="-1"></a>    human_left_arm.el_flex,</span>
+<span id="cb41-7"><a href="#cb41-7" aria-hidden="true" tabindex="-1"></a>    human_left_arm.fr_roll,</span>
+<span id="cb41-8"><a href="#cb41-8" aria-hidden="true" tabindex="-1"></a>    human_left_arm.wr_yaw,</span>
+<span id="cb41-9"><a href="#cb41-9" aria-hidden="true" tabindex="-1"></a>    human_left_arm.wr_pitch,</span>
+<span id="cb41-10"><a href="#cb41-10" aria-hidden="true" tabindex="-1"></a>]</span>
+<span id="cb41-11"><a href="#cb41-11" aria-hidden="true" tabindex="-1"></a>robot.set_joint_targets(robot_left_arm)</span></code></pre></div>
+<p><strong>Limitations:</strong> - Requires joint limit adjustments
+(humans have different ROM than robots) - May need scaling factors for
+elbow/wrist ranges</p>
+<p><strong>B. Cartesian Task Space Mapping</strong></p>
+<p>For robots with different DOF (e.g., 6-DOF industrial arms):</p>
+<div class="sourceCode" id="cb42"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb42-1"><a href="#cb42-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Use forward kinematics to get end-effector position</span></span>
+<span id="cb42-2"><a href="#cb42-2" aria-hidden="true" tabindex="-1"></a>wrist_position_3d <span class="op">=</span> eidon.get_wrist_position(episode, t)</span>
+<span id="cb42-3"><a href="#cb42-3" aria-hidden="true" tabindex="-1"></a>wrist_orientation_quat <span class="op">=</span> eidon.get_hand_quaternion(episode, t)</span>
+<span id="cb42-4"><a href="#cb42-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb42-5"><a href="#cb42-5" aria-hidden="true" tabindex="-1"></a><span class="co"># Solve inverse kinematics for robot</span></span>
+<span id="cb42-6"><a href="#cb42-6" aria-hidden="true" tabindex="-1"></a>robot_joint_angles <span class="op">=</span> robot.ik_solver(</span>
+<span id="cb42-7"><a href="#cb42-7" aria-hidden="true" tabindex="-1"></a>    target_pos<span class="op">=</span>wrist_position_3d,</span>
+<span id="cb42-8"><a href="#cb42-8" aria-hidden="true" tabindex="-1"></a>    target_ori<span class="op">=</span>wrist_orientation_quat,</span>
+<span id="cb42-9"><a href="#cb42-9" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb42-10"><a href="#cb42-10" aria-hidden="true" tabindex="-1"></a>robot.set_joint_targets(robot_joint_angles)</span></code></pre></div>
+<p><strong>C. Reinforcement Learning Refinement</strong></p>
+<p>Use human demonstrations as <strong>initialization</strong> for RL
+policy:</p>
+<ol type="1">
+<li>Train imitation learning policy on Eidon data</li>
+<li>Fine-tune in simulation with RL reward signal</li>
+<li>Deploy to physical robot with sim-to-real transfer</li>
+</ol>
+<h3 id="simulation-environment-integration">7.3 Simulation Environment
+Integration</h3>
+<p><strong>Use cases:</strong> - Validate data quality before deploying
+to physical robot - Generate synthetic training data with domain
+randomization - Test policy generalization</p>
+<p><strong>Supported simulators:</strong> - <strong>NVIDIA Isaac
+Sim</strong>: High-fidelity physics + rendering -
+<strong>MuJoCo</strong>: Fast physics for RL training -
+<strong>PyBullet</strong>: Open-source, widely used in research</p>
+<p><strong>Example: Isaac Sim replay</strong></p>
+<div class="sourceCode" id="cb43"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb43-1"><a href="#cb43-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> omni.isaac.kit <span class="im">import</span> SimulationApp</span>
+<span id="cb43-2"><a href="#cb43-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> eidon <span class="im">import</span> EidonDataset</span>
+<span id="cb43-3"><a href="#cb43-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb43-4"><a href="#cb43-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Load dataset</span></span>
+<span id="cb43-5"><a href="#cb43-5" aria-hidden="true" tabindex="-1"></a>dataset <span class="op">=</span> EidonDataset(<span class="st">&quot;data/task_demonstrations/&quot;</span>)</span>
+<span id="cb43-6"><a href="#cb43-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb43-7"><a href="#cb43-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Spawn humanoid asset in Isaac Sim</span></span>
+<span id="cb43-8"><a href="#cb43-8" aria-hidden="true" tabindex="-1"></a>humanoid <span class="op">=</span> spawn_humanoid(<span class="st">&quot;eidon_humanoid.usd&quot;</span>)</span>
+<span id="cb43-9"><a href="#cb43-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb43-10"><a href="#cb43-10" aria-hidden="true" tabindex="-1"></a><span class="co"># Replay motion</span></span>
+<span id="cb43-11"><a href="#cb43-11" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> t <span class="kw">in</span> dataset.episode(<span class="dv">0</span>).timestamps:</span>
+<span id="cb43-12"><a href="#cb43-12" aria-hidden="true" tabindex="-1"></a>    angles <span class="op">=</span> dataset.get_joint_angles(t)</span>
+<span id="cb43-13"><a href="#cb43-13" aria-hidden="true" tabindex="-1"></a>    humanoid.set_joint_targets(angles)</span>
+<span id="cb43-14"><a href="#cb43-14" aria-hidden="true" tabindex="-1"></a>    step_simulation()</span></code></pre></div>
+<p><strong>Benefits:</strong> - <strong>Visual validation</strong>:
+Ensure captured motion looks anatomically correct - <strong>Physics
+checking</strong>: Detect impossible movements (e.g., arm passing
+through torso) - <strong>Data augmentation</strong>: Add camera
+viewpoint variations, lighting changes</p>
+<h3 id="real-time-teleoperation">7.4 Real-Time Teleoperation</h3>
+<p><strong>IMAGE PLACEHOLDER: Teleoperation System Diagram</strong>
+<em>Description: Human wearing Eidon trackers on left, robot arm on
+right, with wireless communication arrows showing:</em> - <em>Eidon →
+Mobile App (BLE)</em> - <em>Mobile App → Robot Controller (WiFi)</em> -
+<em>Robot Controller → Arm Motors (CAN/Ethernet)</em></p>
+<p><strong>Architecture:</strong></p>
+<pre><code>Human + Eidon Trackers → Mobile App → WebSocket Server → Robot Controller → Actuators
+                         (BLE)        (WiFi/LTE)          (ROS2/MQTT)</code></pre>
+<p><strong>Latency breakdown:</strong> - IMU → BLE: &lt;20ms - BLE →
+Mobile App: ~10-30ms - Mobile App → Server: 20-100ms (network dependent)
+- Server → Robot: 10-50ms - <strong>Total</strong>: 60-200ms
+end-to-end</p>
+<p><strong>Optimization strategies:</strong> 1. <strong>Predictive
+filtering</strong>: Extrapolate motion to compensate latency 2.
+<strong>Direct robot connection</strong>: Skip cloud server (mobile app
+→ robot WiFi direct) 3. <strong>Differential control</strong>: Send
+velocity commands instead of position targets</p>
+<p><strong>Safety considerations:</strong> - <strong>Deadman
+switch</strong>: Stop robot if BLE connection lost - <strong>Joint limit
+enforcement</strong>: Clamp commanded angles to safe ranges -
+<strong>Emergency stop</strong>: Physical button on robot + app UI</p>
+<h3 id="data-annotation-labeling">7.5 Data Annotation &amp;
+Labeling</h3>
+<p>Collected datasets require task-level annotations for VLA
+training.</p>
+<p><strong>Annotation workflow:</strong></p>
+<ol type="1">
+<li><strong>Video review</strong>: Watch egocentric video of task</li>
+<li><strong>Segment identification</strong>: Mark start/end of task
+phases (e.g., “reach for cup”, “grasp”, “lift”)</li>
+<li><strong>Action labeling</strong>: Assign semantic labels to
+segments</li>
+<li><strong>Quality control</strong>: Flag corrupted data (e.g., lost
+tracker connection)</li>
+</ol>
+<p><strong>Recommended tools:</strong> - <strong>CVAT (Computer Vision
+Annotation Tool)</strong>: Video annotation with timeline -
+<strong>Label Studio</strong>: Multi-modal annotation (video + time
+series data) - <strong>Custom Eidon annotation UI</strong>: Integrated
+with eidon-sim visualization</p>
+<p><strong>IMAGE PLACEHOLDER: Annotation UI Mockup</strong>
+<em>Description: Screenshot showing:</em> - <em>Top: Video playback with
+skeleton overlay</em> - <em>Middle: Timeline with segment blocks
+(color-coded by task phase)</em> - <em>Bottom: Joint angle graphs with
+annotation markers</em> - <em>Right sidebar: Label selection dropdown
+and notes field</em></p>
+<h3 id="api-specification">7.6 API Specification</h3>
+<p><strong>For developers integrating Eidon data:</strong></p>
+<p><strong>Dataset loader (Python)</strong></p>
+<div class="sourceCode" id="cb45"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb45-1"><a href="#cb45-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> eidon <span class="im">import</span> EidonDataset</span>
+<span id="cb45-2"><a href="#cb45-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb45-3"><a href="#cb45-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Load dataset from directory</span></span>
+<span id="cb45-4"><a href="#cb45-4" aria-hidden="true" tabindex="-1"></a>dataset <span class="op">=</span> EidonDataset(<span class="st">&quot;path/to/dataset/&quot;</span>)</span>
+<span id="cb45-5"><a href="#cb45-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb45-6"><a href="#cb45-6" aria-hidden="true" tabindex="-1"></a><span class="co"># Iterate over episodes</span></span>
+<span id="cb45-7"><a href="#cb45-7" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> episode <span class="kw">in</span> dataset:</span>
+<span id="cb45-8"><a href="#cb45-8" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f&quot;Task: </span><span class="sc">{</span>episode<span class="sc">.</span>task_label<span class="sc">}</span><span class="ss">&quot;</span>)</span>
+<span id="cb45-9"><a href="#cb45-9" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f&quot;Duration: </span><span class="sc">{</span>episode<span class="sc">.</span>duration_seconds<span class="sc">}</span><span class="ss">s&quot;</span>)</span>
+<span id="cb45-10"><a href="#cb45-10" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f&quot;Number of frames: </span><span class="sc">{</span><span class="bu">len</span>(episode)<span class="sc">}</span><span class="ss">&quot;</span>)</span>
+<span id="cb45-11"><a href="#cb45-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb45-12"><a href="#cb45-12" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Access frame data</span></span>
+<span id="cb45-13"><a href="#cb45-13" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> frame <span class="kw">in</span> episode:</span>
+<span id="cb45-14"><a href="#cb45-14" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Get synchronized data at timestamp t</span></span>
+<span id="cb45-15"><a href="#cb45-15" aria-hidden="true" tabindex="-1"></a>        img <span class="op">=</span> frame.image  <span class="co"># numpy array (H, W, 3)</span></span>
+<span id="cb45-16"><a href="#cb45-16" aria-hidden="true" tabindex="-1"></a>        angles <span class="op">=</span> frame.joint_angles  <span class="co"># dict: {&quot;left_arm&quot;: [7 floats], &quot;right_arm&quot;: [7 floats]}</span></span>
+<span id="cb45-17"><a href="#cb45-17" aria-hidden="true" tabindex="-1"></a>        quat <span class="op">=</span> frame.quaternions  <span class="co"># dict: {&quot;chest&quot;: [4 floats], &quot;left_hand&quot;: [4 floats], ...}</span></span>
+<span id="cb45-18"><a href="#cb45-18" aria-hidden="true" tabindex="-1"></a>        positions <span class="op">=</span> frame.joint_positions_3d  <span class="co"># dict: {&quot;left_elbow&quot;: [x,y,z], ...}</span></span></code></pre></div>
+<p><strong>BLE connection (TypeScript/JavaScript)</strong></p>
+<div class="sourceCode" id="cb46"><pre
+class="sourceCode typescript"><code class="sourceCode typescript"><span id="cb46-1"><a href="#cb46-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> { EidonBLEDevice } <span class="im">from</span> <span class="st">&#39;@eidon/ble-sdk&#39;</span><span class="op">;</span></span>
+<span id="cb46-2"><a href="#cb46-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb46-3"><a href="#cb46-3" aria-hidden="true" tabindex="-1"></a><span class="co">// Scan for devices</span></span>
+<span id="cb46-4"><a href="#cb46-4" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> devices <span class="op">=</span> <span class="cf">await</span> EidonBLEDevice<span class="op">.</span><span class="fu">scan</span>()<span class="op">;</span></span>
+<span id="cb46-5"><a href="#cb46-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb46-6"><a href="#cb46-6" aria-hidden="true" tabindex="-1"></a><span class="co">// Connect to specific device</span></span>
+<span id="cb46-7"><a href="#cb46-7" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> tracker <span class="op">=</span> <span class="cf">await</span> EidonBLEDevice<span class="op">.</span><span class="fu">connect</span>(devices[<span class="dv">0</span>])<span class="op">;</span></span>
+<span id="cb46-8"><a href="#cb46-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb46-9"><a href="#cb46-9" aria-hidden="true" tabindex="-1"></a><span class="co">// Subscribe to quaternion stream</span></span>
+<span id="cb46-10"><a href="#cb46-10" aria-hidden="true" tabindex="-1"></a>tracker<span class="op">.</span><span class="fu">onQuaternion</span>((quat) <span class="kw">=&gt;</span> {</span>
+<span id="cb46-11"><a href="#cb46-11" aria-hidden="true" tabindex="-1"></a>  <span class="bu">console</span><span class="op">.</span><span class="fu">log</span>(<span class="vs">`Quaternion: w=</span><span class="sc">${</span>quat<span class="op">.</span><span class="at">w</span><span class="sc">}</span><span class="vs">, x=</span><span class="sc">${</span>quat<span class="op">.</span><span class="at">x</span><span class="sc">}</span><span class="vs">, y=</span><span class="sc">${</span>quat<span class="op">.</span><span class="at">y</span><span class="sc">}</span><span class="vs">, z=</span><span class="sc">${</span>quat<span class="op">.</span><span class="at">z</span><span class="sc">}</span><span class="vs">`</span>)<span class="op">;</span></span>
+<span id="cb46-12"><a href="#cb46-12" aria-hidden="true" tabindex="-1"></a>})<span class="op">;</span></span>
+<span id="cb46-13"><a href="#cb46-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb46-14"><a href="#cb46-14" aria-hidden="true" tabindex="-1"></a><span class="co">// Trigger calibration</span></span>
+<span id="cb46-15"><a href="#cb46-15" aria-hidden="true" tabindex="-1"></a><span class="cf">await</span> tracker<span class="op">.</span><span class="fu">calibrate</span>()<span class="op">;</span></span>
+<span id="cb46-16"><a href="#cb46-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb46-17"><a href="#cb46-17" aria-hidden="true" tabindex="-1"></a><span class="co">// Read battery level</span></span>
+<span id="cb46-18"><a href="#cb46-18" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> battery <span class="op">=</span> <span class="cf">await</span> tracker<span class="op">.</span><span class="fu">getBatteryPercent</span>()<span class="op">;</span></span>
+<span id="cb46-19"><a href="#cb46-19" aria-hidden="true" tabindex="-1"></a><span class="bu">console</span><span class="op">.</span><span class="fu">log</span>(<span class="vs">`Battery: </span><span class="sc">${</span>battery<span class="sc">}</span><span class="vs">%`</span>)<span class="op">;</span></span></code></pre></div>
+<hr />
+<h2 id="applications-use-cases">8. Applications &amp; Use Cases</h2>
+<p>The Eidon Tracker platform enables a wide range of applications
+beyond VLA training.</p>
+<h3 id="embodied-ai-training-data-collection">8.1 Embodied AI Training
+Data Collection</h3>
+<p><strong>Primary use case</strong>: Create large-scale datasets of
+human task demonstrations for robot learning.</p>
+<p><strong>Target tasks:</strong> - <strong>Kitchen
+manipulation</strong>: Cooking, dishwashing, food preparation -
+<strong>Manufacturing assembly</strong>: Component insertion, tool use,
+quality inspection - <strong>Healthcare</strong>: Patient transfer,
+medication administration, assistive tasks - <strong>Domestic
+chores</strong>: Laundry folding, cleaning, organization -
+<strong>Agriculture</strong>: Harvesting, pruning, sorting</p>
+<p><strong>Advantages over lab teleoperation:</strong> - <strong>Diverse
+environments</strong>: Collect data in real kitchens, factories,
+hospitals - <strong>Natural variability</strong>: Multiple demonstrators
+with different techniques - <strong>Scale</strong>: Deploy 100+ trackers
+to different sites simultaneously - <strong>Cost</strong>: ~$200/system
+vs. $10k+ for lab motion capture</p>
+<p><strong>Dataset metrics</strong> (projected): - <strong>1 hour of
+recording</strong> = ~172,800 samples (48Hz × 3600s) - <strong>100
+demonstrators</strong> × 8 hours = 138M samples - <strong>Approaching
+LLM-scale data</strong>: Billions of samples across diverse tasks</p>
+<h3 id="teleoperation-for-remote-robotics">8.2 Teleoperation for Remote
+Robotics</h3>
+<p><strong>Scenario</strong>: Control humanoid robot from remote
+location</p>
+<p><strong>Use cases:</strong> - <strong>Hazardous
+environments</strong>: Nuclear decommissioning, disaster response -
+<strong>Space exploration</strong>: Mars rovers with human-like
+manipulators - <strong>Underwater operations</strong>: Subsea
+maintenance with ROVs - <strong>Telemedicine</strong>: Remote surgery or
+physical therapy</p>
+<p><strong>IMAGE PLACEHOLDER: Teleoperation Scenario</strong>
+<em>Description: Split image showing:</em> - <em>Left: Operator wearing
+Eidon trackers + VR headset in control room</em> - <em>Right: Humanoid
+robot in hazardous environment (e.g., nuclear plant) mimicking
+operator’s movements</em></p>
+<h3 id="biomechanics-research">8.3 Biomechanics Research</h3>
+<p><strong>Applications:</strong> - <strong>Ergonomic analysis</strong>:
+Assess workplace strain and injury risk - <strong>Sports
+biomechanics</strong>: Golf swing, baseball pitch analysis -
+<strong>Clinical gait analysis</strong>: Movement disorders
+(Parkinson’s, stroke) - <strong>Prosthetics research</strong>: Evaluate
+artificial limb performance</p>
+<p><strong>Advantages:</strong> - <strong>Field-deployable</strong>:
+Measure real work environments, not just lab - <strong>Long-duration
+monitoring</strong>: 8+ hour battery life -
+<strong>Quantitative</strong>: ±1-2° accuracy comparable to
+research-grade systems - <strong>Cost</strong>: ~$200 vs. $50k+ for
+Vicon/OptiTrack systems</p>
+<h3 id="animation-virtual-production">8.4 Animation &amp; Virtual
+Production</h3>
+<p><strong>Use cases:</strong> - <strong>Real-time mocap for
+VR/AR</strong>: Avatar control in metaverse applications - <strong>Video
+game animation</strong>: Capture combat moves, dance sequences -
+<strong>Film pre-visualization</strong>: Block scenes with digital
+actors</p>
+<p><strong>Integration with animation tools:</strong> - Export joint
+angles or GLTF animation tracks - Compatible with Blender, Maya, Unreal
+Engine</p>
+<h3 id="physical-therapy-rehabilitation">8.5 Physical Therapy &amp;
+Rehabilitation</h3>
+<p><strong>Applications:</strong> - <strong>ROM (range of motion)
+tracking</strong>: Measure progress during PT - <strong>Home exercise
+monitoring</strong>: Ensure correct form during unsupervised exercises -
+<strong>Compliance tracking</strong>: Verify patient performed
+prescribed exercises</p>
+<p><strong>Clinical workflow:</strong> 1. Patient performs exercise
+wearing trackers 2. System records joint angles throughout session 3.
+Automated analysis flags improper form or reduced ROM 4. Report sent to
+physical therapist for review</p>
+<p><strong>IMAGE PLACEHOLDER: PT Use Case</strong> <em>Description:
+Patient performing shoulder abduction exercise with tracker on upper
+arm, mobile app showing real-time angle readout and target zone
+visualization</em></p>
+<hr />
+<h2 id="technical-specifications">9. Technical Specifications</h2>
+<h3 id="hardware-specifications">9.1 Hardware Specifications</h3>
+<h4 id="eidon-tracker-device">Eidon Tracker Device</h4>
+<table>
+<thead>
+<tr>
+<th>Specification</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Dimensions</strong></td>
+<td>45mm × 30mm × 15mm</td>
+</tr>
+<tr>
+<td><strong>Weight</strong></td>
+<td>25g (with battery)</td>
+</tr>
+<tr>
+<td><strong>Enclosure material</strong></td>
+<td>3D-printed PLA/ABS (injection-mold-ready)</td>
+</tr>
+<tr>
+<td><strong>Water resistance</strong></td>
+<td>IP42 (splash-resistant)</td>
+</tr>
+<tr>
+<td><strong>Operating temperature</strong></td>
+<td>-20°C to +70°C</td>
+</tr>
+</tbody>
+</table>
+<h4 id="microcontroller-esp32-c6">Microcontroller (ESP32-C6)</h4>
+<table>
+<thead>
+<tr>
+<th>Specification</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>CPU</strong></td>
+<td>RISC-V single-core @ 160MHz</td>
+</tr>
+<tr>
+<td><strong>RAM</strong></td>
+<td>512KB SRAM</td>
+</tr>
+<tr>
+<td><strong>Flash</strong></td>
+<td>4MB</td>
+</tr>
+<tr>
+<td><strong>Wireless</strong></td>
+<td>BLE 5.0, WiFi 6 (802.11ax), ESP-NOW</td>
+</tr>
+<tr>
+<td><strong>GPIO</strong></td>
+<td>22 programmable pins</td>
+</tr>
+<tr>
+<td><strong>ADC</strong></td>
+<td>12-bit, 6 channels</td>
+</tr>
+<tr>
+<td><strong>Power consumption</strong></td>
+<td>~15mA active, &lt;10µA deep sleep</td>
+</tr>
+</tbody>
+</table>
+<h4 id="imu-bno085">IMU (BNO085)</h4>
+<table>
+<thead>
+<tr>
+<th>Specification</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Sensor type</strong></td>
+<td>9-DOF (gyro + accel + mag)</td>
+</tr>
+<tr>
+<td><strong>Gyroscope range</strong></td>
+<td>±2000°/s</td>
+</tr>
+<tr>
+<td><strong>Accelerometer range</strong></td>
+<td>±16g</td>
+</tr>
+<tr>
+<td><strong>Magnetometer range</strong></td>
+<td>±2500µT</td>
+</tr>
+<tr>
+<td><strong>Output rate</strong></td>
+<td>48Hz (quaternion)</td>
+</tr>
+<tr>
+<td><strong>Accuracy</strong></td>
+<td>±2° RMS dynamic, ±1° RMS static</td>
+</tr>
+<tr>
+<td><strong>Calibration</strong></td>
+<td>Automatic sensor fusion</td>
+</tr>
+<tr>
+<td><strong>Interface</strong></td>
+<td>I2C (400kHz)</td>
+</tr>
+</tbody>
+</table>
+<h4 id="power-system">Power System</h4>
+<table>
+<thead>
+<tr>
+<th>Specification</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Battery type</strong></td>
+<td>LiPo (Lithium Polymer)</td>
+</tr>
+<tr>
+<td><strong>Capacity</strong></td>
+<td>150-300mAh (depending on size)</td>
+</tr>
+<tr>
+<td><strong>Voltage</strong></td>
+<td>3.7V nominal (3.0-4.2V range)</td>
+</tr>
+<tr>
+<td><strong>Battery life</strong></td>
+<td>8-12 hours continuous operation</td>
+</tr>
+<tr>
+<td><strong>Charging</strong></td>
+<td>USB-C (5V, 500mA)</td>
+</tr>
+<tr>
+<td><strong>Battery monitoring</strong></td>
+<td>12-bit ADC via voltage divider</td>
+</tr>
+</tbody>
+</table>
+<h4 id="communication">Communication</h4>
+<table>
+<thead>
+<tr>
+<th>Specification</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>BLE range</strong></td>
+<td>10-20m indoors, 50m+ line-of-sight</td>
+</tr>
+<tr>
+<td><strong>ESP-NOW range</strong></td>
+<td>20-50m typical</td>
+</tr>
+<tr>
+<td><strong>BLE data rate</strong></td>
+<td>24Hz quaternion notifications</td>
+</tr>
+<tr>
+<td><strong>ESP-NOW data rate</strong></td>
+<td>48Hz (child → hub)</td>
+</tr>
+<tr>
+<td><strong>Latency</strong></td>
+<td>&lt;50ms end-to-end (IMU → mobile app)</td>
+</tr>
+<tr>
+<td><strong>Packet loss</strong></td>
+<td>&lt;0.1% (BLE in good conditions)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="firmware-specifications">9.2 Firmware Specifications</h3>
+<table>
+<thead>
+<tr>
+<th>Specification</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Framework</strong></td>
+<td>Arduino (C/C++)</td>
+</tr>
+<tr>
+<td><strong>Build system</strong></td>
+<td>PlatformIO</td>
+</tr>
+<tr>
+<td><strong>Firmware version</strong></td>
+<td>1.2 (current)</td>
+</tr>
+<tr>
+<td><strong>OTA updates</strong></td>
+<td>Planned (future feature)</td>
+</tr>
+<tr>
+<td><strong>Flash usage</strong></td>
+<td>~452KB / 4MB (11%)</td>
+</tr>
+<tr>
+<td><strong>RAM usage</strong></td>
+<td>~80KB / 512KB (16%)</td>
+</tr>
+<tr>
+<td><strong>CPU utilization</strong></td>
+<td>~40% average</td>
+</tr>
+</tbody>
+</table>
+<h3 id="data-format-specifications">9.3 Data Format Specifications</h3>
+<h4 id="quaternion-data">Quaternion Data</h4>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Size</th>
+<th>Range</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>qw</td>
+<td>float32</td>
+<td>4 bytes</td>
+<td>[-1.0, 1.0]</td>
+</tr>
+<tr>
+<td>qx</td>
+<td>float32</td>
+<td>4 bytes</td>
+<td>[-1.0, 1.0]</td>
+</tr>
+<tr>
+<td>qy</td>
+<td>float32</td>
+<td>4 bytes</td>
+<td>[-1.0, 1.0]</td>
+</tr>
+<tr>
+<td>qz</td>
+<td>float32</td>
+<td>4 bytes</td>
+<td>[-1.0, 1.0]</td>
+</tr>
+<tr>
+<td><strong>Total</strong></td>
+<td></td>
+<td><strong>16 bytes</strong></td>
+<td>Unit quaternion (‖q‖=1)</td>
+</tr>
+</tbody>
+</table>
+<h4 id="joint-angles-per-arm">Joint Angles (per arm)</h4>
+<table>
+<thead>
+<tr>
+<th>Angle</th>
+<th>Range</th>
+<th>Units</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Shoulder yaw</td>
+<td>-90° to +90°</td>
+<td>degrees</td>
+</tr>
+<tr>
+<td>Shoulder pitch</td>
+<td>-180° to +60°</td>
+<td>degrees</td>
+</tr>
+<tr>
+<td>Shoulder roll</td>
+<td>-45° to +180°</td>
+<td>degrees</td>
+</tr>
+<tr>
+<td>Elbow flex</td>
+<td>0° to 145°</td>
+<td>degrees</td>
+</tr>
+<tr>
+<td>Forearm roll</td>
+<td>-90° to +90°</td>
+<td>degrees</td>
+</tr>
+<tr>
+<td>Wrist yaw</td>
+<td>-30° to +30°</td>
+<td>degrees</td>
+</tr>
+<tr>
+<td>Wrist pitch</td>
+<td>-70° to +70°</td>
+<td>degrees</td>
+</tr>
+</tbody>
+</table>
+<h3 id="system-requirements">9.4 System Requirements</h3>
+<h4 id="mobile-application">Mobile Application</h4>
+<table>
+<thead>
+<tr>
+<th>Platform</th>
+<th>Requirements</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>iOS</strong></td>
+<td>iOS 14+ (BLE 5.0 support)</td>
+</tr>
+<tr>
+<td><strong>Android</strong></td>
+<td>Android 10+ (API level 29+)</td>
+</tr>
+<tr>
+<td><strong>RAM</strong></td>
+<td>4GB+ recommended</td>
+</tr>
+<tr>
+<td><strong>Storage</strong></td>
+<td>500MB+ free (for app + temporary data)</td>
+</tr>
+<tr>
+<td><strong>Camera</strong></td>
+<td>1080p @ 30fps minimum</td>
+</tr>
+</tbody>
+</table>
+<h4 id="eidon-sim-processing">eidon-sim Processing</h4>
+<table>
+<colgroup>
+<col style="width: 43%" />
+<col style="width: 56%" />
+</colgroup>
+<thead>
+<tr>
+<th>Platform</th>
+<th>Requirements</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>OS</strong></td>
+<td>Windows 10+, macOS 12+, Linux (Ubuntu 20.04+)</td>
+</tr>
+<tr>
+<td><strong>Browser</strong></td>
+<td>Chrome 90+, Edge 90+, Firefox 88+ (WebGL 2.0 support)</td>
+</tr>
+<tr>
+<td><strong>RAM</strong></td>
+<td>8GB+</td>
+</tr>
+<tr>
+<td><strong>GPU</strong></td>
+<td>Integrated graphics sufficient (dedicated GPU for faster
+rendering)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="manufacturing-specifications">9.5 Manufacturing
+Specifications</h3>
+<h4 id="pcb">PCB</h4>
+<table>
+<thead>
+<tr>
+<th>Specification</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Size</strong></td>
+<td>25mm × 20mm</td>
+</tr>
+<tr>
+<td><strong>Layers</strong></td>
+<td>2 (top + bottom)</td>
+</tr>
+<tr>
+<td><strong>Thickness</strong></td>
+<td>1.6mm</td>
+</tr>
+<tr>
+<td><strong>Material</strong></td>
+<td>FR4</td>
+</tr>
+<tr>
+<td><strong>Copper weight</strong></td>
+<td>1 oz (35µm)</td>
+</tr>
+<tr>
+<td><strong>Finish</strong></td>
+<td>ENIG (Electroless Nickel Immersion Gold)</td>
+</tr>
+<tr>
+<td><strong>Min trace/space</strong></td>
+<td>0.15mm / 0.15mm</td>
+</tr>
+<tr>
+<td><strong>Min drill</strong></td>
+<td>0.3mm</td>
+</tr>
+<tr>
+<td><strong>Assembly</strong></td>
+<td>SMT (surface mount) + hand soldering (modules)</td>
+</tr>
+</tbody>
+</table>
+<h4 id="d-printed-enclosure">3D Printed Enclosure</h4>
+<table>
+<thead>
+<tr>
+<th>Specification</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Print technology</strong></td>
+<td>FDM (Fused Deposition Modeling)</td>
+</tr>
+<tr>
+<td><strong>Layer height</strong></td>
+<td>0.2mm</td>
+</tr>
+<tr>
+<td><strong>Infill</strong></td>
+<td>20% gyroid</td>
+</tr>
+<tr>
+<td><strong>Material</strong></td>
+<td>PLA or ABS</td>
+</tr>
+<tr>
+<td><strong>Print time</strong></td>
+<td>~60 min (body), ~20 min (lid)</td>
+</tr>
+<tr>
+<td><strong>Post-processing</strong></td>
+<td>Light sanding on mating surfaces</td>
+</tr>
+<tr>
+<td><strong>Cost per unit</strong></td>
+<td>~$1.50 (material + amortized printer cost)</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="conclusion">10. Conclusion</h2>
+<p>The Eidon Tracker system represents a <strong>paradigm shift</strong>
+in embodied AI training data collection. By combining custom hardware,
+sophisticated firmware, and advanced kinematics processing, we enable
+researchers to collect human demonstration data at a scale previously
+unattainable.</p>
+<h3 id="key-innovations">Key Innovations</h3>
+<ol type="1">
+<li><strong>Complete vertical integration</strong>: Custom PCB →
+firmware → enclosure → data pipeline</li>
+<li><strong>Field-deployable design</strong>: Wearable, battery-powered,
+robust construction</li>
+<li><strong>Dual-radio architecture</strong>: Efficient BLE + ESP-NOW
+for multi-device coordination</li>
+<li><strong>Seven-degree-of-freedom kinematics</strong>: Anatomically
+accurate joint angle derivation</li>
+<li><strong>Open platform</strong>: Integration-ready for VLA frameworks
+and robotic systems</li>
+</ol>
+<h3 id="the-path-forward">The Path Forward</h3>
+<p><strong>Immediate applications:</strong> - VLA training dataset
+collection for kitchen manipulation tasks - Teleoperation interface for
+humanoid robots (unitree H1, Figure 01) - Biomechanics research
+(ergonomics, sports science)</p>
+<p><strong>Future development roadmap:</strong> - <strong>Expanded
+tracking</strong>: Lower body tracking (hips, knees, ankles) for
+full-body capture - <strong>Sensor fusion</strong>: Integrate
+camera-based tracking for absolute position (indoor SLAM) -
+<strong>Cloud platform</strong>: Centralized dataset repository with
+annotation tools - <strong>Pre-trained models</strong>: Release VLA
+models trained on Eidon datasets - <strong>Enterprise SDK</strong>:
+Commercial licensing for robotics companies</p>
+<h3 id="closing-statement">Closing Statement</h3>
+<p>The “LLM moment” for humanoid robotics requires data infrastructure
+that <strong>democratizes</strong> embodied AI research. Eidon Tracker
+provides that infrastructure—enabling researchers, startups, and
+enterprises to collect human demonstration data at scale, anywhere tasks
+are performed.</p>
+<p><strong>We’re not just building motion capture hardware. We’re
+building the foundation for a new generation of embodied
+intelligence.</strong></p>
+<hr />
+<h2 id="appendix-a-bill-of-materials-detailed">Appendix A: Bill of
+Materials (Detailed)</h2>
+<h3 id="per-device-bom">Per-Device BOM</h3>
+<table>
+<colgroup>
+<col style="width: 6%" />
+<col style="width: 14%" />
+<col style="width: 16%" />
+<col style="width: 18%" />
+<col style="width: 6%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 9%" />
+</colgroup>
+<thead>
+<tr>
+<th>Ref</th>
+<th>Component</th>
+<th>Part Number</th>
+<th>Manufacturer</th>
+<th>Qty</th>
+<th>Unit Price</th>
+<th>Ext. Price</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>U1</td>
+<td>Microcontroller</td>
+<td>XIAO ESP32-C6</td>
+<td>Seeed Studio</td>
+<td>1</td>
+<td>$5.50</td>
+<td>$5.50</td>
+<td></td>
+</tr>
+<tr>
+<td>U2</td>
+<td>IMU Sensor</td>
+<td>BNO085</td>
+<td>Adafruit (Bosch)</td>
+<td>1</td>
+<td>$12.00</td>
+<td>$12.00</td>
+<td>Pre-calibrated module</td>
+</tr>
+<tr>
+<td>D1</td>
+<td>LED</td>
+<td>APT2012YC</td>
+<td>Kingbright</td>
+<td>1</td>
+<td>$0.10</td>
+<td>$0.10</td>
+<td>Yellow 0805</td>
+</tr>
+<tr>
+<td>R1</td>
+<td>Resistor</td>
+<td>RC0805FR-07220KL</td>
+<td>Yageo</td>
+<td>1</td>
+<td>$0.01</td>
+<td>$0.01</td>
+<td>220kΩ ±1%</td>
+</tr>
+<tr>
+<td>R2</td>
+<td>Resistor</td>
+<td>RC0805FR-07220KL</td>
+<td>Yageo</td>
+<td>1</td>
+<td>$0.01</td>
+<td>$0.01</td>
+<td>220kΩ ±1%</td>
+</tr>
+<tr>
+<td>R3</td>
+<td>Resistor</td>
+<td>RC0805FR-071KL</td>
+<td>Yageo</td>
+<td>1</td>
+<td>$0.01</td>
+<td>$0.01</td>
+<td>1kΩ ±1%</td>
+</tr>
+<tr>
+<td>SW2</td>
+<td>Tactile Switch</td>
+<td>SKRKAEE020</td>
+<td>Alps</td>
+<td>1</td>
+<td>$0.30</td>
+<td>$0.30</td>
+<td>160gf actuation</td>
+</tr>
+<tr>
+<td>BT1</td>
+<td>LiPo Battery</td>
+<td>-</td>
+<td>Generic</td>
+<td>1</td>
+<td>$3.00</td>
+<td>$3.00</td>
+<td>200mAh, 3.7V, JST PH</td>
+</tr>
+<tr>
+<td>PCB</td>
+<td>Bare PCB</td>
+<td>Custom</td>
+<td>JLCPCB</td>
+<td>1</td>
+<td>$2.00</td>
+<td>$2.00</td>
+<td>2-layer, ENIG, 25×20mm</td>
+</tr>
+<tr>
+<td>-</td>
+<td>PCBA Assembly</td>
+<td>-</td>
+<td>JLCPCB</td>
+<td>1</td>
+<td>$5.00</td>
+<td>$5.00</td>
+<td>Pick-and-place + reflow</td>
+</tr>
+<tr>
+<td>-</td>
+<td>Enclosure Body</td>
+<td>eidon-tracker-v3b-body.stl</td>
+<td>3D Printed</td>
+<td>1</td>
+<td>$1.00</td>
+<td>$1.00</td>
+<td>PLA, 0.2mm layers</td>
+</tr>
+<tr>
+<td>-</td>
+<td>Enclosure Lid</td>
+<td>eidon-tracker-v3b-lid-0.stl</td>
+<td>3D Printed</td>
+<td>1</td>
+<td>$0.30</td>
+<td>$0.30</td>
+<td>PLA</td>
+</tr>
+<tr>
+<td>-</td>
+<td>Button</td>
+<td>eidon-tracker-v3b-btn.stl</td>
+<td>3D Printed</td>
+<td>1</td>
+<td>$0.20</td>
+<td>$0.20</td>
+<td>PLA</td>
+</tr>
+<tr>
+<td>-</td>
+<td>Mounting Bracket</td>
+<td><em>-mount-</em>.stl</td>
+<td>3D Printed</td>
+<td>1</td>
+<td>$0.50</td>
+<td>$0.50</td>
+<td>PLA</td>
+</tr>
+<tr>
+<td>-</td>
+<td>Elastic Strap</td>
+<td>-</td>
+<td>Generic</td>
+<td>1</td>
+<td>$1.00</td>
+<td>$1.00</td>
+<td>20mm width, 300mm length</td>
+</tr>
+<tr>
+<td>-</td>
+<td>Hook &amp; Loop</td>
+<td>-</td>
+<td>Generic</td>
+<td>1</td>
+<td>$0.50</td>
+<td>$0.50</td>
+<td>Velcro closure</td>
+</tr>
+<tr>
+<td>-</td>
+<td>Fasteners</td>
+<td>M2×6mm</td>
+<td>Generic</td>
+<td>4</td>
+<td>$0.02</td>
+<td>$0.08</td>
+<td>Phillips pan head</td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td><strong>Total</strong></td>
+<td><strong>$32.51</strong></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<h3 id="device-system-bom">7-Device System BOM</h3>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Qty</th>
+<th>Unit Price</th>
+<th>Ext. Price</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Eidon Tracker Device</td>
+<td>7</td>
+<td>$32.51</td>
+<td>$227.57</td>
+</tr>
+<tr>
+<td>Mobile App (free)</td>
+<td>1</td>
+<td>$0.00</td>
+<td>$0.00</td>
+</tr>
+<tr>
+<td>Documentation</td>
+<td>1</td>
+<td>$0.00</td>
+<td>$0.00</td>
+</tr>
+<tr>
+<td><strong>System Total</strong></td>
+<td></td>
+<td></td>
+<td><strong>$227.57</strong></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Volume pricing</strong> (1000+ units): - PCB: $0.80 ea -
+PCBA: $3.00 ea - Components: ~$18.00 ea (bulk discounts) - Enclosure:
+$0.50 ea (injection molding) - <strong>Total per device</strong>:
+~$18.00 - <strong>7-device system</strong>: ~$126.00</p>
+<hr />
+<h2 id="appendix-b-file-locations-reference">Appendix B: File Locations
+Reference</h2>
+<h3 id="eidon-tracker-repository">eidon-tracker Repository</h3>
+<pre><code>/Users/robert/eidon/eidon-tracker/
+├── firmware/
+│   ├── src/main.cpp (core firmware logic)
+│   ├── lib/BNO085/ (IMU driver)
+│   └── platformio.ini (build config)
+├── pcb/eidon-tracker/
+│   ├── eidon-tracker.kicad_sch (schematic)
+│   ├── eidon-tracker.kicad_pcb (layout)
+│   └── gerbers/*.zip (manufacturing files)
+├── cad/
+│   ├── eidon-tracker-v3b.f3d (Fusion 360 source)
+│   ├── eidon-tracker.step (universal CAD)
+│   └── *.stl (3D print files)
+├── web/
+│   ├── index.html (visualizer UI)
+│   └── script.js (BLE + Three.js logic)
+└── docs/
+    ├── FIRMWARE_ARCHITECTURE.md
+    ├── GATT_SERVICE_REFERENCE.md
+    └── HARDWARE_OVERVIEW.md</code></pre>
+<h3 id="eidon-sim-repository">eidon-sim Repository</h3>
+<pre><code>/Users/robert/eidon/eidon-sim/
+├── src/
+│   ├── core/
+│   │   ├── reportParsers.ts (quaternion decoding)
+│   │   ├── mathUtils.ts (Euler, vector math)
+│   │   └── ArmSolver.ts (7-DOF angle solver)
+│   └── ui/scene/
+│       ├── vectorArm.ts (forward kinematics visualization)
+│       └── skeletalRig.ts (GLTF model animation)
+└── docs/
+    └── kinematics.md (mathematical documentation)</code></pre>
+<hr />
+<h2 id="appendix-c-uuid-reference">Appendix C: UUID Reference</h2>
+<h3 id="ble-service-uuids">BLE Service UUIDs</h3>
+<table>
+<colgroup>
+<col style="width: 48%" />
+<col style="width: 12%" />
+<col style="width: 12%" />
+<col style="width: 26%" />
+</colgroup>
+<thead>
+<tr>
+<th>Service/Characteristic</th>
+<th>UUID</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Primary Service</strong></td>
+<td><code>E1D00001-8B5A-3E5B-9E23-4F9B5C91BBDE</code></td>
+<td>Service</td>
+<td>Main Eidon Tracker service</td>
+</tr>
+<tr>
+<td>Quaternion</td>
+<td><code>E1D00002-8B5A-3E5B-9E23-4F9B5C91BBDE</code></td>
+<td>Char (RN)</td>
+<td>Quaternion data (w,x,y,z)</td>
+</tr>
+<tr>
+<td>Calibration</td>
+<td><code>E1D00003-8B5A-3E5B-9E23-4F9B5C91BBDE</code></td>
+<td>Char (RW)</td>
+<td>Calibration command (0x01)</td>
+</tr>
+<tr>
+<td>Device Info</td>
+<td><code>E1D00005-8B5A-3E5B-9E23-4F9B5C91BBDE</code></td>
+<td>Char (R)</td>
+<td>Device ID, FW ver, battery, role</td>
+</tr>
+<tr>
+<td>Hand Quaternion</td>
+<td><code>E1D00008-8B5A-3E5B-9E23-4F9B5C91BBDE</code></td>
+<td>Char (RN)</td>
+<td>Aggregated hand quat (hub only)</td>
+</tr>
+<tr>
+<td>Forearm Quaternion</td>
+<td><code>E1D00009-8B5A-3E5B-9E23-4F9B5C91BBDE</code></td>
+<td>Char (RN)</td>
+<td>Aggregated forearm quat (hub only)</td>
+</tr>
+<tr>
+<td><strong>Role Config Service</strong></td>
+<td><code>E1D00006-8B5A-3E5B-9E23-4F9B5C91BBDE</code></td>
+<td>Service</td>
+<td>Role assignment service</td>
+</tr>
+<tr>
+<td>Role Assignment</td>
+<td><code>E1D00007-8B5A-3E5B-9E23-4F9B5C91BBDE</code></td>
+<td>Char (RW)</td>
+<td>Device role + hub MAC address</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Legend:</strong> - R = Read - W = Write - N = Notify - RN =
+Read + Notify - RW = Read + Write</p>
+<hr />
+<h2 id="appendix-d-glossary">Appendix D: Glossary</h2>
+<p><strong>BLE (Bluetooth Low Energy)</strong>: Wireless protocol
+optimized for low-power device communication. Used for Eidon Tracker →
+mobile app data streaming.</p>
+<p><strong>BNO085</strong>: Bosch 9-DOF IMU with hardware sensor fusion.
+Outputs quaternions at 48Hz.</p>
+<p><strong>DOF (Degrees of Freedom)</strong>: Number of independent
+parameters defining a joint’s movement. Shoulder = 3-DOF, elbow = 1-DOF,
+wrist = 2-DOF.</p>
+<p><strong>Embodied AI</strong>: AI systems that interact with the
+physical world through robotic bodies.</p>
+<p><strong>ESP-NOW</strong>: Espressif’s proprietary low-latency
+wireless protocol. Used for child device → hub communication.</p>
+<p><strong>Euler Angles</strong>: Representation of 3D rotation as three
+sequential axis rotations (e.g., yaw-pitch-roll).</p>
+<p><strong>GATT (Generic Attribute Profile)</strong>: BLE protocol layer
+defining service/characteristic structure.</p>
+<p><strong>Gimbal Lock</strong>: Singularity in Euler angle
+representation where two axes align, losing a degree of freedom.</p>
+<p><strong>IMU (Inertial Measurement Unit)</strong>: Sensor combining
+gyroscope, accelerometer, and magnetometer. Measures orientation and
+acceleration.</p>
+<p><strong>NimBLE</strong>: Lightweight Bluetooth stack for ESP32
+(alternative to Bluedroid).</p>
+<p><strong>Pronation/Supination</strong>: Forearm rotation (pronation =
+palm down, supination = palm up).</p>
+<p><strong>Quaternion</strong>: 4D number (w, x, y, z) representing 3D
+rotation. Avoids gimbal lock, efficient for interpolation.</p>
+<p><strong>RISC-V</strong>: Open-source instruction set architecture.
+Used in ESP32-C6 microcontroller.</p>
+<p><strong>ROM (Range of Motion)</strong>: Maximum angular extent a
+joint can move.</p>
+<p><strong>Sensor Fusion</strong>: Combining data from multiple sensors
+(gyro, accel, mag) to compute accurate orientation.</p>
+<p><strong>VLA (Vision-Language-Action)</strong>: Multimodal AI model
+mapping visual observations + language instructions → robot actions.</p>
+<hr />
+<h2 id="appendix-e-contact-licensing">Appendix E: Contact &amp;
+Licensing</h2>
+<p><strong>Company</strong>: Eidon <strong>Website</strong>: <a
+href="https://www.eidon.ai">www.eidon.ai</a> <em>(placeholder)</em>
+<strong>Technical Support</strong>: support@eidon.ai
+<em>(placeholder)</em> <strong>GitHub</strong>: <a
+href="https://github.com/eidon/eidon-tracker">github.com/eidon/eidon-tracker</a>
+<em>(placeholder)</em></p>
+<p><strong>Licensing:</strong> - Hardware designs (PCB, enclosure):
+<strong>Open-source</strong> (CERN-OHL-P v2 or similar) - Firmware:
+<strong>Open-source</strong> (MIT License or similar) - Software
+(eidon-sim): <strong>Open-source</strong> (MIT License) - Documentation:
+<strong>Creative Commons CC-BY-4.0</strong></p>
+<p><strong>Commercial licensing available for:</strong> - White-label
+OEM integration - Custom firmware development - Enterprise support
+contracts</p>
+<hr />
+<p><strong>Document prepared by</strong>: Eidon Engineering Team
+<strong>Last updated</strong>: January 2025 <strong>Document
+version</strong>: 1.0</p>
+<hr />
+</body>
+</html>
