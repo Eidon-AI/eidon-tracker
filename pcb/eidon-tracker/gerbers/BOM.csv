@@ -2,4 +2,4 @@
 "D1","1","LED","","LED_SMD:LED_0805_2012Metric","Kingbright APT2012YC","Digi-Key 754-1121-1-ND"
 "R1,R2","2","220k","","Resistor_SMD:R_0805_2012Metric","Yageo RC0805FR-07220KL","LCSC C25811"
 "R3","1","1k","","Resistor_SMD:R_0805_2012Metric","Yageo RC0805FR-071KL","LCSC C95781; Digi-Key 311-1.00KCRCT-ND"
-"SW2","1","SW_Push","","Button_Switch_SMD:SW_Push_SPST_NO_Alps_SKRK","Alps SKRKACE010","Mouser 688-SKRKACE010"
+"SW2","1","SW_Push","","Button_Switch_SMD:SW_Push_SPST_NO_Alps_SKRK","Alps SKRKAEE020","SKRKAEE020"

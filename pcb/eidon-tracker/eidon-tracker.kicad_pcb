@@ -142,15 +142,15 @@
 				)
 			)
 		)
-		(property "Description" ""
-			(at 0.022323 -0.012888 90)
+		(property "Description" "XIAO-ESP32C6 MCU Module"
+			(at 0 0 0)
 			(unlocked yes)
 			(layer "F.Fab")
 			(hide yes)
-			(uuid "113a86da-f894-4529-9644-71e24ebca9ce")
+			(uuid "ecc6fdcf-9ddd-48d1-b14b-45fbf9fa44f6")
 			(effects
 				(font
-					(size 1.27 1.27)
+					(size 1 1)
 					(thickness 0.15)
 				)
 			)
@@ -187,19 +187,6 @@
 			(layer "F.Fab")
 			(hide yes)
 			(uuid "b8791bb5-21e0-41a9-91a0-d22da3477235")
-			(effects
-				(font
-					(size 1 1)
-					(thickness 0.15)
-				)
-			)
-		)
-		(property "Description" "XIAO-ESP32C6 MCU Module"
-			(at 0 0 0)
-			(unlocked yes)
-			(layer "F.Fab")
-			(hide yes)
-			(uuid "ecc6fdcf-9ddd-48d1-b14b-45fbf9fa44f6")
 			(effects
 				(font
 					(size 1 1)
@@ -3395,7 +3382,7 @@
 				(justify mirror)
 			)
 		)
-		(property "Value" "1.8k"
+		(property "Value" "1k"
 			(at 0 0 0)
 			(layer "B.Fab")
 			(hide yes)
@@ -3431,6 +3418,34 @@
 			(effects
 				(font
 					(size 1.27 1.27)
+					(thickness 0.15)
+				)
+				(justify mirror)
+			)
+		)
+		(property "Supplier & Ref" "LCSC C95781; Digi-Key 311-1.00KCRCT-ND"
+			(at 0 0 0)
+			(unlocked yes)
+			(layer "B.Fab")
+			(hide yes)
+			(uuid "463405b0-3693-45ae-8a27-5cdc092fe48e")
+			(effects
+				(font
+					(size 1 1)
+					(thickness 0.15)
+				)
+				(justify mirror)
+			)
+		)
+		(property "Manufacturer Part Number (MPN)" "Yageo RC0805FR-071KL"
+			(at 0 0 0)
+			(unlocked yes)
+			(layer "B.Fab")
+			(hide yes)
+			(uuid "a6ffa037-3953-465e-81fb-5a6d396fa788")
+			(effects
+				(font
+					(size 1 1)
 					(thickness 0.15)
 				)
 				(justify mirror)

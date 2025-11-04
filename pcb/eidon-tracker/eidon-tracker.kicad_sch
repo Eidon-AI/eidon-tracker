@@ -4231,7 +4231,7 @@
 				(hide yes)
 			)
 		)
-		(property "Supplier & Ref" "Mouser 688-SKRKACE010"
+		(property "Supplier & Ref" "LCSC SKRKAEE020; Mouser 688-SKRKACE010"
 			(at 196.85 137.16 0)
 			(effects
 				(font
