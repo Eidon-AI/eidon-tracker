@@ -1,8 +1,10 @@
 # EIDON TRACKER SYSTEM
 ## A High-Precision Wearable IMU Platform for Embodied AI Training Data Collection
 
+![Eidon Tracker - Technical illustration](images/whitepaper/EIDON_TRACKER_DRAWING.png)
+
 **Version 1.0**
-**Date: January 2025**
+**Date: November 2025**
 
 ---
 
@@ -69,10 +71,9 @@ Just as LLMs achieved breakthrough performance through massive-scale diverse tra
 
 The Eidon ecosystem consists of three integrated subsystems:
 
-**IMAGE PLACEHOLDER: System Architecture Diagram**
-*Description: High-level block diagram showing (1) Eidon Tracker wearable devices on human body, (2) Mobile app hub receiving BLE data + recording video, (3) Data processing pipeline, (4) Output to VLA training or robotic control systems*
+![System Architecture Diagram - Complete ecosystem from capture to training](images/whitepaper/SYSTEM_ARCH_DIAG.png)
 
-#### 2.1 Eidon Tracker Hardware (This Repository)
+#### 2.1 Eidon Tracker Hardware
 
 Seven wearable IMU devices providing real-time orientation tracking:
 
@@ -140,19 +141,15 @@ Real-time and post-processing kinematics engine:
 
 ### Wearing Configuration
 
-**IMAGE PLACEHOLDER: Body Tracking Layout**
-*Description: Front and side view silhouette of human showing placement of 7 trackers:*
-- *Chest: Center of sternum*
-- *Left/Right Upper Arm: Lateral humerus (upper arm)*
-- *Left/Right Forearm: Posterior radius (back of forearm)*
-- *Left/Right Hand: Dorsal metacarpals (back of hand)*
+![Body Tracking Layout - Front and side view showing 7 tracker placement positions](images/whitepaper/BODY_TRACKING_LAYOUT.png)
 
-**IMAGE PLACEHOLDER: Tracker Mounting Details**
-*Description: Close-up photos/drawings showing:*
-- *Elastic strap mounting on arm (side profile)*
-- *Hook-and-loop closure mechanism*
-- *Proper IMU alignment with anatomical axes*
-- *Chest mount harness configuration*
+**Tracker Placement:**
+- **Chest**: Center of sternum (reference frame)
+- **Left/Right Upper Arm**: Lateral humerus (upper arm)
+- **Left/Right Forearm**: Posterior radius (back of forearm)
+- **Left/Right Hand**: Dorsal metacarpals (back of hand)
+
+![Tracker Mounting Details - Close-up showing strap mounting and attachment mechanism](images/whitepaper/TRACKER_MOUNTING_DETAILS.png)
 
 ### Key System Specifications (Summary)
 
@@ -166,6 +163,8 @@ Real-time and post-processing kinematics engine:
 | **Latency** | <50ms end-to-end (IMU → mobile app) |
 | **Form factor** | 45×30×15mm per tracker |
 | **Weight** | ~25g per tracker with battery |
+| **Cost per device** | $30.84 (current production) |
+| **Complete 7-device system** | $278.87 (including harness and charging hub) |
 
 ---
 
@@ -175,15 +174,7 @@ The Eidon Tracker hardware represents a complete custom solution optimized for w
 
 ### 3.1 Custom PCB Design
 
-**IMAGE PLACEHOLDER: PCB Layout Renders**
-*Description: Top and bottom view of assembled PCB with component callouts: (1) ESP32-C6 module, (2) BNO085 IMU, (3) Status LED, (4) Battery connector, (5) Voltage divider network, (6) User button*
-
-**IMAGE PLACEHOLDER: KiCad Schematic (Simplified)**
-*Description: Clean schematic diagram showing major functional blocks:*
-- *Power section (LiPo input, voltage monitoring circuit)*
-- *Microcontroller section (ESP32-C6 with key pins labeled)*
-- *IMU section (I2C interface, interrupt pin)*
-- *Status indicators (LED + current-limiting resistor)*
+![PCB Design - Custom circuit board layout and schematic](images/whitepaper/PCB_DESIGN_3D.png)
 
 #### PCB Specifications
 
@@ -235,20 +226,16 @@ The Eidon Tracker hardware represents a complete custom solution optimized for w
 
 ### 3.2 Mechanical Design
 
-**IMAGE PLACEHOLDER: Exploded View Assembly**
-*Description: CAD explosion showing all components separated vertically:*
-- *Top lid with button access hole*
-- *Main enclosure body with PCB mounting posts*
-- *PCB with battery underneath*
-- *Integrated mounting strap channels*
-- *Bottom face with logo/ventilation*
+![Exploded View Assembly - CAD rendering showing all components separated](images/whitepaper/EXPLODED_VIEW_ASSEMBLY.png)
 
-**IMAGE PLACEHOLDER: Cross-Section View**
-*Description: Cutaway showing internal component stacking:*
-- *PCB at top with IMU facing up*
-- *Battery in lower cavity*
-- *Wire routing channels*
-- *Snap-fit lid retention features*
+**Component Stack (top to bottom):**
+- Top lid with button access hole
+- Main enclosure body with PCB mounting posts
+- PCB with battery underneath
+- Integrated mounting strap channels
+- Bottom face with logo/ventilation
+
+![Exploded View Assembly - Side perspective showing internal layout](images/whitepaper/EXPLODED_VIEW_ASSEMBLY_SIDE.png)
 
 #### Enclosure Specifications
 
@@ -271,16 +258,16 @@ The Eidon Tracker hardware represents a complete custom solution optimized for w
 
 #### Mounting System
 
-**IMAGE PLACEHOLDER: Mounting Bracket Designs**
-*Description: Three mounting bracket types shown separately:*
-- *Arm bracket: Curved profile with elastic strap slots*
-- *Chest bracket: Flat with multiple strap anchor points*
-- *Hand bracket: Low-profile design for back-of-hand placement*
+<div class="side-by-side">
+<img src="images/whitepaper/PHOTO_ARM_MOUNT.png" alt="Arm Mount - Elastic strap mounting on forearm" style="max-width: 400px; width: auto;">
+<img src="images/whitepaper/PHOTO_CHEST_MOUNT.jpg" alt="Chest Mount - Harness system for torso tracking" style="max-width: 400px; width: auto;">
+</div>
 
-**Mounting brackets** (separate STL files):
-- `eidon-tracker-mount-arm.stl`: Curved profile fits radius/ulna/humerus anatomy
-- `eidon-tracker-mount-chest.stl`: Flat plate with multiple strap routing options
-- `eidon-tracker-mount-chest-B.stl`: Alternative chest design with offset angle
+**Integrated Mounting System:**
+- Strap channels are built directly into the enclosure body (no separate bracket required)
+- 20mm elastic webbing threads through molded slots on sides of enclosure
+- Allows for quick attachment/removal while maintaining secure fit
+- Earlier design iterations used separate STL mounting brackets (deprecated in v3b)
 
 **Strap specifications:**
 - **Material**: Elastic webbing or neoprene
@@ -305,23 +292,31 @@ The Eidon Tracker hardware represents a complete custom solution optimized for w
 
 ### 3.3 Bill of Materials (Complete Device)
 
-| Category | Item | Quantity | Unit Cost (est.) | Notes |
-|----------|------|----------|------------------|-------|
-| **PCB** | Fabricated bare board | 1 | $2.00 | Min order 5 pcs |
-| **PCBA** | Component assembly | 1 | $5.00 | Automated pick-and-place |
-| **MCU** | Seeed XIAO ESP32-C6 | 1 | $5.50 | Includes castellated module |
-| **IMU** | BNO085 breakout | 1 | $12.00 | Pre-calibrated module |
-| **Passives** | Resistors, LED, button | 1 set | $0.50 | Bulk pricing |
-| **Battery** | 200mAh LiPo | 1 | $3.00 | With protection circuit |
-| **Enclosure** | 3D-printed body + lid | 1 | $1.50 | Amortized printer cost |
-| **Mounting** | Bracket + strap | 1 | $2.00 | Elastic webbing + 3D print |
-| **Misc** | Screws, wiring | 1 set | $0.50 | M2 fasteners |
-| **TOTAL** | | | **~$32.00** | Per device |
-| **7-device system** | | | **~$224.00** | Full upper body tracking |
+| Category | Item | Quantity | Unit Cost | Notes |
+|----------|------|----------|-----------|-------|
+| **MCU** | Seeed XIAO ESP32-C6 | 1 | $5.20 | Includes castellated module |
+| **IMU** | BNO085 breakout | 1 | $17.51 | Pre-calibrated module |
+| **Battery** | LiPo (200-300mAh) | 1 | $4.59 | With protection circuit |
+| **Power Switch** | Slide/toggle switch | 1 | $0.08 | SPDT switch |
+| **Enclosure** | 3D-printed body + lid + button | 1 | $0.46 | PLA filament (amortized) |
+| **Mounting** | Elastic strap with Velcro | 1 | $3.00 | 20mm elastic webbing |
+| **Cable** | USB-C charging cable | 1 | $1.13 | Data + charging |
+| **TOTAL** | | | **$30.84** | Per device |
+| **7-device system** | | | **$215.88** | Trackers only |
+
+**Complete 7-Device Kit (Ready to Use):**
+
+| Item | Quantity | Unit Cost | Total |
+|------|----------|-----------|-------|
+| Eidon Tracker devices | 7 | $30.84 | $215.88 |
+| Chest harness | 1 | $24.00 | $24.00 |
+| USB charging hub | 1 | $35.99 | $35.99 |
+| Extra straps (chest mount) | 1 | $3.00 | $3.00 |
+| **TOTAL SYSTEM COST** | | | **$278.87** |
 
 **Cost reduction at scale:**
-- 100-unit production: ~$25/device ($175 for 7-device system)
-- 1000-unit production: ~$18/device ($126 for 7-device system)
+- 100-unit production: ~$24/device ($168 for 7-device system)
+- 1000-unit production: ~$18/device ($126 for 7-device system, IMU bulk pricing)
 
 ---
 
@@ -329,12 +324,7 @@ The Eidon Tracker hardware represents a complete custom solution optimized for w
 
 The Eidon Tracker firmware is a sophisticated real-time system managing sensor fusion, wireless communication, power optimization, and multi-device coordination.
 
-**IMAGE PLACEHOLDER: Firmware Architecture Diagram**
-*Description: Block diagram showing firmware layers:*
-- *Bottom: Hardware abstraction (I2C, BLE, ESP-NOW drivers)*
-- *Middle: Core services (IMU manager, battery monitor, device config)*
-- *Top: Application logic (role management, data streaming, calibration)*
-- *Arrows showing data flow between blocks*
+<img src="images/whitepaper/FIRMWARE_ARCH_DIAG.png" alt="Firmware Architecture Diagram - Layered software architecture and data flow" style="width: 300px;">
 
 ### 4.1 Development Environment
 
@@ -583,12 +573,12 @@ firmware/
 
 The Eidon system transforms raw IMU quaternions into actionable skeletal kinematics through a sophisticated processing pipeline implemented in the **eidon-sim** repository.
 
-**IMAGE PLACEHOLDER: Data Pipeline Flowchart**
+<!-- **IMAGE PLACEHOLDER: Data Pipeline Flowchart**
 *Description: Flowchart showing:*
 1. *Raw quaternions (7 devices, 48Hz) → Mobile app aggregation*
 2. *Timestamped video frames (30-60fps) → Mobile app storage*
 3. *Synchronized dataset → eidon-sim processing*
-4. *Output: 7-DOF joint angles, 3D skeletal trajectory, aligned video*
+4. *Output: 7-DOF joint angles, 3D skeletal trajectory, aligned video* -->
 
 ### 5.1 Mobile Application Hub
 
@@ -620,13 +610,7 @@ The Eidon system transforms raw IMU quaternions into actionable skeletal kinemat
    - Packages IMU data (binary or JSON), video file, metadata into single archive
    - Optional cloud upload (future feature)
 
-**IMAGE PLACEHOLDER: Mobile App Screenshot**
-*Description: Mockup showing:*
-- *Connection status for 7 devices (green checkmarks)*
-- *Battery levels for each tracker*
-- *Live 3D skeleton preview (simplified)*
-- *Record/Stop buttons*
-- *Session timer and dataset size*
+![Mobile App Screenshot - Data collection interface with device status and recording controls](images/whitepaper/MOBILE_APP_SCREENSHOT.png)
 
 ### 5.2 Quaternion Data Format
 
@@ -666,12 +650,12 @@ Byte offset | Field         | Type    | Description
 **Framework**: TypeScript + Three.js
 **Execution**: Web application (browser-based) or Node.js CLI
 
-**IMAGE PLACEHOLDER: eidon-sim Screenshot**
+<!-- **IMAGE PLACEHOLDER: eidon-sim Screenshot**
 *Description: Screenshot showing:*
 - *3D viewport with skeletal avatar performing task*
 - *Left sidebar: Device connection status*
 - *Right sidebar: Real-time joint angle readouts (7-DOF per arm)*
-- *Bottom: Timeline scrubber with video playback*
+- *Bottom: Timeline scrubber with video playback* -->
 
 #### Core Processing Modules
 
@@ -737,10 +721,10 @@ The ArmSolver class is the heart of the kinematics pipeline. It takes 3 quaterni
    - Realistic avatar for validation
    - Exports animation data (future: GLTF/FBX export)
 
-**IMAGE PLACEHOLDER: Side-by-Side Rendering Modes**
+<!-- **IMAGE PLACEHOLDER: Side-by-Side Rendering Modes**
 *Description: Split image showing:*
 - *Left: Vector arm mode (colored arrows showing humerus, radius, hand segments)*
-- *Right: Skeletal rig mode (textured humanoid model with same pose)*
+- *Right: Skeletal rig mode (textured humanoid model with same pose)* -->
 
 **D. Temporal Filtering**
 
@@ -840,12 +824,7 @@ Synchronized video with:
 
 This section details the mathematical transformations that convert raw IMU quaternions into anatomically meaningful joint angles.
 
-**IMAGE PLACEHOLDER: Quaternion to Angles Overview**
-*Description: Diagram showing transformation pipeline:*
-- *Device quaternion (4D hypersphere) →*
-- *Rotation matrix (3×3 orthogonal) →*
-- *Euler angles (3 scalar rotations) →*
-- *Joint angles (anatomical degrees of freedom)*
+<img src="images/whitepaper/QUATERNION_ANGLE_OVERVIEW.png" alt="Quaternion to Angles Overview - Mathematical transformation pipeline" style="width: 300px;">
 
 ### 6.1 Quaternion Fundamentals
 
@@ -918,12 +897,12 @@ export function quatToMat3(q: quat): mat3 {
 
 Euler angles represent 3D rotation as three sequential rotations about fixed axes. The **order matters** due to non-commutativity.
 
-**IMAGE PLACEHOLDER: Euler Angle Convention Diagram**
+<!-- **IMAGE PLACEHOLDER: Euler Angle Convention Diagram**
 *Description: 3D coordinate system showing Z-Y-X rotation sequence:*
 1. *First rotate α about Z-axis (yaw)*
 2. *Then rotate β about new Y-axis (pitch)*
 3. *Finally rotate γ about new X-axis (roll)*
-*Show intermediate frames after each rotation*
+*Show intermediate frames after each rotation* -->
 
 #### A. Z-Y-X Euler Angles (Shoulder)
 
@@ -1000,12 +979,12 @@ For single-axis joints (elbow flexion), vector dot product is simpler and more r
 
 #### Elbow Flexion Angle
 
-**IMAGE PLACEHOLDER: Elbow Angle Diagram**
+<!-- **IMAGE PLACEHOLDER: Elbow Angle Diagram**
 *Description: Side view of arm showing:*
 - *Upper arm forward vector (blue arrow from shoulder)*
 - *Forearm forward vector (red arrow from elbow)*
 - *Angle θ between vectors*
-- *Labels: 0° = straight, 180° = fully bent*
+- *Labels: 0° = straight, 180° = fully bent* -->
 
 **Mathematical formula:**
 
@@ -1053,12 +1032,12 @@ Simply comparing quaternions gives coupled elbow+roll motion.
 **Robust solution:**
 Project "up" vectors onto plane perpendicular to forearm forward direction.
 
-**IMAGE PLACEHOLDER: Forearm Roll Geometry**
+<!-- **IMAGE PLACEHOLDER: Forearm Roll Geometry**
 *Description: 3D diagram showing:*
 - *Forearm cylinder with forward axis (green)*
 - *Upper arm "up" vector (blue) and its projection (dashed blue) onto perpendicular plane*
 - *Forearm "up" vector (red) and its projection (dashed red) onto same plane*
-- *Angle θ between projections*
+- *Angle θ between projections* -->
 
 **Mathematical steps:**
 
@@ -1182,12 +1161,12 @@ Inputs: Q_UpperArm, Q_Forearm, Q_Hand (3 quaternions)
 Outputs: [sh_yaw, sh_pitch, sh_roll, el_flex, fr_roll, wr_yaw, wr_pitch]
 ```
 
-**IMAGE PLACEHOLDER: 7-DOF Arm Diagram**
+<!-- **IMAGE PLACEHOLDER: 7-DOF Arm Diagram**
 *Description: Annotated arm illustration showing all 7 angles with arrows:*
 - *Shoulder: 3 curved arrows for yaw/pitch/roll*
 - *Elbow: 1 curved arrow for flexion*
 - *Forearm: 1 straight arrow for roll axis*
-- *Wrist: 2 curved arrows for yaw/pitch*
+- *Wrist: 2 curved arrows for yaw/pitch* -->
 
 ### 6.8 Forward Kinematics (Vector Chaining)
 
@@ -1253,13 +1232,13 @@ const fingertipPos = vec3.scaleAndAdd(
 
 The Eidon Tracker is designed as an **open platform** for embodied AI research. This section describes integration points with external systems.
 
-**IMAGE PLACEHOLDER: Integration Ecosystem Diagram**
+<!-- **IMAGE PLACEHOLDER: Integration Ecosystem Diagram**
 *Description: Hub-and-spoke diagram showing Eidon system (center) connecting to:*
 - *VLA training frameworks (OpenVLA, Octo, RT-1)*
 - *Robotic platforms (unitree, figure, 1x)*
 - *Simulation environments (Isaac Sim, MuJoCo)*
 - *Data annotation tools (CVAT, Label Studio)*
-- *Cloud storage (S3, GCS)*
+- *Cloud storage (S3, GCS)* -->
 
 ### 7.1 VLA Training Pipeline Integration
 
@@ -1405,11 +1384,11 @@ for t in dataset.episode(0).timestamps:
 
 ### 7.4 Real-Time Teleoperation
 
-**IMAGE PLACEHOLDER: Teleoperation System Diagram**
+<!-- **IMAGE PLACEHOLDER: Teleoperation System Diagram**
 *Description: Human wearing Eidon trackers on left, robot arm on right, with wireless communication arrows showing:*
 - *Eidon → Mobile App (BLE)*
 - *Mobile App → Robot Controller (WiFi)*
-- *Robot Controller → Arm Motors (CAN/Ethernet)*
+- *Robot Controller → Arm Motors (CAN/Ethernet)* -->
 
 **Architecture:**
 
@@ -1451,12 +1430,12 @@ Collected datasets require task-level annotations for VLA training.
 - **Label Studio**: Multi-modal annotation (video + time series data)
 - **Custom Eidon annotation UI**: Integrated with eidon-sim visualization
 
-**IMAGE PLACEHOLDER: Annotation UI Mockup**
+<!-- **IMAGE PLACEHOLDER: Annotation UI Mockup**
 *Description: Screenshot showing:*
 - *Top: Video playback with skeleton overlay*
 - *Middle: Timeline with segment blocks (color-coded by task phase)*
 - *Bottom: Joint angle graphs with annotation markers*
-- *Right sidebar: Label selection dropdown and notes field*
+- *Right sidebar: Label selection dropdown and notes field* -->
 
 ### 7.6 API Specification
 
@@ -1547,10 +1526,10 @@ The Eidon Tracker platform enables a wide range of applications beyond VLA train
 - **Underwater operations**: Subsea maintenance with ROVs
 - **Telemedicine**: Remote surgery or physical therapy
 
-**IMAGE PLACEHOLDER: Teleoperation Scenario**
+<!-- **IMAGE PLACEHOLDER: Teleoperation Scenario**
 *Description: Split image showing:*
 - *Left: Operator wearing Eidon trackers + VR headset in control room*
-- *Right: Humanoid robot in hazardous environment (e.g., nuclear plant) mimicking operator's movements*
+- *Right: Humanoid robot in hazardous environment (e.g., nuclear plant) mimicking operator's movements* -->
 
 ### 8.3 Biomechanics Research
 
@@ -1590,8 +1569,8 @@ The Eidon Tracker platform enables a wide range of applications beyond VLA train
 3. Automated analysis flags improper form or reduced ROM
 4. Report sent to physical therapist for review
 
-**IMAGE PLACEHOLDER: PT Use Case**
-*Description: Patient performing shoulder abduction exercise with tracker on upper arm, mobile app showing real-time angle readout and target zone visualization*
+<!-- **IMAGE PLACEHOLDER: PT Use Case**
+*Description: Patient performing shoulder abduction exercise with tracker on upper arm, mobile app showing real-time angle readout and target zone visualization* -->
 
 ---
 
@@ -1779,45 +1758,52 @@ The "LLM moment" for humanoid robotics requires data infrastructure that **democ
 
 ## Appendix A: Bill of Materials (Detailed)
 
-### Per-Device BOM
+### Per-Device BOM (Current Production Costs)
 
-| Ref | Component | Part Number | Manufacturer | Qty | Unit Price | Ext. Price | Notes |
-|-----|-----------|-------------|--------------|-----|-----------|-----------|-------|
-| U1 | Microcontroller | XIAO ESP32-C6 | Seeed Studio | 1 | $5.50 | $5.50 | |
-| U2 | IMU Sensor | BNO085 | Adafruit (Bosch) | 1 | $12.00 | $12.00 | Pre-calibrated module |
-| D1 | LED | APT2012YC | Kingbright | 1 | $0.10 | $0.10 | Yellow 0805 |
-| R1 | Resistor | RC0805FR-07220KL | Yageo | 1 | $0.01 | $0.01 | 220kΩ ±1% |
-| R2 | Resistor | RC0805FR-07220KL | Yageo | 1 | $0.01 | $0.01 | 220kΩ ±1% |
-| R3 | Resistor | RC0805FR-071KL | Yageo | 1 | $0.01 | $0.01 | 1kΩ ±1% |
-| SW2 | Tactile Switch | SKRKAEE020 | Alps | 1 | $0.30 | $0.30 | 160gf actuation |
-| BT1 | LiPo Battery | - | Generic | 1 | $3.00 | $3.00 | 200mAh, 3.7V, JST PH |
-| PCB | Bare PCB | Custom | JLCPCB | 1 | $2.00 | $2.00 | 2-layer, ENIG, 25×20mm |
-| - | PCBA Assembly | - | JLCPCB | 1 | $5.00 | $5.00 | Pick-and-place + reflow |
-| - | Enclosure Body | eidon-tracker-v3b-body.stl | 3D Printed | 1 | $1.00 | $1.00 | PLA, 0.2mm layers |
-| - | Enclosure Lid | eidon-tracker-v3b-lid-0.stl | 3D Printed | 1 | $0.30 | $0.30 | PLA |
-| - | Button | eidon-tracker-v3b-btn.stl | 3D Printed | 1 | $0.20 | $0.20 | PLA |
-| - | Mounting Bracket | *-mount-*.stl | 3D Printed | 1 | $0.50 | $0.50 | PLA |
-| - | Elastic Strap | - | Generic | 1 | $1.00 | $1.00 | 20mm width, 300mm length |
-| - | Hook & Loop | - | Generic | 1 | $0.50 | $0.50 | Velcro closure |
-| - | Fasteners | M2×6mm | Generic | 4 | $0.02 | $0.08 | Phillips pan head |
-| | | | | | **Total** | **$32.51** | |
+| Component | Part/Model | Manufacturer | Qty | Unit Price | Ext. Price | Notes |
+|-----------|------------|--------------|-----|-----------|-----------|-------|
+| Microcontroller | XIAO ESP32-C6 | Seeed Studio | 1 | $5.20 | $5.20 | BLE 5.0 + WiFi 6 |
+| IMU Sensor | BNO085 | Adafruit (Bosch) | 1 | $17.51 | $17.51 | Pre-calibrated 9-DOF |
+| LiPo Battery | 200-300mAh 3.7V | Generic | 1 | $4.59 | $4.59 | JST connector, protection circuit |
+| Power Switch | SPDT slide switch | Generic | 1 | $0.08 | $0.08 | PCB mount |
+| 3D Printed Parts | Body + lid + button | PLA filament | 1 set | $0.46 | $0.46 | ~15g material per device |
+| Elastic Strap | 20mm Velcro elastic | Generic | 1 | $3.00 | $3.00 | ~300mm length |
+| USB Cable | USB-C charge cable | Generic | 1 | $1.13 | $1.13 | 1m length |
+| | | | | **Total** | **$30.84** | **Per device** |
 
-### 7-Device System BOM
+**Note:** Current costs are based on small-batch production (10-20 units). PCB fabrication and passive components (resistors, LEDs) are included in the XIAO module cost.
 
-| Item | Qty | Unit Price | Ext. Price |
-|------|-----|-----------|-----------|
-| Eidon Tracker Device | 7 | $32.51 | $227.57 |
-| Mobile App (free) | 1 | $0.00 | $0.00 |
-| Documentation | 1 | $0.00 | $0.00 |
-| **System Total** | | | **$227.57** |
+### Complete 7-Device System BOM
 
-**Volume pricing** (1000+ units):
-- PCB: $0.80 ea
-- PCBA: $3.00 ea
-- Components: ~$18.00 ea (bulk discounts)
-- Enclosure: $0.50 ea (injection molding)
-- **Total per device**: ~$18.00
-- **7-device system**: ~$126.00
+| Item | Qty | Unit Price | Ext. Price | Notes |
+|------|-----|-----------|-----------|-------|
+| Eidon Tracker devices | 7 | $30.84 | $215.88 | 2× hand, 2× forearm, 2× upper arm, 1× chest |
+| Velcro elastic straps | 6 | $3.00 | $18.00 | Included in tracker cost above |
+| Chest harness | 1 | $24.00 | $24.00 | Adjustable chest mount system |
+| USB charging hub | 1 | $35.99 | $35.99 | 7+ port USB hub for simultaneous charging |
+| USB cables | 7 | $1.13 | $7.91 | Included in tracker cost above |
+| | | | **$278.87** | **Total system cost** |
+
+**Effective cost breakdown:**
+- **Trackers only:** $215.88 (7 devices)
+- **Accessories:** $62.99 (harness + hub)
+- **Total ready-to-use kit:** $278.87
+
+### Volume Pricing Estimates
+
+**100-unit production (700 trackers):**
+- IMU: $15.00 ea (10% bulk discount)
+- ESP32-C6: $4.50 ea
+- Battery: $3.50 ea
+- 3D printing: $0.30 ea (batch production)
+- **Estimated cost:** ~$24/device ($168 for 7-device system)
+
+**1000-unit production (7000 trackers):**
+- IMU: $12.00 ea (30% bulk discount)
+- ESP32-C6: $4.00 ea
+- Battery: $2.50 ea
+- Enclosure: $0.50 ea (injection molding tooling amortized)
+- **Estimated cost:** ~$18/device ($126 for 7-device system)
 
 ---
 
@@ -1929,9 +1915,9 @@ The "LLM moment" for humanoid robotics requires data infrastructure that **democ
 ## Appendix E: Contact & Licensing
 
 **Company**: Eidon
-**Website**: [www.eidon.ai](https://www.eidon.ai) *(placeholder)*
-**Technical Support**: support@eidon.ai *(placeholder)*
-**GitHub**: [github.com/eidon/eidon-tracker](https://github.com/eidon/eidon-tracker) *(placeholder)*
+**Website**: [www.eidon.ai](https://www.eidon.ai)
+**Technical Support**: robert@eidon.ai
+**GitHub**: [github.com/eidon/eidon-tracker](https://github.com/eidon/eidon-tracker)
 
 **Licensing:**
 - Hardware designs (PCB, enclosure): **Open-source** (CERN-OHL-P v2 or similar)
@@ -1946,8 +1932,26 @@ The "LLM moment" for humanoid robotics requires data infrastructure that **democ
 
 ---
 
+## Appendix F: Hardware Schematics
+
+### KiCad Schematic Diagram
+
+Complete electrical schematic showing circuit design, component interconnections, and signal routing.
+
+![KiCad Schematic - Complete electrical circuit design](images/whitepaper/KICAD_SCHEMATIC.png)
+
+**Key functional blocks:**
+- **Power Management**: LiPo battery input, voltage monitoring circuit (220kΩ voltage divider)
+- **Microcontroller**: Seeed XIAO ESP32-C6 with pin assignments for I2C, GPIO, ADC
+- **IMU Interface**: BNO085 I2C connection (400kHz), interrupt pin, address configuration
+- **Status Indicators**: LED with current-limiting resistor, user button interface
+
+For full resolution schematic and PCB layout files, see: `pcb/eidon-tracker/eidon-tracker.kicad_sch`
+
+---
+
 **Document prepared by**: Eidon Engineering Team
-**Last updated**: January 2025
+**Last updated**: November 2025
 **Document version**: 1.0
 
 ---
