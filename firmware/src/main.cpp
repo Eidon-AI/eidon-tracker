@@ -9,6 +9,11 @@
 #include "BLE_Services/BLE_Callbacks.h"
 #include "Role_Services/RoleConfig_Service.h"
 #include "Role_Services/HubClient_Service.h"
+
+// Finger sensor library (only for ESP32-C3 glove)
+#ifdef ESP32_C3_GLOVE
+#include "FingerSensors.h"
+#endif
 #include "BLE_Services/BLE_Polling_Service.h" //TODO: Move this from BLE Services
 #include "DeviceConfig.h"
 #include "Role_Services/Hub_Structures.h"
@@ -48,6 +53,11 @@ static QuaternionCharCallbacks quaternionCallbacksInstance;
 // BNO085 IMU instance
 BNO085 imu;
 
+// Finger sensors instance (only for ESP32-C3 glove)
+#ifdef ESP32_C3_GLOVE
+FingerSensors fingerSensors;
+#endif
+
 // Custom GATT Service UUIDs
 #define EIDON_SERVICE_UUID        "E1D00001-8B5A-3E5B-9E23-4F9B5C91BBDE"
 #define QUATERNION_CHAR_UUID      "E1D00002-8B5A-3E5B-9E23-4F9B5C91BBDE"
@@ -61,6 +71,9 @@ BNO085 imu;
 // New characteristics for hub devices only (child data)
 #define HAND_QUATERNION_CHAR_UUID     "E1D00008-8B5A-3E5B-9E23-4F9B5C91BBDE"
 #define FOREARM_QUATERNION_CHAR_UUID  "E1D00009-8B5A-3E5B-9E23-4F9B5C91BBDE"
+
+// Finger sensor characteristic for glove devices only
+#define FINGER_SENSOR_CHAR_UUID       "E1D0000A-8B5A-3E5B-9E23-4F9B5C91BBDE"
 
 // QuaternionData structure is now defined in Role_Services/Hub_Structures.h
 QuaternionData gattQuaternionData;
@@ -333,6 +346,9 @@ NimBLECharacteristic* deviceInfoChar = nullptr;
 NimBLECharacteristic* handQuaternionChar = nullptr;
 NimBLECharacteristic* forearmQuaternionChar = nullptr;
 
+// Finger sensor characteristic for glove devices only
+NimBLECharacteristic* fingerSensorChar = nullptr;
+
 // Function to get current BLE connection state (similar to Bluefruit.connected())
 bool isConnected() {
     return deviceConnected; // Simple state tracking like reference code
@@ -455,7 +471,23 @@ void sendQuaternionReport() {
                 quaternionChar->notify((uint8_t*)&gattQuaternionData, sizeof(gattQuaternionData));
             }
         }
-        
+
+#ifdef ESP32_C3_GLOVE
+        // Send finger sensor data (glove only)
+        if (DeviceConfig::isGloveMode() && fingerSensorChar != nullptr) {
+            // Update finger sensors
+            fingerSensors.update();
+
+            // Get encoded values (16 x uint16_t = 32 bytes)
+            uint16_t encodedFingerData[16];
+            fingerSensors.getEncodedValues(encodedFingerData);
+
+            // Send notification
+            fingerSensorChar->setValue((uint8_t*)encodedFingerData, 32);
+            fingerSensorChar->notify();
+        }
+#endif
+
         // LED is now controlled by updateLEDStatus() in the main loop
     }
 }
@@ -776,6 +808,18 @@ void setup() {
             delay(100);
         }
     }
+
+#ifdef ESP32_C3_GLOVE
+    // Initialize finger sensors (glove only)
+    if (DeviceConfig::isGloveMode()) {
+        if (!fingerSensors.begin()) {
+            Serial.println("Warning: Failed to initialize finger sensors");
+            // Don't halt - IMU still works
+        } else {
+            Serial.println("Finger sensors initialized successfully");
+        }
+    }
+#endif
         
     // Initialize Bluetooth
     NimBLEDevice::init("");
@@ -846,7 +890,19 @@ void setup() {
         NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
     );
     forearmQuaternionChar->setValue((uint8_t*)&gattQuaternionData, sizeof(gattQuaternionData));
-    
+
+#ifdef ESP32_C3_GLOVE
+    // Configure Finger Sensor characteristic (glove only)
+    // 32 bytes: 16 sensors x 2 bytes (uint16_t encoded values)
+    fingerSensorChar = eidonService->createCharacteristic(
+        FINGER_SENSOR_CHAR_UUID,
+        NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
+    );
+    uint16_t initialFingerData[16] = {0}; // Initialize with zeros
+    fingerSensorChar->setValue((uint8_t*)initialFingerData, 32);
+    Serial.println("Created finger sensor characteristic (32 bytes)");
+#endif
+
     // Start custom service
     eidonService->start();
     
