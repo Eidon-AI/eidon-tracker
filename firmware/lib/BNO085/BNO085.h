@@ -18,7 +18,7 @@
     #define I2C_SCL             19   // GPIO 19 (D8) - Clock line
     #define I2C_ADR             18   // GPIO 18 (D10) - Address select pin
     #define I2C_ADDR            0x4B // I2C address
-    #define I2C_FREQ_HZ         400000  // 400kHz for tracker
+    #define I2C_FREQ_HZ         100000  // 100kHz for stability and consistency
 #endif
 
 // Declare the struct type
