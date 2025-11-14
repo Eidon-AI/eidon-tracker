@@ -130,6 +130,7 @@ bool disconnectTimedOut = false;
 // IMU rate limiting for both child and hub devices
 unsigned long lastIMUUpdate = 0;
 const unsigned long IMU_UPDATE_INTERVAL = 21; // 48 Hz (20.83ms interval) - matches ESP-NOW rate for redundancy
+// NOTE: Battery optimization opportunity - could reduce to 30Hz (33ms) or 20Hz (50ms) for significant power savings
 
 // LED pin - Seeed XIAO ESP32-C6 onboard LED is on GPIO15
 #define LED_PIN 15
