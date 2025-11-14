@@ -72,6 +72,8 @@ const char* DeviceConfig::getRoleName(DeviceRole role) {
         case ROLE_LEFT_HUB: return "Left Hub";
         case ROLE_RIGHT_HUB: return "Right Hub";
         case ROLE_CHEST: return "Chest";
+        case ROLE_LEFT_GLOVE: return "Left Glove";
+        case ROLE_RIGHT_GLOVE: return "Right Glove";
         case ROLE_UNKNOWN: return "Unknown";
         default: return "Invalid";
     }
@@ -84,6 +86,14 @@ bool DeviceConfig::isHubMode() {
 bool DeviceConfig::isNodeMode() {
     return (config.role == ROLE_LEFT_HAND || config.role == ROLE_RIGHT_HAND ||
             config.role == ROLE_LEFT_FOREARM || config.role == ROLE_RIGHT_FOREARM);
+}
+
+bool DeviceConfig::isGloveMode() {
+    return (config.role == ROLE_LEFT_GLOVE || config.role == ROLE_RIGHT_GLOVE);
+}
+
+bool DeviceConfig::isStandaloneMode() {
+    return (config.role == ROLE_CHEST || isGloveMode());
 }
 
 // Hub MAC address management functions
@@ -244,16 +254,24 @@ String DeviceConfig::generateDeviceName() {
     
     
     
-    // Create device name: Eidon-Tracker-<last 4 digits of BLE MAC>
+    // Create device name based on role
     char macSuffix[5];
     snprintf(macSuffix, sizeof(macSuffix), "%02X%02X", bleMac[4], bleMac[5]);
-    
-    String deviceName = String("Eidon-Tracker-") + String(macSuffix);
 
-    
+    String deviceName;
+    if (isGloveMode()) {
+        deviceName = String("Eidon-Glove-") + String(macSuffix);
+    } else {
+        deviceName = String("Eidon-Tracker-") + String(macSuffix);
+    }
+
     return deviceName;
 }
 
 bool DeviceConfig::isValidRole(DeviceRole role) {
-    return (role >= ROLE_LEFT_HAND && role <= ROLE_RIGHT_HUB) || role == ROLE_CHEST || role == ROLE_UNKNOWN;
+    return (role >= ROLE_LEFT_HAND && role <= ROLE_RIGHT_HUB) ||
+           role == ROLE_CHEST ||
+           role == ROLE_LEFT_GLOVE ||
+           role == ROLE_RIGHT_GLOVE ||
+           role == ROLE_UNKNOWN;
 } 

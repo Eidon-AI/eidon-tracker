@@ -6,13 +6,15 @@
 
 // Device role enumeration with clear documentation
 enum DeviceRole {
-    ROLE_LEFT_HAND = 0,      // Left hand/arm
-    ROLE_RIGHT_HAND = 1,     // Right hand/arm
-    ROLE_LEFT_FOREARM = 2,   // Left forearm
-    ROLE_RIGHT_FOREARM = 3,  // Right forearm
+    ROLE_LEFT_HAND = 0,      // Left hand/arm tracker
+    ROLE_RIGHT_HAND = 1,     // Right hand/arm tracker
+    ROLE_LEFT_FOREARM = 2,   // Left forearm tracker
+    ROLE_RIGHT_FOREARM = 3,  // Right forearm tracker
     ROLE_LEFT_HUB = 4,       // Left hub/upper arm
     ROLE_RIGHT_HUB = 5,      // Right hub/upper arm
-    ROLE_CHEST = 6,          // Chest
+    ROLE_CHEST = 6,          // Chest tracker
+    ROLE_LEFT_GLOVE = 8,     // Left glove (direct to phone, with finger sensors)
+    ROLE_RIGHT_GLOVE = 9,    // Right glove (direct to phone, with finger sensors)
     ROLE_UNKNOWN = 255       // No role assigned (default state)
 };
 
@@ -35,6 +37,8 @@ public:
     static const char* getRoleName(DeviceRole role);
     static bool isHubMode();
     static bool isNodeMode();
+    static bool isGloveMode();
+    static bool isStandaloneMode();
     
     // Hub MAC address management (for ESP-NOW)
     static bool setHubMacAddress(const uint8_t* macAddress);
