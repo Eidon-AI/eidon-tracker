@@ -96,19 +96,23 @@ void BNO085::enableReports() {
 }
 
 // Function to initialize the BNO085 sensor
-bool BNO085::begin() {    
+bool BNO085::begin() {
     Serial.println("BNO085: Starting initialization...");
-    
-    // Configure ADR pin for I2C address selection
+
+#ifndef ESP32_C3_GLOVE
+    // Configure ADR pin for I2C address selection (tracker only)
     // ADR pin HIGH = 0x4B, ADR pin LOW = 0x4A
     pinMode(I2C_ADR, OUTPUT);
     digitalWrite(I2C_ADR, HIGH); // Set to 0x4B address
     Serial.printf("BNO085: ADR pin set HIGH for I2C address 0x%02X\n", I2C_ADDR);
-    
-    // Initialize I2C with explicit pins for ESP32-C6
+#else
+    Serial.printf("BNO085: Glove mode - I2C address 0x%02X\n", I2C_ADDR);
+#endif
+
+    // Initialize I2C with explicit pins
     Wire.setPins(I2C_SDA, I2C_SCL);
     Wire.begin();
-    Wire.setClock(400000); // Set to 400kHz (standard fast mode) for stability
+    Wire.setClock(I2C_FREQ_HZ); // Use platform-specific frequency
     
 
     
@@ -159,11 +163,11 @@ bool BNO085::begin() {
         } else {
             // Final attempts: Try with different I2C speeds
             if (total_attempts == 7) {
-                Wire.setClock(400000);
+                Wire.setClock(I2C_FREQ_HZ);
             } else if (total_attempts == 9) {
                 Wire.setClock(50000);
             }
-            
+
             if (bno08x.begin_I2C(I2C_ADDR)) {
                 bno_initialized = true;
                 break;
@@ -182,7 +186,7 @@ bool BNO085::begin() {
                 delay(100);
                 Wire.setPins(I2C_SDA, I2C_SCL);
                 Wire.begin();
-                Wire.setClock(100000);
+                Wire.setClock(I2C_FREQ_HZ);
             }
         }
     }

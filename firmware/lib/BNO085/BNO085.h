@@ -5,11 +5,21 @@
 #include <Adafruit_BNO08x.h>
 #include <Wire.h>
 
-// Define I2C pins
-#define I2C_SCL 19  // D8 on XIAO ESP32-C6 (GPIO19) - shared with SPI SCLK
-#define I2C_SDA 20  // D9 on XIAO ESP32-C6 (GPIO20) - shared with SPI MISO
-#define I2C_ADR 18  // D10 on XIAO ESP32-C6 (GPIO18) - controls I2C address (0x4A/0x4B)
-#define I2C_ADDR 0x4B
+// Define I2C pins - conditional based on hardware platform
+#ifdef ESP32_C3_GLOVE
+    // ESP32-C3 Glove: I2C pins
+    #define I2C_SDA             21   // GPIO 21 (D6/TX) - Data line
+    #define I2C_SCL             20   // GPIO 20 (D7/RX) - Clock line
+    #define I2C_ADDR            0x4B // I2C address
+    #define I2C_FREQ_HZ         100000  // 100kHz for glove
+#else
+    // ESP32-C6 Tracker: I2C pins
+    #define I2C_SDA             20   // GPIO 20 (D9) - Data line
+    #define I2C_SCL             19   // GPIO 19 (D8) - Clock line
+    #define I2C_ADR             18   // GPIO 18 (D10) - Address select pin
+    #define I2C_ADDR            0x4B // I2C address
+    #define I2C_FREQ_HZ         400000  // 400kHz for tracker
+#endif
 
 // Declare the struct type
 struct euler_t {
