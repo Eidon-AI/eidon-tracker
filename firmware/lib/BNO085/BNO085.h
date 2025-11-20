@@ -7,9 +7,9 @@
 
 // Define I2C pins - conditional based on hardware platform
 #ifdef ESP32_C3_GLOVE
-    // ESP32-C3 Glove: I2C pins
-    #define I2C_SDA             21   // GPIO 21 (D6/TX) - Data line
-    #define I2C_SCL             20   // GPIO 20 (D7/RX) - Clock line
+    // ESP32-C3 Glove: I2C pins (matching eidon-glove hardware)
+    #define I2C_SDA             20   // GPIO 20 (D9) - Data line
+    #define I2C_SCL             19   // GPIO 19 (D8) - Clock line
     #define I2C_ADDR            0x4B // I2C address
     #define I2C_FREQ_HZ         100000  // 100kHz for glove
 #else
