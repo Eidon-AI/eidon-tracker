@@ -137,11 +137,16 @@ unsigned long lastIMUUpdate = 0;
 const unsigned long IMU_UPDATE_INTERVAL = 21; // 48 Hz (20.83ms interval) - matches ESP-NOW rate for redundancy
 // NOTE: Battery optimization opportunity - could reduce to 30Hz (33ms) or 20Hz (50ms) for significant power savings
 
-// LED pin - Seeed XIAO ESP32-C6 onboard LED is on GPIO15
-#define LED_PIN 15
-
-// Status LED pin (second LED for simple status indication on GPIO1)
-#define STATUS_LED_PIN A1
+// LED pin definitions - platform specific
+#ifdef ESP32_C3_GLOVE
+    // ESP32-C3 Glove: LED on GPIO5 (from eidon-glove hardware)
+    #define LED_PIN 5
+    #define STATUS_LED_PIN 5  // Same pin on C3 glove (single LED)
+#else
+    // ESP32-C6 Tracker: onboard LED on GPIO15, status LED on GPIO1
+    #define LED_PIN 15
+    #define STATUS_LED_PIN A1
+#endif
 
 // Status LED variables
 unsigned long statusLedLastUpdate = 0;
@@ -713,10 +718,11 @@ void setup() {
     Serial.println("Step 2: Setting up LED pins...");
     Serial.flush();
 #ifdef ESP32_C3_GLOVE
-    // On C3 glove, skip GPIO configuration that might conflict with boot pins
-    // GPIO3 (A1/STATUS_LED_PIN) is a strapping pin on C3
-    Serial.println("Step 2: Skipping LED GPIO config on C3 (strapping pins)");
+    // C3 glove uses GPIO5 for LED (single LED, same pin for both)
+    pinMode(LED_PIN, OUTPUT);
+    Serial.printf("Step 2: C3 LED configured on GPIO%d\n", LED_PIN);
 #else
+    // C6 tracker has two LEDs
     pinMode(LED_PIN, OUTPUT);
     pinMode(STATUS_LED_PIN, OUTPUT);
 #endif
@@ -1034,10 +1040,8 @@ void loop() {
     // Update LED status first - DISABLED for performance
     // updateLEDStatus();
 
-    // Update status LED (second LED) - simple on/off control
-#ifndef ESP32_C3_GLOVE
+    // Update status LED - simple on/off control
     updateStatusLED();
-#endif
 
     // Update battery level (periodic reading every 60 seconds)
     updateBatteryLevel();
@@ -1070,9 +1074,7 @@ void loop() {
             }
 
             // Force reset LED state and start fresh pattern
-#ifndef ESP32_C3_GLOVE
             digitalWrite(LED_PIN, LOW);  // Start with LED OFF
-#endif
             ledState = false;
             ledLastUpdate = 0; // Force immediate update
             currentLEDPattern = LED_CONNECTED;
