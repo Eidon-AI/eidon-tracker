@@ -418,8 +418,8 @@ void handleRoleChange(const std::string& value, bool success) {
         RoleConfigData* data = (RoleConfigData*)value.data();
         uint8_t newRole = data->role;
         
-        // Validate role value (0-6 are valid roles, 255 is ROLE_UNKNOWN)
-        if (newRole <= 6 || newRole == 255) {
+        // Validate role value using DeviceConfig validator (includes glove roles 8, 9)
+        if (deviceConfig.isValidRole((DeviceRole)newRole)) {
             Serial.printf("ROLE CHANGE: %s\n", deviceConfig.getRoleName((DeviceRole)newRole));
             
             // Validate and set hub MAC address if provided
@@ -472,9 +472,9 @@ void handleRoleChange(const std::string& value, bool success) {
     else if (value.length() == 1) {
         uint8_t newRole = (uint8_t)value[0];
         
-        // Validate role value (0-6 are valid roles, 255 is ROLE_UNKNOWN)
-        if (newRole <= 6 || newRole == 255) {
-            
+        // Validate role value using DeviceConfig validator (includes glove roles 8, 9)
+        if (deviceConfig.isValidRole((DeviceRole)newRole)) {
+
             // Clear hub MAC address for legacy role assignment
             deviceConfig.clearHubMacAddress();
             

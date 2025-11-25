@@ -109,19 +109,15 @@ bool BNO085::begin() {
     Serial.printf("BNO085: Glove mode - I2C address 0x%02X\n", I2C_ADDR);
 #endif
 
-#ifdef ESP32_C3_GLOVE
-    // On C3 glove, skip I2C entirely for now - Wire.begin() causes watchdog reset
-    // TODO: Investigate proper I2C pins for C3 glove hardware
-    Serial.println("BNO085: Skipping I2C init on C3 glove (causes WDT reset)");
-    return false;
-#endif
-
     // Initialize I2C with explicit pins
-    Serial.println("BNO085: Setting I2C pins...");
+    Serial.println("BNO085: Initializing I2C...");
+#ifdef ESP32_C3_GLOVE
+    // On C3 glove, use the same method as eidon-glove (simpler API)
+    Wire.begin(I2C_SDA, I2C_SCL);
+#else
     Wire.setPins(I2C_SDA, I2C_SCL);
-    Serial.println("BNO085: Calling Wire.begin()...");
     Wire.begin();
-    Serial.println("BNO085: Setting I2C clock...");
+#endif
     Wire.setClock(I2C_FREQ_HZ); // Use platform-specific frequency
     Serial.println("BNO085: I2C initialized");
 

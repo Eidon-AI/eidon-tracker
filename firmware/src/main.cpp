@@ -757,6 +757,15 @@ void setup() {
     Serial.println("Step 3: Device configuration initialized!");
     Serial.flush();
 
+#ifdef ESP32_C3_GLOVE
+    // Set default role for C3 glove builds if not already assigned
+    if (!deviceConfig.isRoleAssigned()) {
+        Serial.println("Step 3b: Setting default glove role (ROLE_LEFT_GLOVE)...");
+        deviceConfig.setRole(ROLE_LEFT_GLOVE);
+        Serial.println("Step 3b: Default glove role set!");
+    }
+#endif
+
     // Initialize WiFi for ESP-NOW support and MAC address retrieval
     // WiFi must init BEFORE BLE for proper coexistence on single-core chips
     Serial.println("Step 4: Initializing WiFi...");
