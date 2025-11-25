@@ -305,17 +305,11 @@ float readBatteryVoltage() {
     // When USB powered but no battery, ADC floats around 3.8-4.0V (giving false 80% reading)
     if (Vbattf < BATTERY_MIN_VALID_VOLTAGE) {
         batteryPresent = false;
-        Serial.printf("BATTERY DEBUG: Total ADC mV=%u, Average mV=%u, Battery Voltage=%.3fV - NO BATTERY (too low)\n",
-                      Vbatt, Vbatt / numSamples, Vbattf);
     } else if (Vbattf >= BATTERY_FLOATING_MIN && Vbattf <= BATTERY_FLOATING_MAX) {
         // Likely floating ADC reading (USB powered, no battery)
         batteryPresent = false;
-        Serial.printf("BATTERY DEBUG: Total ADC mV=%u, Average mV=%u, Battery Voltage=%.3fV - NO BATTERY (floating ADC)\n",
-                      Vbatt, Vbatt / numSamples, Vbattf);
     } else {
         batteryPresent = true;
-        Serial.printf("BATTERY DEBUG: Total ADC mV=%u, Average mV=%u, Battery Voltage=%.3fV - Battery present\n",
-                      Vbatt, Vbatt / numSamples, Vbattf);
     }
 
     return Vbattf;
@@ -337,9 +331,6 @@ uint8_t calculateBatteryPercentage(float voltage) {
         float percentage = ((voltage - BATTERY_MIN_VOLTAGE) / (BATTERY_MAX_VOLTAGE - BATTERY_MIN_VOLTAGE)) * 100.0;
         result = (uint8_t)percentage;
     }
-
-    Serial.printf("BATTERY DEBUG: Voltage=%.3fV -> Percentage=%d%% (range: %.1fV-%.1fV)\n",
-                  voltage, result, BATTERY_MIN_VOLTAGE, BATTERY_MAX_VOLTAGE);
 
     return result;
 }
@@ -1054,6 +1045,18 @@ void loop() {
 
     // Update battery level (periodic reading every 60 seconds)
     updateBatteryLevel();
+
+// #ifdef ESP32_C3_GLOVE
+//     // Debug: update and print finger sensor values periodically (always, not just when connected)
+//     if (DeviceConfig::isGloveMode()) {
+//         static unsigned long lastFingerPrint = 0;
+//         if (currentTime - lastFingerPrint >= 500) {
+//             fingerSensors.update();
+//             fingerSensors.printValues();
+//             lastFingerPrint = currentTime;
+//         }
+//     }
+// #endif
 
     // Simplified connection state management for maximum performance (like reference code)
     bool actuallyConnected = (pServer->getConnectedCount() > 0);

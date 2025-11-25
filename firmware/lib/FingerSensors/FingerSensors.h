@@ -2,25 +2,27 @@
 #define FINGER_SENSORS_H
 
 #include <Arduino.h>
+#include <ResponsiveAnalogRead.h>
 
 // Only compile for ESP32-C3 glove
 #ifdef ESP32_C3_GLOVE
 
-// Multiplexer control pins (ESP32-C3)
-#define MUX_S0          10   // GPIO 10 - D10 - Select bit 0
-#define MUX_S1          9    // GPIO 9  - D9  - Select bit 1
-#define MUX_S2          6    // GPIO 6  - D4  - Select bit 2
-#define MUX_S3          7    // GPIO 7  - D5  - Select bit 3
-#define MUX_ADC_PIN     0    // GPIO 0  - A0/D0 - Analog input (MUX_OUT)
+// Multiplexer control pins (ESP32-C3) - matching eidon-glove hardware
+#define MUX_S0          10   // GPIO 10 - Select bit 0
+#define MUX_S1          9    // GPIO 9  - Select bit 1
+#define MUX_S2          6    // GPIO 6  - Select bit 2
+#define MUX_S3          7    // GPIO 7  - Select bit 3
+#define MUX_ADC_PIN     A2   // A2 - Analog input (MUX_OUT) - same as eidon-glove
 
 #define NUM_FINGER_SENSORS 16
 
-// Finger sensor names for debugging
+// Finger sensor names for debugging (Thumb 4 + Index/Middle/Ring/Pinky 3 each = 16)
 static const char* FINGER_NAMES[NUM_FINGER_SENSORS] = {
     "Thumb CMC",    "Thumb MCP",    "Thumb IP",     "Thumb Flex",
-    "Index MCP",    "Index PIP",    "Index DIP",    "Index Flex",
-    "Middle MCP",   "Middle PIP",   "Middle DIP",   "Middle Flex",
-    "Ring MCP",     "Ring PIP",     "Ring DIP",     "Ring Flex"
+    "Index MCP",    "Index PIP",    "Index DIP",
+    "Middle MCP",   "Middle PIP",   "Middle DIP",
+    "Ring MCP",     "Ring PIP",     "Ring DIP",
+    "Pinky MCP",    "Pinky PIP",    "Pinky DIP"
 };
 
 class FingerSensors {

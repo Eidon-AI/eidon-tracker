@@ -9,6 +9,9 @@ const char* FingerSensors::CONFIG_NAMESPACE = "finger_cal";
 const char* FingerSensors::CAL_MIN_KEY = "cal_min";
 const char* FingerSensors::CAL_MAX_KEY = "cal_max";
 
+// ResponsiveAnalogRead instance - same as eidon-glove
+ResponsiveAnalogRead analog(MUX_ADC_PIN, true);
+
 bool FingerSensors::begin() {
     Serial.println("FingerSensors: Initializing...");
 
@@ -40,27 +43,22 @@ bool FingerSensors::begin() {
 }
 
 void FingerSensors::selectMuxChannel(uint8_t channel) {
-    // Set S0-S3 based on channel (0-15)
-    digitalWrite(MUX_S0, (channel & 0x01) ? HIGH : LOW);
-    digitalWrite(MUX_S1, (channel & 0x02) ? HIGH : LOW);
-    digitalWrite(MUX_S2, (channel & 0x04) ? HIGH : LOW);
-    digitalWrite(MUX_S3, (channel & 0x08) ? HIGH : LOW);
+    // Set S0-S3 based on channel (0-15) - matching eidon-glove bit order
+    digitalWrite(MUX_S0, channel & 0x01);
+    digitalWrite(MUX_S1, (channel >> 1) & 0x01);
+    digitalWrite(MUX_S2, (channel >> 2) & 0x01);
+    digitalWrite(MUX_S3, (channel >> 3) & 0x01);
 
-    // Allow MUX to settle (10µs should be enough for CD74HC4067)
-    delayMicroseconds(10);
+    // Allow MUX to settle - 1ms like eidon-glove
+    delay(1);
 }
 
 uint16_t FingerSensors::readMuxChannel(uint8_t channel) {
     selectMuxChannel(channel);
 
-    // Read ADC with averaging (3 samples to reduce noise)
-    uint32_t sum = 0;
-    for (int i = 0; i < 3; i++) {
-        sum += analogRead(MUX_ADC_PIN);
-        delayMicroseconds(100);
-    }
-
-    return sum / 3;
+    // Use ResponsiveAnalogRead for smoothing - same as eidon-glove
+    analog.update();
+    return analog.getRawValue();
 }
 
 void FingerSensors::update() {
