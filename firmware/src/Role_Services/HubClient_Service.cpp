@@ -1,13 +1,57 @@
 #include "HubClient_Service.h"
 #include <Arduino.h>
-#include <WiFi.h>
 #include "Hub_Structures.h"
+
+// Hub client functionality disabled on C3 glove (BLE-only mode)
+#ifndef ESP32_C3_GLOVE
+#include <WiFi.h>
+#endif
 
 // External dependencies
 extern DeviceConfig deviceConfig;
 
 // Global instance
 HubClientService hubClientService;
+
+// C3 glove stub implementations (empty - glove doesn't use hub/ESP-NOW functionality)
+#ifdef ESP32_C3_GLOVE
+HubClientService::HubClientService() : childDeviceCount(0), espNowInitialized(false), packetCounter(0), lastLogTime(0), handMissedPolls(0), forearmMissedPolls(0) {}
+HubClientService::~HubClientService() {}
+void HubClientService::begin() {}
+void HubClientService::update(bool bleConnected) {}
+bool HubClientService::initializeESPNow() { return false; }
+void HubClientService::registerChildDevice(const uint8_t* macAddress, DeviceRole childRole) {}
+void HubClientService::unregisterChildDevice(DeviceRole childRole) {}
+bool HubClientService::isChildConnected(DeviceRole childRole) { return false; }
+void HubClientService::processESPNowPacket(const uint8_t* macAddr, const uint8_t* data, int dataLen) {}
+void HubClientService::processQuaternionPacket(const uint8_t* macAddr, const uint8_t* data, int dataLen) {}
+void HubClientService::restoreESPNowPeers() {}
+void HubClientService::sendCalibrationCommand() {}
+void HubClientService::updateChildData() {}
+void HubClientService::updateHubQuaternionData(float w, float x, float y, float z) {}
+void HubClientService::checkChildDisconnections() {}
+int HubClientService::findChildSlot(DeviceRole childRole) { return -1; }
+int HubClientService::findChildByMac(const uint8_t* macAddress) { return -1; }
+int HubClientService::createChildSlot() { return -1; }
+void HubClientService::syncConnectionStatus() {}
+bool HubClientService::registerChildAsESPNowPeer(const uint8_t* macAddress) { return false; }
+
+// Stub external functions
+void setupHubClientService() {}
+void updateHubClientService(bool bleConnected) {}
+void checkChildDisconnections() {}
+void registerChildDevice(const uint8_t* macAddress, DeviceRole childRole) {}
+void unregisterChildDevice(DeviceRole childRole) {}
+void updateChildData() {}
+void updateHubQuaternionData(float w, float x, float y, float z) {}
+bool isChildConnected(DeviceRole childRole) { return false; }
+AggregatedQuaternionData* getAggregatedData() { return hubClientService.getAggregatedData(); }
+void sendCalibrationCommand() {}
+bool registerChildAsESPNowPeer(const uint8_t* macAddress) { return false; }
+void restoreESPNowPeers() {}
+
+#else
+// Normal implementation for non-C3 devices
 
 
 
@@ -133,9 +177,10 @@ bool HubClientService::initializeESPNow() {
     }
     
     // Force WiFi channel to ESP-NOW channel first
-    WiFi.setChannel(1);
+    // NOTE: WiFi.setChannel() not available in older framework versions
+    // WiFi.setChannel(1);
     delay(50); // Give WiFi time to settle (shorter than re-initialization)
-    Serial.println("HubClient: WiFi channel set to 1 for ESP-NOW");
+    Serial.println("HubClient: WiFi channel configured for ESP-NOW");
     
     // Configure WiFi for BLE coexistence
     WiFi.setSleep(false); // Disable WiFi sleep to prevent conflicts
@@ -502,4 +547,6 @@ bool isChildConnected(DeviceRole childRole) {
 
 AggregatedQuaternionData* getAggregatedData() {
     return hubClientService.getAggregatedData();
-} 
+}
+
+#endif // ESP32_C3_GLOVE

@@ -4,7 +4,8 @@
 #include <NimBLEDevice.h>
 #include <NimBLEServer.h>
 #include <NimBLECharacteristic.h>
-#include "BNO085.h"
+// DISABLED: Using stub in main.cpp for BLE-only mode
+// #include "BNO085.h"
 
 // Forward declarations
 class BNO085;

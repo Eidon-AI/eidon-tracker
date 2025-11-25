@@ -3,8 +3,12 @@
 #include <NimBLEServer.h>
 #include <NimBLEUtils.h>
 #include <NimBLECharacteristic.h>
+
+// WiFi/ESP-NOW for tracker (C6) - libraries included but initialization is skipped on C3
 #include <WiFi.h>
 #include <esp_now.h>
+#include <esp_mac.h>  // For esp_read_mac()
+
 #include "BNO085.h"
 #include "BLE_Services/BLE_Callbacks.h"
 #include "Role_Services/RoleConfig_Service.h"
@@ -29,11 +33,13 @@ float readBatteryVoltage();
 uint8_t calculateBatteryPercentage(float voltage);
 void updateBatteryLevel();
 
-// ESP-NOW sender functions for child devices
+// ESP-NOW sender functions for child devices (not used on C3 glove)
+#ifndef ESP32_C3_GLOVE
 bool initializeESPNowSender();
 void sendESPNowQuaternionData();
 void updateESPNowHubMacAddress();
 void restoreESPNowPeers();  // ESP-NOW peer recovery function
+#endif
 
 // Hub client functions are now in Role_Services/HubClient_Service.h
 
@@ -99,7 +105,8 @@ unsigned long lastTransmission = 0;
 // Track subscription status
 bool quaternionSubscribed = false;
 
-// ESP-NOW sender variables for child devices
+// ESP-NOW sender variables for child devices (not used on C3 glove)
+#ifndef ESP32_C3_GLOVE
 bool espNowInitialized = false;
 uint8_t hubMacAddress[6];
 bool hubMacAssigned = false;
@@ -118,6 +125,7 @@ unsigned long imuUpdateCount = 0;
 unsigned long espNowSendCount = 0;
 unsigned long lastHubStatusCheck = 0;
 const unsigned long HUB_STATUS_CHECK_INTERVAL = 40000; // 40 seconds (5x the regular interval)
+#endif
 
 // BLE advertising timeout for child devices
 const unsigned long BLE_STARTUP_TIMEOUT = 30000; // 30 seconds for devices that start as children
@@ -516,7 +524,11 @@ void updateBatteryLevel() {
         // Update device info characteristic with new battery level
         if (deviceInfoChar != nullptr) {
             uint8_t deviceMac[6];
+#ifdef ESP32_C3_GLOVE
+            esp_read_mac(deviceMac, ESP_MAC_BT);  // Use BT MAC on C3 glove
+#else
             WiFi.macAddress(deviceMac);
+#endif
 
             uint8_t deviceInfo[14] = {
                 0x01, 0x00,  // Device ID
@@ -530,33 +542,34 @@ void updateBatteryLevel() {
     }
 }
 
-// ESP-NOW sender functions for child devices
+// ESP-NOW sender functions for child devices (not used on C3 glove)
+#ifndef ESP32_C3_GLOVE
 bool initializeESPNowSender() {
     if (espNowInitialized) {
         return true; // Already initialized
     }
-    
+
     // Force WiFi channel to ESP-NOW channel first
     WiFi.setChannel(1);
     delay(50); // Give WiFi time to settle
-    
+
     // Initialize ESP-NOW
     if (esp_now_init() != ESP_OK) {
         return false;
     }
-    
+
     // Set ESP-NOW PMK (required for all ESP-NOW operations)
     if (esp_now_set_pmk((uint8_t*)"pmk1234567890123") != ESP_OK) {
         return false;
     }
-    
+
     // Register callback for receiving commands from hub
     esp_now_register_recv_cb(onESPNowDataRecv);
     Serial.println("CHILD: ESP-NOW receive callback registered - ready to receive calibration commands");
-    
+
     // ESP-NOW automatically supports both sending and receiving
     // No need to set a specific role - it can do both
-    
+
     espNowInitialized = true;
     return true;
 }
@@ -565,14 +578,14 @@ void updateESPNowHubMacAddress() {
     // Check if we have a hub MAC address assigned
     if (deviceConfig.isHubMacAssigned()) {
         deviceConfig.getHubMacAddress(hubMacAddress);
-        
+
         // Register hub as ESP-NOW peer
         esp_now_peer_info_t peerInfo;
         memset(&peerInfo, 0, sizeof(peerInfo));
         memcpy(peerInfo.peer_addr, hubMacAddress, 6);
         peerInfo.channel = 1; // Use channel 1
         peerInfo.encrypt = false; // No encryption for now
-        
+
         esp_err_t result = esp_now_add_peer(&peerInfo);
         if (result == ESP_OK || result == ESP_ERR_ESPNOW_EXIST) {
             hubMacAssigned = true;
@@ -586,23 +599,6 @@ void updateESPNowHubMacAddress() {
 
 /**
  * Unified ESP-NOW callback function for both hub and child devices
- * 
- * This function handles all incoming ESP-NOW packets and routes them based on device role:
- * - HUB devices: Process MESSAGE_TYPE_QUAT (quaternion packets) from children
- * - CHILD devices: Process MESSAGE_TYPE_CMD (calibration commands) from hub
- * 
- * Packet Flow:
- * 1. Children send quaternions (MESSAGE_TYPE_QUAT) → Hub receives and processes
- * 2. Hub sends calibration (MESSAGE_TYPE_CMD) → Children receive and process
- * 
- * Expected Behavior:
- * - Hub ignores command packets (it only sends them)
- * - Children ignore quaternion packets (they only send them)
- * - All packets are validated for minimum size before processing
- * 
- * @param esp_now_info ESP-NOW receive information including source MAC address
- * @param data Raw packet data
- * @param dataLen Length of packet data in bytes
  */
 void onESPNowDataRecv(const esp_now_recv_info_t* esp_now_info, const uint8_t* data, int dataLen) {
     // Check minimum packet size (header size)
@@ -610,10 +606,10 @@ void onESPNowDataRecv(const esp_now_recv_info_t* esp_now_info, const uint8_t* da
         Serial.printf("ESP-NOW: Packet too small: %d bytes\n", dataLen);
         return; // Packet too small, ignore silently
     }
-    
+
     // Extract header to determine packet type
     ESPNowPacketHeader* header = (ESPNowPacketHeader*)data;
-    
+
     // Route packets based on device role
     if (deviceConfig.isHubMode()) {
         // HUB: Process quaternion packets only
@@ -629,14 +625,14 @@ void onESPNowDataRecv(const esp_now_recv_info_t* esp_now_info, const uint8_t* da
                          header->messageType,
                          esp_now_info->src_addr[0], esp_now_info->src_addr[1], esp_now_info->src_addr[2],
                          esp_now_info->src_addr[3], esp_now_info->src_addr[4], esp_now_info->src_addr[5]);
-            
+
             // Process calibration command
             if (dataLen == sizeof(ESPNowCommandPacket)) {
                 ESPNowCommandPacket* cmd = (ESPNowCommandPacket*)data;
-                
+
                 if (cmd->commandType == 0x01) { // IMU reset command
                     Serial.println("CHILD: Calibration command received");
-                    
+
                     if (imu.isAvailable()) {
                         imu.reset();
                     }
@@ -651,20 +647,20 @@ void sendESPNowQuaternionData() {
     if (!espNowInitialized || !hubMacAssigned) {
         return; // Not ready to send
     }
-    
+
     // Rate limiting - now handled by IMU update interval (48Hz)
     // Removed redundant rate limiting since IMU updates at 48Hz
-    
+
     // Get current quaternion data from IMU
     float qw_sensor, qx_sensor, qy_sensor, qz_sensor;
     imu.getQuaternion(qw_sensor, qx_sensor, qy_sensor, qz_sensor);
-    
+
     // Apply 180-degree rotation around Z-axis to correct for IMU mounting
     float corrected_w = qw_sensor;
     float corrected_x = -qx_sensor;
     float corrected_y = -qy_sensor;
     float corrected_z = qz_sensor;
-    
+
     // Create ESP-NOW packet with simplified header structure
     ESPNowQuaternionPacket packet;
     packet.header.messageType = MESSAGE_TYPE_QUAT;  // QUAT
@@ -675,10 +671,10 @@ void sendESPNowQuaternionData() {
     packet.quaternion.x = corrected_x;
     packet.quaternion.y = corrected_y;
     packet.quaternion.z = corrected_z;
-    
+
     // Send packet to hub
     esp_err_t result = esp_now_send(hubMacAddress, (uint8_t*)&packet, sizeof(packet));
-    
+
     if (result == ESP_OK) {
         lastESPNowTransmission = millis();
         espNowSendCount++;
@@ -690,7 +686,7 @@ void sendESPNowQuaternionData() {
         if (currentTime - lastESPNowError >= ESP_NOW_ERROR_TIMEOUT) {
             espNowErrorCount++;
             lastESPNowError = currentTime;
-            
+
             // If we've had many errors, try to reinitialize ESP-NOW
             if (espNowErrorCount >= 10) {
                 Serial.println("ESP-NOW: Too many errors, attempting reinitialization...");
@@ -708,28 +704,29 @@ void sendESPNowQuaternionData() {
         }
     }
 }
+#endif // ESP32_C3_GLOVE
 
 void setup() {
-    // Setup LED pins
-    pinMode(LED_PIN, OUTPUT);
-    pinMode(STATUS_LED_PIN, OUTPUT);
-
-    // LED TEST CODE - Commented out but kept for hardware debugging
-    // Uncomment below to test LED functionality with different resistor values
-    /*
-    // Rapid blinking test - should be visible even without serial
-    for (int i = 0; i < 5; i++) {
-        digitalWrite(LED_PIN, HIGH);
-        digitalWrite(STATUS_LED_PIN, HIGH);
-        delay(200);
-        digitalWrite(LED_PIN, LOW);
-        digitalWrite(STATUS_LED_PIN, LOW);
-        delay(200);
-    }
-    */
-
     Serial.begin(115200);
     delay(2000); // Longer delay for serial to initialize
+
+    Serial.println("\n\n=====  DEBUG BOOT TEST =====");
+    Serial.println("Step 1: Serial initialized!");
+    Serial.flush();
+
+    // Setup LED pins
+    Serial.println("Step 2: Setting up LED pins...");
+    Serial.flush();
+#ifdef ESP32_C3_GLOVE
+    // On C3 glove, skip GPIO configuration that might conflict with boot pins
+    // GPIO3 (A1/STATUS_LED_PIN) is a strapping pin on C3
+    Serial.println("Step 2: Skipping LED GPIO config on C3 (strapping pins)");
+#else
+    pinMode(LED_PIN, OUTPUT);
+    pinMode(STATUS_LED_PIN, OUTPUT);
+#endif
+    Serial.println("Step 2: LED pins configured!");
+    Serial.flush();
 
     Serial.println("\n\n----- Eidon Tracker Starting -----");
     Serial.flush();
@@ -739,20 +736,38 @@ void setup() {
     // Record startup time for advertising timeout
     startupTime = millis();
 
+    Serial.println("Step 3: Initializing device configuration...");
+    Serial.flush();
+
     // Initialize device configuration first
     if (!deviceConfig.begin()) {
         Serial.println("Failed to initialize device configuration!");
+#ifdef ESP32_C3_GLOVE
+        Serial.println("WARNING: Continuing without device config (C3 glove test mode)");
+#else
         while (1) {
             digitalWrite(LED_PIN, HIGH);
             delay(100);
             digitalWrite(LED_PIN, LOW);
             delay(100);
         }
+#endif
     }
+    Serial.println("Step 3: Device configuration initialized!");
+    Serial.flush();
 
-    // Initialize WiFi for ESP-NOW support and MAC address retrieval
+    // Initialize WiFi for ESP-NOW support and MAC address retrieval (not on C3 glove)
+#ifndef ESP32_C3_GLOVE
+    Serial.println("Step 4: Initializing WiFi...");
+    Serial.flush();
     WiFi.mode(WIFI_MODE_STA);
     WiFi.begin(); // Start WiFi (no need to connect to network for ESP-NOW)
+    Serial.println("Step 4: WiFi initialized!");
+    Serial.flush();
+#else
+    Serial.println("Step 4: WiFi skipped (C3 glove BLE-only mode)");
+    Serial.flush();
+#endif
 
     // LED TEST CODE - Commented out but kept for hardware debugging
     /*
@@ -790,6 +805,9 @@ void setup() {
     Serial.flush();
     */
 
+    Serial.println("Step 5: Setting up battery ADC...");
+    Serial.flush();
+
     // Setup battery ADC pin (following Seeed wiki)
     pinMode(A0, INPUT); // Configure A0 as ADC input
 
@@ -798,17 +816,30 @@ void setup() {
     batteryVoltage = readBatteryVoltage();
     batteryPercentage = calculateBatteryPercentage(batteryVoltage);
     Serial.printf("BATTERY: Initial reading - Voltage: %.2fV, Percentage: %d%%\n", batteryVoltage, batteryPercentage);
+    Serial.println("Step 5: Battery ADC configured!");
+    Serial.flush();
 
-    // Initialize IMU
+    Serial.println("Step 6: Initializing IMU...");
+    Serial.flush();
+
+    // Initialize IMU (optional on C3 glove for initial testing)
     if (!imu.begin()) {
         Serial.println("Failed to initialize IMU!");
+#ifdef ESP32_C3_GLOVE
+        // On C3 glove, continue without IMU for BLE testing
+        Serial.println("WARNING: Continuing without IMU (C3 glove test mode)");
+#else
         while (1) {
             digitalWrite(LED_PIN, HIGH);
             delay(100);
             digitalWrite(LED_PIN, LOW);
             delay(100);
         }
+#endif
+    } else {
+        Serial.println("Step 6: IMU initialized!");
     }
+    Serial.flush();
 
 #ifdef ESP32_C3_GLOVE
     // Initialize finger sensors (glove only)
@@ -823,18 +854,26 @@ void setup() {
 #endif
         
     // Initialize Bluetooth
+    Serial.println("DEBUG: About to init BLE...");
+    Serial.flush();
+
     NimBLEDevice::init("");
-    
+    Serial.println("DEBUG: NimBLEDevice::init() completed");
+    Serial.flush();
+
     // Set device name for advertising
     String deviceName = deviceConfig.generateDeviceName();
     NimBLEDevice::setDeviceName(deviceName.c_str());
-    
+
     // Enable proper security to fix write callbacks on encrypted connections
     NimBLEDevice::setSecurityAuth(true, true, true);  // Enable authentication, encryption, and authorization
     NimBLEDevice::setSecurityIOCap(BLE_HS_IO_NO_INPUT_OUTPUT);  // No input/output - Just Works pairing, no prompt
-    
+
     // Set consistent power level
-    NimBLEDevice::setPower(9); // Use integer value instead of ESP_PWR_LVL_P9
+    NimBLEDevice::setPower(9); // Use integer value for NimBLE 2.3.x
+
+    Serial.println("DEBUG: BLE initialization complete");
+    Serial.flush();
     
     // Create server
     pServer = NimBLEDevice::createServer();
@@ -863,9 +902,13 @@ void setup() {
         NIMBLE_PROPERTY::READ
     );
     
-    // Get device's WiFi MAC address
+    // Get device's MAC address
     uint8_t deviceMac[6];
+#ifdef ESP32_C3_GLOVE
+    esp_read_mac(deviceMac, ESP_MAC_BT);  // Use BT MAC on C3 glove
+#else
     WiFi.macAddress(deviceMac);
+#endif
     
     // Extended device info with MAC address (14 bytes total)
     uint8_t deviceInfo[14] = {
@@ -960,31 +1003,35 @@ void setup() {
     // Start advertising
     pAdvertising->start();
     
-    // Check for stored hub MAC address if this is a child device
-    if (deviceConfig.isNodeMode() && (deviceConfig.getRole() == ROLE_LEFT_HAND || 
+    // Check for stored hub MAC address if this is a child device (not on C3 glove)
+#ifndef ESP32_C3_GLOVE
+    if (deviceConfig.isNodeMode() && (deviceConfig.getRole() == ROLE_LEFT_HAND ||
                                       deviceConfig.getRole() == ROLE_RIGHT_HAND ||
-                                      deviceConfig.getRole() == ROLE_LEFT_FOREARM || 
+                                      deviceConfig.getRole() == ROLE_LEFT_FOREARM ||
                                       deviceConfig.getRole() == ROLE_RIGHT_FOREARM)) {
         if (deviceConfig.isHubMacAssigned()) {
             uint8_t hubMac[6];
             deviceConfig.getHubMacAddress(hubMac);
-            
+
             // Initialize ESP-NOW sender for child device
             if (initializeESPNowSender()) {
                 updateESPNowHubMacAddress();
             }
         }
     }
-    
+#endif
+
     // Essential initialization summary
-    Serial.printf("INIT: Device: %s, Role: %s, Polling: 1Hz\n", 
-                 deviceName.c_str(), 
+    Serial.printf("INIT: Device: %s, Role: %s, Polling: 1Hz\n",
+                 deviceName.c_str(),
                  deviceConfig.getRoleName(deviceConfig.getRole()));
-    
+
+#ifndef ESP32_C3_GLOVE
     // Add ESP-NOW initialization status for child devices
     if (deviceConfig.isNodeMode() && deviceConfig.isHubMacAssigned()) {
         Serial.println("INIT: ESP-NOW ready");
     }
+#endif
     
     Serial.println("----- Initialization Complete -----");
 }
@@ -997,7 +1044,9 @@ void loop() {
     // updateLEDStatus();
 
     // Update status LED (second LED) - simple on/off control
+#ifndef ESP32_C3_GLOVE
     updateStatusLED();
+#endif
 
     // Update battery level (periodic reading every 60 seconds)
     updateBatteryLevel();
@@ -1009,28 +1058,32 @@ void loop() {
         // Minimal logging to avoid delays
         if (deviceConnected) {
             Serial.println("BLE: Connected");
-            
+
+#ifndef ESP32_C3_GLOVE
             // Re-initialize ESP-NOW after BLE connection to prevent conflicts
             if (deviceConfig.isHubMode()) {
                 // Force WiFi channel back to ESP-NOW channel
                 WiFi.setChannel(1);
                 delay(100); // Give WiFi time to settle
-                
+
                 // Force complete ESP-NOW re-initialization
                 esp_now_deinit();
                 delay(100);
-                
+
                 if (esp_now_init() == ESP_OK) {
                     esp_now_set_pmk((uint8_t*)"pmk1234567890123");
                     esp_now_register_recv_cb(onESPNowDataRecv);
-                    
+
                     // Restore ESP-NOW peer registrations after reinitialization
                     restoreESPNowPeers();
                 }
             }
-            
+#endif
+
             // Force reset LED state and start fresh pattern
+#ifndef ESP32_C3_GLOVE
             digitalWrite(LED_PIN, LOW);  // Start with LED OFF
+#endif
             ledState = false;
             ledLastUpdate = 0; // Force immediate update
             currentLEDPattern = LED_CONNECTED;
@@ -1055,16 +1108,20 @@ void loop() {
     // Rate-limited IMU updates for both child and hub devices (48Hz)
     if (currentTime - lastIMUUpdate >= IMU_UPDATE_INTERVAL) {
         imu.update();
+#ifndef ESP32_C3_GLOVE
         imuUpdateCount++; // Track IMU updates for periodic logging
+#endif
         lastIMUUpdate = currentTime;
-        
+
+#ifndef ESP32_C3_GLOVE
         // For child devices: Send ESP-NOW data immediately after every IMU update (48Hz redundancy approach)
-        if (deviceConfig.isNodeMode() && (deviceConfig.getRole() == ROLE_LEFT_HAND || 
+        if (deviceConfig.isNodeMode() && (deviceConfig.getRole() == ROLE_LEFT_HAND ||
                                           deviceConfig.getRole() == ROLE_RIGHT_HAND ||
-                                          deviceConfig.getRole() == ROLE_LEFT_FOREARM || 
+                                          deviceConfig.getRole() == ROLE_LEFT_FOREARM ||
                                           deviceConfig.getRole() == ROLE_RIGHT_FOREARM)) {
             sendESPNowQuaternionData();
         }
+#endif
     }
     
     // Update BLE polling system (skip when BLE timeout is up on children)
@@ -1075,7 +1132,9 @@ void loop() {
             pollingDisabledLogged = false;
         }
         pollingManager.update();
-    } else if (deviceConfig.isNodeMode() && !deviceConnected) {
+    }
+#ifndef ESP32_C3_GLOVE
+    else if (deviceConfig.isNodeMode() && !deviceConnected) {
         // Log once when polling is disabled for children
         static bool pollingDisabledLogged = false;
         if (!pollingDisabledLogged) {
@@ -1083,11 +1142,11 @@ void loop() {
             pollingDisabledLogged = true;
         }
     }
-    
+
     // Update hub client service (only if we're a hub)
     if (deviceConfig.isHubMode()) {
         updateHubClientService(deviceConnected);
-        
+
         // Check for child disconnections every second
         static unsigned long lastDisconnectCheck = 0;
         if (currentTime - lastDisconnectCheck >= 1000) {
@@ -1095,6 +1154,7 @@ void loop() {
             lastDisconnectCheck = currentTime;
         }
     }
+#endif
     
     // Send data if connected
     if (deviceConnected) {
@@ -1128,46 +1188,48 @@ void loop() {
     }
     
     // Periodic logging for child devices (ESP-NOW transmission now handled in IMU update section)
-    if (deviceConfig.isNodeMode() && (deviceConfig.getRole() == ROLE_LEFT_HAND || 
+    // Not used on C3 glove since it's BLE-only
+#ifndef ESP32_C3_GLOVE
+    if (deviceConfig.isNodeMode() && (deviceConfig.getRole() == ROLE_LEFT_HAND ||
                                       deviceConfig.getRole() == ROLE_RIGHT_HAND ||
-                                      deviceConfig.getRole() == ROLE_LEFT_FOREARM || 
+                                      deviceConfig.getRole() == ROLE_LEFT_FOREARM ||
                                       deviceConfig.getRole() == ROLE_RIGHT_FOREARM)) {
         // Periodic logging for child devices
         if (currentTime - lastChildLogTime >= CHILD_LOG_INTERVAL) {
             float imuRate = (float)imuUpdateCount / (CHILD_LOG_INTERVAL / 1000.0);
             float espNowRate = (float)espNowSendCount / (CHILD_LOG_INTERVAL / 1000.0);
-            
+
             if (startupTimedOut || disconnectTimedOut) {
-                Serial.printf("CHILD: IMU %.0f Hz, Sent data to Hub: %.1f Hz, Role: %s (ESP-NOW only mode)\n", 
+                Serial.printf("CHILD: IMU %.0f Hz, Sent data to Hub: %.1f Hz, Role: %s (ESP-NOW only mode)\n",
                              imuRate, espNowRate, deviceConfig.getRoleName(deviceConfig.getRole()));
             } else {
                 // Check which timeout is closer
                 unsigned long startupTimeLeft = BLE_STARTUP_TIMEOUT - (currentTime - startupTime);
                 unsigned long disconnectTimeLeft = (disconnectTime > 0) ? BLE_DISCONNECT_TIMEOUT - (currentTime - disconnectTime) : 0;
-                
+
                 if (startupTimeLeft > 0 && (disconnectTime == 0 || startupTimeLeft <= disconnectTimeLeft)) {
-                    Serial.printf("CHILD: IMU %.0f Hz, Sent data to Hub: %.1f Hz, Role: %s (Startup timeout in %lus)\n", 
+                    Serial.printf("CHILD: IMU %.0f Hz, Sent data to Hub: %.1f Hz, Role: %s (Startup timeout in %lus)\n",
                                  imuRate, espNowRate, deviceConfig.getRoleName(deviceConfig.getRole()), startupTimeLeft / 1000);
                 } else if (disconnectTimeLeft > 0) {
-                    Serial.printf("CHILD: IMU %.0f Hz, Sent data to Hub: %.1f Hz, Role: %s (Disconnect timeout in %lus)\n", 
+                    Serial.printf("CHILD: IMU %.0f Hz, Sent data to Hub: %.1f Hz, Role: %s (Disconnect timeout in %lus)\n",
                                  imuRate, espNowRate, deviceConfig.getRoleName(deviceConfig.getRole()), disconnectTimeLeft / 1000);
                 } else {
-                    Serial.printf("CHILD: IMU %.0f Hz, Sent data to Hub: %.1f Hz, Role: %s (BLE timeout imminent)\n", 
+                    Serial.printf("CHILD: IMU %.0f Hz, Sent data to Hub: %.1f Hz, Role: %s (BLE timeout imminent)\n",
                                  imuRate, espNowRate, deviceConfig.getRoleName(deviceConfig.getRole()));
                 }
             }
-            
+
             // Reset counters
             imuUpdateCount = 0;
             espNowSendCount = 0;
             lastChildLogTime = currentTime;
         }
-        
+
         // Hub status check (every 5x the regular interval)
         if (currentTime - lastHubStatusCheck >= HUB_STATUS_CHECK_INTERVAL) {
             if (hubMacAssigned) {
                 Serial.printf("CHILD: Hub MAC: %02X:%02X:%02X:%02X:%02X:%02X\n",
-                             hubMacAddress[0], hubMacAddress[1], hubMacAddress[2], 
+                             hubMacAddress[0], hubMacAddress[1], hubMacAddress[2],
                              hubMacAddress[3], hubMacAddress[4], hubMacAddress[5]);
             } else {
                 Serial.println("CHILD: No hub MAC assigned");
@@ -1175,6 +1237,7 @@ void loop() {
             lastHubStatusCheck = currentTime;
         }
     }
+#endif
     
     // BLE advertising timeout management for child devices
     if (deviceConfig.isNodeMode() && !deviceConnected) {

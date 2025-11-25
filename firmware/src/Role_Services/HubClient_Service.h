@@ -2,8 +2,13 @@
 #define HUB_CLIENT_SERVICE_H
 
 #include <Arduino.h>
+
+// Hub client functionality disabled on C3 glove (BLE-only mode)
+#ifndef ESP32_C3_GLOVE
 #include <esp_now.h>
 #include <WiFi.h>
+#endif
+
 #include "DeviceConfig.h"
 #include "Hub_Structures.h"
 
@@ -89,6 +94,9 @@ bool registerChildAsESPNowPeer(const uint8_t* macAddress);
 void restoreESPNowPeers();  // Global recovery function
 
 // ESP-NOW callback function declaration (defined in main.cpp)
+// New API (framework 3.x): callback(recv_info, data, len)
+#ifndef ESP32_C3_GLOVE
 void onESPNowDataRecv(const esp_now_recv_info_t* esp_now_info, const uint8_t* data, int dataLen);
+#endif
 
 #endif // HUB_CLIENT_SERVICE_H 

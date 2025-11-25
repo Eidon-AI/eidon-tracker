@@ -60,7 +60,7 @@ public:
     static bool isValidRole(DeviceRole role);
     
 private:
-    static Preferences prefs;
+    static Preferences* prefs;  // Changed to pointer to avoid global construction
     static DeviceConfigData config;
     static bool initialized;
     

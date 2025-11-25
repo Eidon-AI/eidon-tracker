@@ -109,44 +109,79 @@ bool BNO085::begin() {
     Serial.printf("BNO085: Glove mode - I2C address 0x%02X\n", I2C_ADDR);
 #endif
 
-    // Initialize I2C with explicit pins
-    Wire.setPins(I2C_SDA, I2C_SCL);
-    Wire.begin();
-    Wire.setClock(I2C_FREQ_HZ); // Use platform-specific frequency
-    
+#ifdef ESP32_C3_GLOVE
+    // On C3 glove, skip I2C entirely for now - Wire.begin() causes watchdog reset
+    // TODO: Investigate proper I2C pins for C3 glove hardware
+    Serial.println("BNO085: Skipping I2C init on C3 glove (causes WDT reset)");
+    return false;
+#endif
 
-    
+    // Initialize I2C with explicit pins
+    Serial.println("BNO085: Setting I2C pins...");
+    Wire.setPins(I2C_SDA, I2C_SCL);
+    Serial.println("BNO085: Calling Wire.begin()...");
+    Wire.begin();
+    Serial.println("BNO085: Setting I2C clock...");
+    Wire.setClock(I2C_FREQ_HZ); // Use platform-specific frequency
+    Serial.println("BNO085: I2C initialized");
+
     // Test basic I2C communication with retries
     int i2c_attempts = 0;
     bool i2c_success = false;
-    
-    while (!i2c_success && i2c_attempts < 5) {
+
+#ifdef ESP32_C3_GLOVE
+    // Single quick check on C3 glove to prevent watchdog timeout
+    const int max_i2c_attempts = 1;
+    Wire.setTimeOut(50); // Very short timeout for C3
+#else
+    const int max_i2c_attempts = 5;
+#endif
+
+    Serial.println("BNO085: Testing I2C communication...");
+    while (!i2c_success && i2c_attempts < max_i2c_attempts) {
         Wire.beginTransmission(I2C_ADDR);
         byte error = Wire.endTransmission();
-        
+
         if (error == 0) {
             i2c_success = true;
+            Serial.println("BNO085: I2C device found!");
         } else {
             i2c_attempts++;
-            if (i2c_attempts < 5) {
-                delay(500);
+            Serial.printf("BNO085: I2C attempt %d failed (error %d)\n", i2c_attempts, error);
+#ifndef ESP32_C3_GLOVE
+            if (i2c_attempts < max_i2c_attempts) {
+                delay(200);
             }
+#endif
         }
     }
-    
+
     if (!i2c_success) {
-        Serial.println("BNO085: I2C communication failed");
+        Serial.println("BNO085: I2C communication failed - no device found");
         return false;
     }
-    
+
     // Try multiple initialization approaches with retries
     bool bno_initialized = false;
     int total_attempts = 0;
+#ifdef ESP32_C3_GLOVE
+    const int max_attempts = 3; // Reduced attempts on C3 glove
+#else
     const int max_attempts = 10; // Reduced from 15
+#endif
     
     while (!bno_initialized && total_attempts < max_attempts) {
         total_attempts++;
-        
+
+#ifdef ESP32_C3_GLOVE
+        // Simplified initialization for C3 glove - just try with explicit Wire object
+        if (bno08x.begin_I2C(I2C_ADDR, &Wire)) {
+            bno_initialized = true;
+            break;
+        }
+        // Short delay between attempts
+        delay(100);
+#else
         // Try different initialization methods
         if (total_attempts <= 3) {
             // First 3 attempts: Try with explicit Wire object
@@ -173,11 +208,11 @@ bool BNO085::begin() {
                 break;
             }
         }
-        
+
         // Wait between attempts
         int delay_ms = (total_attempts <= 5) ? 500 : 1000;
         delay(delay_ms);
-        
+
         // Reset I2C if device is not responding (every 5 attempts)
         if (total_attempts % 5 == 0) {
             Wire.beginTransmission(I2C_ADDR);
@@ -189,6 +224,7 @@ bool BNO085::begin() {
                 Wire.setClock(I2C_FREQ_HZ);
             }
         }
+#endif
     }
     
     if (!bno_initialized) {

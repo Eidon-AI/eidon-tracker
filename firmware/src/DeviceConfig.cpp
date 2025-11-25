@@ -1,8 +1,8 @@
 #include "DeviceConfig.h"
-#include <WiFi.h>
+#include <esp_mac.h>
 
 // Static member initialization
-Preferences DeviceConfig::prefs;
+Preferences* DeviceConfig::prefs = nullptr;  // Initialize as nullptr, allocate in begin()
 DeviceConfigData DeviceConfig::config;
 bool DeviceConfig::initialized = false;
 
@@ -18,10 +18,15 @@ bool DeviceConfig::begin() {
     if (initialized) {
         return true;
     }
-    
+
+    // Allocate Preferences object (avoiding global construction crash)
+    prefs = new Preferences();
+
     // Initialize preferences
-    if (!prefs.begin(CONFIG_NAMESPACE, false)) {
+    if (!prefs->begin(CONFIG_NAMESPACE, false)) {
         Serial.println("DeviceConfig: Failed to initialize preferences");
+        delete prefs;
+        prefs = nullptr;
         return false;
     }
     
@@ -190,10 +195,10 @@ bool DeviceConfig::saveConfig() {
     }
     
     // Save role configuration
-    prefs.putUChar(ROLE_KEY, (uint8_t)config.role);
+    prefs->putUChar(ROLE_KEY, (uint8_t)config.role);
     
     // Save hub MAC address configuration
-    prefs.putBytes(HUB_MAC_KEY, config.hubMacAddress, sizeof(config.hubMacAddress));
+    prefs->putBytes(HUB_MAC_KEY, config.hubMacAddress, sizeof(config.hubMacAddress));
     
 
     return true;
@@ -206,10 +211,10 @@ bool DeviceConfig::loadConfig() {
     }
     
     // Load role configuration
-    config.role = (DeviceRole)prefs.getUChar(ROLE_KEY, ROLE_UNKNOWN);
+    config.role = (DeviceRole)prefs->getUChar(ROLE_KEY, ROLE_UNKNOWN);
     
     // Load hub MAC address configuration
-    size_t macSize = prefs.getBytes(HUB_MAC_KEY, config.hubMacAddress, sizeof(config.hubMacAddress));
+    size_t macSize = prefs->getBytes(HUB_MAC_KEY, config.hubMacAddress, sizeof(config.hubMacAddress));
     if (macSize != sizeof(config.hubMacAddress)) {
         // Initialize with zeros if not found
         memset(config.hubMacAddress, 0, sizeof(config.hubMacAddress));
@@ -229,7 +234,7 @@ bool DeviceConfig::resetConfig() {
     }
     
     // Clear all preferences
-    prefs.clear();
+    prefs->clear();
     
     // Reset to defaults
     config.role = ROLE_UNKNOWN;
@@ -240,9 +245,9 @@ bool DeviceConfig::resetConfig() {
 }
 
 String DeviceConfig::generateDeviceName() {
-    // Get device's WiFi MAC address for unique identification
+    // Get device's MAC address directly (no WiFi init needed)
     uint8_t deviceMac[6];
-    WiFi.macAddress(deviceMac);
+    esp_read_mac(deviceMac, ESP_MAC_WIFI_STA);
     
     // Debug: Print the MAC address we're using
     
