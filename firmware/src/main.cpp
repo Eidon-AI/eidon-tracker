@@ -33,13 +33,12 @@ float readBatteryVoltage();
 uint8_t calculateBatteryPercentage(float voltage);
 void updateBatteryLevel();
 
-// ESP-NOW sender functions for child devices (not used on C3 glove)
-#ifndef ESP32_C3_GLOVE
+// ESP-NOW sender functions for child devices
 bool initializeESPNowSender();
 void sendESPNowQuaternionData();
 void updateESPNowHubMacAddress();
 void restoreESPNowPeers();  // ESP-NOW peer recovery function
-#endif
+void onESPNowDataRecv(const esp_now_recv_info_t* esp_now_info, const uint8_t* data, int dataLen);
 
 // Hub client functions are now in Role_Services/HubClient_Service.h
 
@@ -105,8 +104,7 @@ unsigned long lastTransmission = 0;
 // Track subscription status
 bool quaternionSubscribed = false;
 
-// ESP-NOW sender variables for child devices (not used on C3 glove)
-#ifndef ESP32_C3_GLOVE
+// ESP-NOW sender variables for child devices
 bool espNowInitialized = false;
 uint8_t hubMacAddress[6];
 bool hubMacAssigned = false;
@@ -125,7 +123,6 @@ unsigned long imuUpdateCount = 0;
 unsigned long espNowSendCount = 0;
 unsigned long lastHubStatusCheck = 0;
 const unsigned long HUB_STATUS_CHECK_INTERVAL = 40000; // 40 seconds (5x the regular interval)
-#endif
 
 // BLE advertising timeout for child devices
 const unsigned long BLE_STARTUP_TIMEOUT = 30000; // 30 seconds for devices that start as children
@@ -542,8 +539,7 @@ void updateBatteryLevel() {
     }
 }
 
-// ESP-NOW sender functions for child devices (not used on C3 glove)
-#ifndef ESP32_C3_GLOVE
+// ESP-NOW sender functions for child devices
 bool initializeESPNowSender() {
     if (espNowInitialized) {
         return true; // Already initialized
@@ -704,7 +700,6 @@ void sendESPNowQuaternionData() {
         }
     }
 }
-#endif // ESP32_C3_GLOVE
 
 void setup() {
     Serial.begin(115200);
@@ -756,18 +751,18 @@ void setup() {
     Serial.println("Step 3: Device configuration initialized!");
     Serial.flush();
 
-    // Initialize WiFi for ESP-NOW support and MAC address retrieval (not on C3 glove)
-#ifndef ESP32_C3_GLOVE
+    // Initialize WiFi for ESP-NOW support and MAC address retrieval
+    // WiFi must init BEFORE BLE for proper coexistence on single-core chips
     Serial.println("Step 4: Initializing WiFi...");
     Serial.flush();
     WiFi.mode(WIFI_MODE_STA);
-    WiFi.begin(); // Start WiFi (no need to connect to network for ESP-NOW)
+    delay(100); // Give WiFi time to initialize
+    Serial.println("Step 4: WiFi mode set to STA");
+    Serial.flush();
+    WiFi.begin(); // Start WiFi (required for ESP-NOW)
+    delay(100); // Give WiFi time to settle
     Serial.println("Step 4: WiFi initialized!");
     Serial.flush();
-#else
-    Serial.println("Step 4: WiFi skipped (C3 glove BLE-only mode)");
-    Serial.flush();
-#endif
 
     // LED TEST CODE - Commented out but kept for hardware debugging
     /*
@@ -1003,8 +998,7 @@ void setup() {
     // Start advertising
     pAdvertising->start();
     
-    // Check for stored hub MAC address if this is a child device (not on C3 glove)
-#ifndef ESP32_C3_GLOVE
+    // Check for stored hub MAC address if this is a child device
     if (deviceConfig.isNodeMode() && (deviceConfig.getRole() == ROLE_LEFT_HAND ||
                                       deviceConfig.getRole() == ROLE_RIGHT_HAND ||
                                       deviceConfig.getRole() == ROLE_LEFT_FOREARM ||
@@ -1019,19 +1013,16 @@ void setup() {
             }
         }
     }
-#endif
 
     // Essential initialization summary
     Serial.printf("INIT: Device: %s, Role: %s, Polling: 1Hz\n",
                  deviceName.c_str(),
                  deviceConfig.getRoleName(deviceConfig.getRole()));
 
-#ifndef ESP32_C3_GLOVE
     // Add ESP-NOW initialization status for child devices
     if (deviceConfig.isNodeMode() && deviceConfig.isHubMacAssigned()) {
         Serial.println("INIT: ESP-NOW ready");
     }
-#endif
     
     Serial.println("----- Initialization Complete -----");
 }
@@ -1059,7 +1050,6 @@ void loop() {
         if (deviceConnected) {
             Serial.println("BLE: Connected");
 
-#ifndef ESP32_C3_GLOVE
             // Re-initialize ESP-NOW after BLE connection to prevent conflicts
             if (deviceConfig.isHubMode()) {
                 // Force WiFi channel back to ESP-NOW channel
@@ -1078,7 +1068,6 @@ void loop() {
                     restoreESPNowPeers();
                 }
             }
-#endif
 
             // Force reset LED state and start fresh pattern
 #ifndef ESP32_C3_GLOVE
@@ -1108,12 +1097,9 @@ void loop() {
     // Rate-limited IMU updates for both child and hub devices (48Hz)
     if (currentTime - lastIMUUpdate >= IMU_UPDATE_INTERVAL) {
         imu.update();
-#ifndef ESP32_C3_GLOVE
         imuUpdateCount++; // Track IMU updates for periodic logging
-#endif
         lastIMUUpdate = currentTime;
 
-#ifndef ESP32_C3_GLOVE
         // For child devices: Send ESP-NOW data immediately after every IMU update (48Hz redundancy approach)
         if (deviceConfig.isNodeMode() && (deviceConfig.getRole() == ROLE_LEFT_HAND ||
                                           deviceConfig.getRole() == ROLE_RIGHT_HAND ||
@@ -1121,7 +1107,6 @@ void loop() {
                                           deviceConfig.getRole() == ROLE_RIGHT_FOREARM)) {
             sendESPNowQuaternionData();
         }
-#endif
     }
     
     // Update BLE polling system (skip when BLE timeout is up on children)
@@ -1132,9 +1117,7 @@ void loop() {
             pollingDisabledLogged = false;
         }
         pollingManager.update();
-    }
-#ifndef ESP32_C3_GLOVE
-    else if (deviceConfig.isNodeMode() && !deviceConnected) {
+    } else if (deviceConfig.isNodeMode() && !deviceConnected) {
         // Log once when polling is disabled for children
         static bool pollingDisabledLogged = false;
         if (!pollingDisabledLogged) {
@@ -1154,7 +1137,6 @@ void loop() {
             lastDisconnectCheck = currentTime;
         }
     }
-#endif
     
     // Send data if connected
     if (deviceConnected) {
@@ -1188,8 +1170,6 @@ void loop() {
     }
     
     // Periodic logging for child devices (ESP-NOW transmission now handled in IMU update section)
-    // Not used on C3 glove since it's BLE-only
-#ifndef ESP32_C3_GLOVE
     if (deviceConfig.isNodeMode() && (deviceConfig.getRole() == ROLE_LEFT_HAND ||
                                       deviceConfig.getRole() == ROLE_RIGHT_HAND ||
                                       deviceConfig.getRole() == ROLE_LEFT_FOREARM ||
@@ -1237,7 +1217,6 @@ void loop() {
             lastHubStatusCheck = currentTime;
         }
     }
-#endif
     
     // BLE advertising timeout management for child devices
     if (deviceConfig.isNodeMode() && !deviceConnected) {

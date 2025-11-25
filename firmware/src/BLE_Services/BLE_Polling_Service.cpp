@@ -2,23 +2,17 @@
 #include <Arduino.h>
 #include <NimBLEDevice.h>
 #include "DeviceConfig.h"
-// DISABLED: Using stubs for BLE-only mode
-// #include "BNO085.h"
-#include "../HardwareStubs.h"
+#include "BNO085.h"
 #include "Role_Services/RoleConfig_Service.h"
 #include "Role_Services/HubClient_Service.h"
 
 // Forward declarations
-class BNO085;
-class DeviceConfig;
 class ColorManager;
 
-// ESP-NOW function declarations (for child devices) - not used on C3 glove
-#ifndef ESP32_C3_GLOVE
+// ESP-NOW function declarations (for child devices)
 extern bool initializeESPNowSender();
 extern void updateESPNowHubMacAddress();
 extern void sendCalibrationCommand();
-#endif
 
 // External variables that handlers need access to
 extern BNO085 imu;
@@ -447,7 +441,6 @@ void handleRoleChange(const std::string& value, bool success) {
                 updateAdvertisingData();
                 
                 // 3. Handle child behavior - disconnect from phone when CHILD role assigned
-#ifndef ESP32_C3_GLOVE
                 if (deviceConfig.isNodeMode() && (newRole == ROLE_LEFT_HAND || newRole == ROLE_RIGHT_HAND ||
                                                  newRole == ROLE_LEFT_FOREARM || newRole == ROLE_RIGHT_FOREARM)) {
                     // Initialize ESP-NOW communication with assigned hub
@@ -463,7 +456,6 @@ void handleRoleChange(const std::string& value, bool success) {
                         updateAdvertisingData(); // Restart advertising with updated role information
                     }
                 }
-#endif
                 
                 // 5. Provide LED feedback
                 // TODO: Check LED feedback is working
