@@ -3,10 +3,19 @@
 
 #include <Arduino.h>
 #include "DeviceConfig.h"
+#include "BNO085.h"
 
 // Message type constants for ESP-NOW packets
 #define MESSAGE_TYPE_QUAT 0x01    // Quaternion data
 #define MESSAGE_TYPE_CMD  0x02    // Command
+#define MESSAGE_TYPE_RAW  0x03    // Raw sensor data
+
+// Raw motion data structure (36 bytes)
+struct RawMotionData {
+    float accel_x, accel_y, accel_z; // Accelerometer (m/s^2)
+    float gyro_x,  gyro_y,  gyro_z;  // Gyroscope (rad/s)
+    float mag_x,   mag_y,   mag_z;   // Magnetometer (uT)
+} __attribute__((packed));
 
 // Quaternion data structure for GATT (16 bytes) - unchanged
 struct QuaternionData {
@@ -49,6 +58,16 @@ struct AggregatedQuaternionData {
     QuaternionData hubData;
     QuaternionData handData;
     QuaternionData forearmData;
+    bool handConnected;
+    bool forearmConnected;
+    unsigned long timestamp;
+} __attribute__((packed));
+
+// Aggregated raw data for hub
+struct AggregatedRawData {
+    RawMotionData hubData;
+    RawMotionData handData;
+    RawMotionData forearmData;
     bool handConnected;
     bool forearmConnected;
     unsigned long timestamp;

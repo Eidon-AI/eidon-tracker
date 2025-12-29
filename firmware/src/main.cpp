@@ -54,6 +54,11 @@ BNO085 imu;
 #define CALIBRATION_CHAR_UUID     "E1D00003-8B5A-3E5B-9E23-4F9B5C91BBDE"
 #define DEVICE_INFO_CHAR_UUID     "E1D00005-8B5A-3E5B-9E23-4F9B5C91BBDE"
 
+// Raw Data Characteristics
+#define HUB_RAW_DATA_CHAR_UUID      "E1D0000B-8B5A-3E5B-9E23-4F9B5C91BBDE"
+#define HAND_RAW_DATA_CHAR_UUID     "E1D0000C-8B5A-3E5B-9E23-4F9B5C91BBDE"
+#define FOREARM_RAW_DATA_CHAR_UUID  "E1D0000D-8B5A-3E5B-9E23-4F9B5C91BBDE"
+
 // Message type constants for ESP-NOW packets
 #define MESSAGE_TYPE_QUAT 0x01    // Quaternion data
 #define MESSAGE_TYPE_CMD  0x02    // Command
@@ -64,6 +69,7 @@ BNO085 imu;
 
 // QuaternionData structure is now defined in Role_Services/Hub_Structures.h
 QuaternionData gattQuaternionData;
+RawMotionData gattRawData;
 
 // Global quaternion variables (for backward compatibility)
 float quaternion_x = 0;
@@ -332,6 +338,11 @@ NimBLECharacteristic* deviceInfoChar = nullptr;
 // New characteristics for hub devices only (child data)
 NimBLECharacteristic* handQuaternionChar = nullptr;
 NimBLECharacteristic* forearmQuaternionChar = nullptr;
+
+// Raw data characteristics
+NimBLECharacteristic* hubRawDataChar = nullptr;
+NimBLECharacteristic* handRawDataChar = nullptr;
+NimBLECharacteristic* forearmRawDataChar = nullptr;
 
 // Function to get current BLE connection state (similar to Bluefruit.connected())
 bool isConnected() {
@@ -847,6 +858,27 @@ void setup() {
     );
     forearmQuaternionChar->setValue((uint8_t*)&gattQuaternionData, sizeof(gattQuaternionData));
     
+    // Configure Hub Raw Data characteristic
+    hubRawDataChar = eidonService->createCharacteristic(
+        HUB_RAW_DATA_CHAR_UUID,
+        NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
+    );
+    hubRawDataChar->setValue((uint8_t*)&gattRawData, sizeof(gattRawData));
+
+    // Configure Hand Raw Data characteristic
+    handRawDataChar = eidonService->createCharacteristic(
+        HAND_RAW_DATA_CHAR_UUID,
+        NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
+    );
+    handRawDataChar->setValue((uint8_t*)&gattRawData, sizeof(gattRawData));
+
+    // Configure Forearm Raw Data characteristic
+    forearmRawDataChar = eidonService->createCharacteristic(
+        FOREARM_RAW_DATA_CHAR_UUID,
+        NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
+    );
+    forearmRawDataChar->setValue((uint8_t*)&gattRawData, sizeof(gattRawData));
+
     // Start custom service
     eidonService->start();
     
