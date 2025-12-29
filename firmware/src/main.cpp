@@ -27,6 +27,7 @@ void updateBatteryLevel();
 // ESP-NOW sender functions for child devices
 bool initializeESPNowSender();
 void sendESPNowQuaternionData();
+void sendESPNowRawData(); // Add declaration for raw data sender
 void updateESPNowHubMacAddress();
 void restoreESPNowPeers();  // ESP-NOW peer recovery function
 
@@ -69,7 +70,7 @@ BNO085 imu;
 
 // QuaternionData structure is now defined in Role_Services/Hub_Structures.h
 QuaternionData gattQuaternionData;
-RawMotionData gattRawData;
+// RawMotionData gattRawData; // Removed redundant global variable - using local vars or member access
 
 // Global quaternion variables (for backward compatibility)
 float quaternion_x = 0;
@@ -687,6 +688,29 @@ void sendESPNowQuaternionData() {
     }
 }
 
+void sendESPNowRawData() {
+    if (!espNowInitialized || !hubMacAssigned) {
+        return; // Not ready to send
+    }
+
+    // Get current raw data from IMU
+    RawMotionData raw;
+    imu.getRawData(raw);
+
+    // Create ESP-NOW packet
+    ESPNowRawPacket packet;
+    packet.header.messageType = MESSAGE_TYPE_RAW;
+    packet.header.senderRole = (uint8_t)deviceConfig.getRole();
+    packet.header.reserved[0] = 0;
+    packet.header.reserved[1] = 0;
+    packet.data = raw;
+
+    // Send packet to hub
+    // Note: We don't track errors/stats separately for raw data to avoid log spam
+    // The quaternion packet handles the connection health tracking
+    esp_now_send(hubMacAddress, (uint8_t*)&packet, sizeof(packet));
+}
+
 void setup() {
     // Setup LED pins
     pinMode(LED_PIN, OUTPUT);
@@ -863,21 +887,23 @@ void setup() {
         HUB_RAW_DATA_CHAR_UUID,
         NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
     );
-    hubRawDataChar->setValue((uint8_t*)&gattRawData, sizeof(gattRawData));
+    // Initialize with zeros using a local variable
+    RawMotionData zeroRawData = {0};
+    hubRawDataChar->setValue((uint8_t*)&zeroRawData, sizeof(zeroRawData));
 
     // Configure Hand Raw Data characteristic
     handRawDataChar = eidonService->createCharacteristic(
         HAND_RAW_DATA_CHAR_UUID,
         NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
     );
-    handRawDataChar->setValue((uint8_t*)&gattRawData, sizeof(gattRawData));
+    handRawDataChar->setValue((uint8_t*)&zeroRawData, sizeof(zeroRawData));
 
     // Configure Forearm Raw Data characteristic
     forearmRawDataChar = eidonService->createCharacteristic(
         FOREARM_RAW_DATA_CHAR_UUID,
         NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
     );
-    forearmRawDataChar->setValue((uint8_t*)&gattRawData, sizeof(gattRawData));
+    forearmRawDataChar->setValue((uint8_t*)&zeroRawData, sizeof(zeroRawData));
 
     // Start custom service
     eidonService->start();
@@ -1039,6 +1065,7 @@ void loop() {
                                           deviceConfig.getRole() == ROLE_LEFT_FOREARM || 
                                           deviceConfig.getRole() == ROLE_RIGHT_FOREARM)) {
             sendESPNowQuaternionData();
+            sendESPNowRawData(); // Send raw data immediately after quaternion data
         }
     }
     
@@ -1081,6 +1108,33 @@ void loop() {
             lastTransmission = currentTime;
             // Send quaternion report if connected
             sendQuaternionReport();
+            
+            // Send raw data report if connected
+            if (isConnected()) {
+                // 1. Hub Raw Data
+                if (hubRawDataChar != nullptr && imu.isAvailable()) {
+                    RawMotionData hubRaw;
+                    imu.getRawData(hubRaw);
+                    hubRawDataChar->notify((uint8_t*)&hubRaw, sizeof(hubRaw));
+                }
+
+                // 2. Child Raw Data (if Hub Mode)
+                if (deviceConfig.isHubMode()) {
+                    // Access child devices to get their latest raw data
+                    ESPNowChildDevice* children = getChildDevices();
+                    int childCount = 2; // Fixed max children
+
+                    for (int i = 0; i < childCount; i++) {
+                        if (children[i].dataAvailable) {
+                             if ((children[i].role == ROLE_LEFT_HAND || children[i].role == ROLE_RIGHT_HAND) && handRawDataChar != nullptr) {
+                                handRawDataChar->notify((uint8_t*)&children[i].lastRawData, sizeof(RawMotionData));
+                             } else if ((children[i].role == ROLE_LEFT_FOREARM || children[i].role == ROLE_RIGHT_FOREARM) && forearmRawDataChar != nullptr) {
+                                forearmRawDataChar->notify((uint8_t*)&children[i].lastRawData, sizeof(RawMotionData));
+                             }
+                        }
+                    }
+                }
+            }
             
             // Log BLE transmission for hub devices
             if (deviceConfig.isHubMode()) {

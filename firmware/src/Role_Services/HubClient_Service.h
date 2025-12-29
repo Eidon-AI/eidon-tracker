@@ -84,6 +84,7 @@ void updateChildData();
 void updateHubQuaternionData(float w, float x, float y, float z);
 bool isChildConnected(DeviceRole childRole);
 AggregatedQuaternionData* getAggregatedData();
+ESPNowChildDevice* getChildDevices(); // Added getter
 void sendCalibrationCommand();
 bool registerChildAsESPNowPeer(const uint8_t* macAddress);
 void restoreESPNowPeers();  // Global recovery function

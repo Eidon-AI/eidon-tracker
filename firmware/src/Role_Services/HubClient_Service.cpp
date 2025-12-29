@@ -232,13 +232,30 @@ void HubClientService::processESPNowPacket(const uint8_t* macAddr, const uint8_t
     // Extract header to determine packet type
     ESPNowPacketHeader* header = (ESPNowPacketHeader*)data;
     
-    // Only handle quaternion packets for now
+    // Only handle quaternion and raw data packets
     if (header->messageType == MESSAGE_TYPE_QUAT) {
-        // Increment packet counter for periodic logging (moved from old callback)
+        // Increment packet counter for periodic logging
         packetCounter++;
         processQuaternionPacket(macAddr, data, dataLen);
+    } else if (header->messageType == MESSAGE_TYPE_RAW) {
+        // Increment packet counter
+        packetCounter++;
+        // Process raw data packet (inline implementation for now as it's simple)
+        if (dataLen != sizeof(ESPNowRawPacket)) {
+            return;
+        }
+        
+        ESPNowRawPacket* packet = (ESPNowRawPacket*)data;
+        int slotIndex = findChildByMac(macAddr);
+        
+        if (slotIndex != -1) {
+            ESPNowChildDevice& child = childDevices[slotIndex];
+            child.lastRawData = packet->data;
+            // Note: We don't update dataAvailable flag here as it's driven by quaternion updates
+            // which are the primary heartbeat
+        }
     }
-    // Silently ignore non-quaternion packets to reduce log spam
+    // Silently ignore other packets to reduce log spam
 }
 
 // Process quaternion packet (simplified - uses MAC address instead of role)
@@ -502,4 +519,8 @@ bool isChildConnected(DeviceRole childRole) {
 
 AggregatedQuaternionData* getAggregatedData() {
     return hubClientService.getAggregatedData();
+}
+
+ESPNowChildDevice* getChildDevices() {
+    return hubClientService.getChildDevices();
 } 

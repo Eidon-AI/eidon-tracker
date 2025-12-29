@@ -3,19 +3,14 @@
 
 #include <Arduino.h>
 #include "DeviceConfig.h"
-#include "BNO085.h"
+#include "BNO085.h" // Includes RawMotionData definition
 
 // Message type constants for ESP-NOW packets
 #define MESSAGE_TYPE_QUAT 0x01    // Quaternion data
 #define MESSAGE_TYPE_CMD  0x02    // Command
 #define MESSAGE_TYPE_RAW  0x03    // Raw sensor data
 
-// Raw motion data structure (36 bytes)
-struct RawMotionData {
-    float accel_x, accel_y, accel_z; // Accelerometer (m/s^2)
-    float gyro_x,  gyro_y,  gyro_z;  // Gyroscope (rad/s)
-    float mag_x,   mag_y,   mag_z;   // Magnetometer (uT)
-} __attribute__((packed));
+// RawMotionData is defined in BNO085.h
 
 // Quaternion data structure for GATT (16 bytes) - unchanged
 struct QuaternionData {
@@ -38,6 +33,12 @@ struct ESPNowQuaternionPacket {
     QuaternionData quaternion;  // Existing structure (unchanged)
 } __attribute__((packed));
 
+// ESP-NOW raw data packet for child to hub communication
+struct ESPNowRawPacket {
+    ESPNowPacketHeader header;  // messageType = 0x03
+    RawMotionData data;         // Raw sensor data
+} __attribute__((packed));
+
 // ESP-NOW command packet for hub to child communication
 struct ESPNowCommandPacket {
     ESPNowPacketHeader header;  // messageType = 0x02
@@ -51,6 +52,7 @@ struct ESPNowChildDevice {
     DeviceRole role;           // Child device role
     bool dataAvailable;        // Whether we've received data recently
     QuaternionData lastData;   // Last received quaternion data
+    RawMotionData lastRawData; // Last received raw data
 } __attribute__((packed));
 
 // Aggregated quaternion data for hub (unchanged structure)
