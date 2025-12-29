@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <string>
 #include <NimBLEDevice.h>
 #include <NimBLEServer.h>
 #include <NimBLEUtils.h>
@@ -12,6 +13,7 @@
 #include "BLE_Services/BLE_Polling_Service.h" //TODO: Move this from BLE Services
 #include "DeviceConfig.h"
 #include "Role_Services/Hub_Structures.h"
+#include "Version.h"
 
 // Function declarations
 void sendQuaternionReport();
@@ -520,7 +522,7 @@ void updateBatteryLevel() {
 
             uint8_t deviceInfo[14] = {
                 0x01, 0x00,  // Device ID
-                0x01, 0x02,  // Firmware version 1.2
+                FIRMWARE_VERSION_MAJOR, FIRMWARE_VERSION_MINOR,  // Firmware version
                 batteryPercentage,  // Updated battery level (0 if no battery)
                 (uint8_t)deviceConfig.getRole(),  // Device role
                 deviceMac[0], deviceMac[1], deviceMac[2], deviceMac[3], deviceMac[4], deviceMac[5]  // MAC address
@@ -859,7 +861,7 @@ void setup() {
         QUATERNION_CHAR_UUID,
         NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
     );
-    quaternionChar->setValue((uint8_t*)&gattQuaternionData, sizeof(gattQuaternionData));
+    quaternionChar->setValue((const uint8_t*)&gattQuaternionData, sizeof(gattQuaternionData));
     quaternionChar->setCallbacks(&quaternionCallbacksInstance);
     
     // Configure Calibration characteristic
@@ -881,12 +883,12 @@ void setup() {
     // Extended device info with MAC address (14 bytes total)
     uint8_t deviceInfo[14] = {
         0x01, 0x00,  // Device ID
-        0x01, 0x02,  // Firmware version 1.2
+        FIRMWARE_VERSION_MAJOR, FIRMWARE_VERSION_MINOR,  // Firmware version
         batteryPercentage,  // Battery level (actual reading from ADC)
         (uint8_t)deviceConfig.getRole(),  // Device role
         deviceMac[0], deviceMac[1], deviceMac[2], deviceMac[3], deviceMac[4], deviceMac[5]  // MAC address
     };
-    deviceInfoChar->setValue(deviceInfo, sizeof(deviceInfo));
+    deviceInfoChar->setValue((const uint8_t*)deviceInfo, sizeof(deviceInfo));
     
     // Add child data characteristics for all devices (populated when device becomes hub)
     // Configure Hand Quaternion characteristic
@@ -894,14 +896,14 @@ void setup() {
         HAND_QUATERNION_CHAR_UUID,
         NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
     );
-    handQuaternionChar->setValue((uint8_t*)&gattQuaternionData, sizeof(gattQuaternionData));
+    handQuaternionChar->setValue((const uint8_t*)&gattQuaternionData, sizeof(gattQuaternionData));
     
     // Configure Forearm Quaternion characteristic
     forearmQuaternionChar = eidonService->createCharacteristic(
         FOREARM_QUATERNION_CHAR_UUID,
         NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
     );
-    forearmQuaternionChar->setValue((uint8_t*)&gattQuaternionData, sizeof(gattQuaternionData));
+    forearmQuaternionChar->setValue((const uint8_t*)&gattQuaternionData, sizeof(gattQuaternionData));
     
     // Configure Hub Raw Data characteristic
     hubRawDataChar = eidonService->createCharacteristic(
@@ -910,21 +912,21 @@ void setup() {
     );
     // Initialize with zeros using a local variable
     RawMotionData zeroRawData = {0};
-    hubRawDataChar->setValue((uint8_t*)&zeroRawData, sizeof(zeroRawData));
+    hubRawDataChar->setValue((const uint8_t*)&zeroRawData, sizeof(zeroRawData));
 
     // Configure Hand Raw Data characteristic
     handRawDataChar = eidonService->createCharacteristic(
         HAND_RAW_DATA_CHAR_UUID,
         NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
     );
-    handRawDataChar->setValue((uint8_t*)&zeroRawData, sizeof(zeroRawData));
+    handRawDataChar->setValue((const uint8_t*)&zeroRawData, sizeof(zeroRawData));
 
     // Configure Forearm Raw Data characteristic
     forearmRawDataChar = eidonService->createCharacteristic(
         FOREARM_RAW_DATA_CHAR_UUID,
         NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
     );
-    forearmRawDataChar->setValue((uint8_t*)&zeroRawData, sizeof(zeroRawData));
+    forearmRawDataChar->setValue((const uint8_t*)&zeroRawData, sizeof(zeroRawData));
 
     // Start custom service
     eidonService->start();
