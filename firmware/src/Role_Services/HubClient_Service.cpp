@@ -215,6 +215,25 @@ void HubClientService::update(bool bleConnected) {
         
         Serial.printf("HUB: ESP-NOW received: %.1f Hz, Children: %d/%d, BLE: %s\n", 
                      espNowRate, connectedCount, 2, bleConnected ? "Connected" : "Disconnected");
+
+        // Raw Data Debug (same frequency as HUB log)
+        // Print HUB's own raw data (need access to IMU, but it's global in main.cpp)
+        // Since we can't easily access the global IMU here without circular deps or externs, 
+        // we'll rely on the fact that this service is for managing children.
+        // However, we CAN print the raw data of the connected children if available.
+        
+        for (int i = 0; i < childDeviceCount; i++) {
+            if (childDevices[i].dataAvailable) {
+                RawMotionData& raw = childDevices[i].lastRawData;
+                Serial.printf("RAW DEBUG (Child %d %s): Accel(%.2f, %.2f, %.2f) Gyro(%.2f, %.2f, %.2f)\n", 
+                             i, childDevices[i].role == ROLE_LEFT_HAND ? "L_HAND" : 
+                                (childDevices[i].role == ROLE_RIGHT_HAND ? "R_HAND" : 
+                                (childDevices[i].role == ROLE_LEFT_FOREARM ? "L_FORE" : 
+                                (childDevices[i].role == ROLE_RIGHT_FOREARM ? "R_FORE" : "UNK"))),
+                             raw.accel_x, raw.accel_y, raw.accel_z,
+                             raw.gyro_x, raw.gyro_y, raw.gyro_z);
+            }
+        }
                 
         // Reset counters
         packetCounter = 0;

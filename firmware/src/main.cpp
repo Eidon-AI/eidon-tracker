@@ -242,8 +242,8 @@ void updateStatusLED() {
     static unsigned long lastDebug = 0;
     static bool lastConnectedState = false;
 
-    // Debug output every 5 seconds
-    if (currentTime - lastDebug >= 5000) {
+    // Debug output every 30 seconds
+    if (currentTime - lastDebug >= 30000) {
         Serial.printf("LED: Connected=%d, State=%d, Pin=%d\n", isConnected(), statusLedState, STATUS_LED_PIN);
         lastDebug = currentTime;
     }
@@ -286,20 +286,29 @@ float readBatteryVoltage() {
 
     // Detect battery presence
     // When USB powered but no battery, ADC floats around 3.8-4.0V (giving false 80% reading)
+    static bool firstRun = true;
     if (Vbattf < BATTERY_MIN_VALID_VOLTAGE) {
         batteryPresent = false;
-        Serial.printf("BATTERY DEBUG: Total ADC mV=%u, Average mV=%u, Battery Voltage=%.3fV - NO BATTERY (too low)\n",
-                      Vbatt, Vbatt / numSamples, Vbattf);
+        if (firstRun) {
+            Serial.printf("BATTERY DEBUG: Total ADC mV=%u, Average mV=%u, Battery Voltage=%.3fV - NO BATTERY (too low)\n",
+                          Vbatt, Vbatt / numSamples, Vbattf);
+        }
     } else if (Vbattf >= BATTERY_FLOATING_MIN && Vbattf <= BATTERY_FLOATING_MAX) {
         // Likely floating ADC reading (USB powered, no battery)
         batteryPresent = false;
-        Serial.printf("BATTERY DEBUG: Total ADC mV=%u, Average mV=%u, Battery Voltage=%.3fV - NO BATTERY (floating ADC)\n",
-                      Vbatt, Vbatt / numSamples, Vbattf);
+        if (firstRun) {
+            Serial.printf("BATTERY DEBUG: Total ADC mV=%u, Average mV=%u, Battery Voltage=%.3fV - NO BATTERY (floating ADC)\n",
+                          Vbatt, Vbatt / numSamples, Vbattf);
+        }
     } else {
         batteryPresent = true;
-        Serial.printf("BATTERY DEBUG: Total ADC mV=%u, Average mV=%u, Battery Voltage=%.3fV - Battery present\n",
-                      Vbatt, Vbatt / numSamples, Vbattf);
+        if (firstRun) {
+            Serial.printf("BATTERY DEBUG: Total ADC mV=%u, Average mV=%u, Battery Voltage=%.3fV - Battery present\n",
+                          Vbatt, Vbatt / numSamples, Vbattf);
+        }
     }
+    
+    firstRun = false;
 
     return Vbattf;
 }
@@ -321,8 +330,12 @@ uint8_t calculateBatteryPercentage(float voltage) {
         result = (uint8_t)percentage;
     }
 
-    Serial.printf("BATTERY DEBUG: Voltage=%.3fV -> Percentage=%d%% (range: %.1fV-%.1fV)\n",
-                  voltage, result, BATTERY_MIN_VOLTAGE, BATTERY_MAX_VOLTAGE);
+    static bool firstRun = true;
+    if (firstRun) {
+        Serial.printf("BATTERY DEBUG: Voltage=%.3fV -> Percentage=%d%% (range: %.1fV-%.1fV)\n",
+                      voltage, result, BATTERY_MIN_VOLTAGE, BATTERY_MAX_VOLTAGE);
+        firstRun = false;
+    }
 
     return result;
 }
@@ -481,16 +494,24 @@ void updateBatteryLevel() {
 
         // Read battery voltage
         batteryVoltage = readBatteryVoltage();
+        
+        static bool firstRun = true;
 
         // Only calculate percentage if battery is present
         if (batteryPresent) {
             batteryPercentage = calculateBatteryPercentage(batteryVoltage);
-            Serial.printf("BATTERY: Voltage: %.2fV, Percentage: %d%%\n", batteryVoltage, batteryPercentage);
+            if (firstRun) {
+                Serial.printf("BATTERY: Voltage: %.2fV, Percentage: %d%%\n", batteryVoltage, batteryPercentage);
+            }
         } else {
             // No battery detected (USB powered only or disconnected)
             batteryPercentage = 0;
-            Serial.printf("BATTERY: NO BATTERY DETECTED (USB powered only or disconnected)\n");
+            if (firstRun) {
+                Serial.printf("BATTERY: NO BATTERY DETECTED (USB powered only or disconnected)\n");
+            }
         }
+        
+        firstRun = false;
 
         // Update device info characteristic with new battery level
         if (deviceInfoChar != nullptr) {
@@ -1190,6 +1211,14 @@ void loop() {
             imuUpdateCount = 0;
             espNowSendCount = 0;
             lastChildLogTime = currentTime;
+            
+            // Raw Data Debug (same frequency as CHILD log)
+            RawMotionData currentRaw;
+            imu.getRawData(currentRaw);
+            Serial.printf("RAW DEBUG: Accel(%.2f, %.2f, %.2f) Gyro(%.2f, %.2f, %.2f) Mag(%.2f, %.2f, %.2f)\n", 
+                        currentRaw.accel_x, currentRaw.accel_y, currentRaw.accel_z,
+                        currentRaw.gyro_x, currentRaw.gyro_y, currentRaw.gyro_z,
+                        currentRaw.mag_x, currentRaw.mag_y, currentRaw.mag_z);
         }
         
         // Hub status check (every 5x the regular interval)
