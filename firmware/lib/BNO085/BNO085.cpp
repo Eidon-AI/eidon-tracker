@@ -98,20 +98,20 @@ void BNO085::enableReports() {
     }
 
     // Enable Accelerometer (SH2_ACCELEROMETER)
-    // 20ms = 50Hz
-    if (!bno08x.enableReport(SH2_ACCELEROMETER, 20000)) {
+    // 40ms = 25Hz (Half of quaternion rate)
+    if (!bno08x.enableReport(SH2_ACCELEROMETER, 40000)) {
         Serial.println("Could not enable accelerometer");
     }
 
     // Enable Calibrated Gyroscope (SH2_GYROSCOPE_CALIBRATED)
-    // 20ms = 50Hz
-    if (!bno08x.enableReport(SH2_GYROSCOPE_CALIBRATED, 20000)) {
+    // 40ms = 25Hz
+    if (!bno08x.enableReport(SH2_GYROSCOPE_CALIBRATED, 40000)) {
         Serial.println("Could not enable gyroscope");
     }
 
     // Enable Calibrated Magnetometer (SH2_MAGNETIC_FIELD_CALIBRATED)
-    // 20ms = 50Hz
-    if (!bno08x.enableReport(SH2_MAGNETIC_FIELD_CALIBRATED, 20000)) {
+    // 40ms = 25Hz
+    if (!bno08x.enableReport(SH2_MAGNETIC_FIELD_CALIBRATED, 40000)) {
         Serial.println("Could not enable magnetometer");
     }
 }
@@ -253,7 +253,8 @@ void BNO085::update() {
         enableReports();
     }
     
-    if (bno08x.getSensorEvent(&sensorValue)) {
+    // Process all available events
+    while (bno08x.getSensorEvent(&sensorValue)) {
         switch (sensorValue.sensorId) {
             case SH2_GAME_ROTATION_VECTOR:
                 quaternion_x = sensorValue.un.gameRotationVector.i;

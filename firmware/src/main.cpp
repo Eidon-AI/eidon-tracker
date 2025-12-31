@@ -1088,7 +1088,13 @@ void loop() {
                                           deviceConfig.getRole() == ROLE_LEFT_FOREARM || 
                                           deviceConfig.getRole() == ROLE_RIGHT_FOREARM)) {
             sendESPNowQuaternionData();
-            sendESPNowRawData(); // Send raw data immediately after quaternion data
+            
+            // Send raw data at half rate (24Hz) since sensor only updates at 25Hz
+            static bool sendRawNext = true;
+            if (sendRawNext) {
+                sendESPNowRawData(); 
+            }
+            sendRawNext = !sendRawNext;
         }
     }
     
@@ -1214,13 +1220,7 @@ void loop() {
             espNowSendCount = 0;
             lastChildLogTime = currentTime;
             
-            // Raw Data Debug (same frequency as CHILD log)
-            RawMotionData currentRaw;
-            imu.getRawData(currentRaw);
-            Serial.printf("RAW DEBUG: Accel(%.2f, %.2f, %.2f) Gyro(%.2f, %.2f, %.2f) Mag(%.2f, %.2f, %.2f)\n", 
-                        currentRaw.accel_x, currentRaw.accel_y, currentRaw.accel_z,
-                        currentRaw.gyro_x, currentRaw.gyro_y, currentRaw.gyro_z,
-                        currentRaw.mag_x, currentRaw.mag_y, currentRaw.mag_z);
+            // Raw Data Debug removed to reduce serial noise
         }
         
         // Hub status check (every 5x the regular interval)
