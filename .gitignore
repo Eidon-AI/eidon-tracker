@@ -14,3 +14,6 @@
 
 pcb/eidon-tracker/eidon-tracker-backups/*
 pcb/eidon-tracker/#auto_saved_files#
+
+# Local Builds
+local_builds/

@@ -1,0 +1,6 @@
+{
+  // VS-Code reads this every time it starts; PlatformIO never rewrites it.
+  "C_Cpp.default.configurationProvider": "platformio.platformio-ide",
+  "C_Cpp.default.intelliSenseMode": "linux-gcc-arm",
+  "idf.pythonInstallPath": "/opt/miniconda3/bin/python"
+}

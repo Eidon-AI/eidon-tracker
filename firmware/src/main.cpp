@@ -11,6 +11,7 @@
 #include "Role_Services/RoleConfig_Service.h"
 #include "Role_Services/HubClient_Service.h"
 #include "BLE_Services/BLE_Polling_Service.h" //TODO: Move this from BLE Services
+#include "BLE_Services/BLE_OTA_Service.h"
 #include "DeviceConfig.h"
 #include "Role_Services/Hub_Structures.h"
 #include "Version.h"
@@ -936,6 +937,9 @@ void setup() {
     
     // ---------- BLE Polling System Setup -----------------------------
     setupPollingSystem();
+
+    // ---------- BLE OTA Service Setup -----------------------------
+    BleOtaService::begin(pServer);
 
     // Add Role target to polling system
     pollingManager.addTarget(roleConfigChar, 1000, handleRoleChange, "Role"); // 1 Hz (1000ms)
