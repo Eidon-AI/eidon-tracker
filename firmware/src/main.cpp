@@ -520,9 +520,10 @@ void updateBatteryLevel() {
             uint8_t deviceMac[6];
             WiFi.macAddress(deviceMac);
 
+            // Extended device info with MAC address (14 bytes total)
             uint8_t deviceInfo[14] = {
                 0x01, 0x00,  // Device ID
-                FIRMWARE_VERSION_MAJOR, FIRMWARE_VERSION_MINOR,  // Firmware version
+                FIRMWARE_VERSION_MAJOR, FIRMWARE_VERSION_MINOR, FIRMWARE_VERSION_PATCH, // Firmware version
                 batteryPercentage,  // Updated battery level (0 if no battery)
                 (uint8_t)deviceConfig.getRole(),  // Device role
                 deviceMac[0], deviceMac[1], deviceMac[2], deviceMac[3], deviceMac[4], deviceMac[5]  // MAC address
@@ -883,7 +884,7 @@ void setup() {
     // Extended device info with MAC address (14 bytes total)
     uint8_t deviceInfo[14] = {
         0x01, 0x00,  // Device ID
-        FIRMWARE_VERSION_MAJOR, FIRMWARE_VERSION_MINOR,  // Firmware version
+        FIRMWARE_VERSION_MAJOR, FIRMWARE_VERSION_MINOR, FIRMWARE_VERSION_PATCH, // Firmware version
         batteryPercentage,  // Battery level (actual reading from ADC)
         (uint8_t)deviceConfig.getRole(),  // Device role
         deviceMac[0], deviceMac[1], deviceMac[2], deviceMac[3], deviceMac[4], deviceMac[5]  // MAC address

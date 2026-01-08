@@ -206,10 +206,10 @@ bool DeviceConfig::loadConfig() {
         memset(config.hubMacAddress, 0, sizeof(config.hubMacAddress));
     }
     
-    Serial.printf("DeviceConfig: Configuration loaded - Role: %s, Hub MAC: %s, Version: %d.%d\n",
+    Serial.printf("DeviceConfig: Configuration loaded - Role: %s, Hub MAC: %s, Version: %d.%d.%d\n",
                  getRoleName(config.role),
                  isHubMacAssigned() ? "ASSIGNED" : "NOT ASSIGNED",
-                 FIRMWARE_VERSION_MAJOR, FIRMWARE_VERSION_MINOR);
+                 FIRMWARE_VERSION_MAJOR, FIRMWARE_VERSION_MINOR, FIRMWARE_VERSION_PATCH);
     
     return true;
 }
