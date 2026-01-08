@@ -12,6 +12,9 @@ float quaternion_y = 0;
 float quaternion_z = 0;
 float quaternion_w = 1;
 
+// Raw data storage
+RawMotionData rawData = {0};
+
 // Euler angles structure for quaternion conversion
 euler_t ypr = {0, 0, 0};
 
@@ -92,6 +95,24 @@ void BNO085::enableReports() {
     // Enable Tap Detector (event-driven, report interval 0)
     if (!bno08x.enableReport(SH2_TAP_DETECTOR, 0)) {
         Serial.println("Could not enable tap detector");
+    }
+
+    // Enable Accelerometer (SH2_ACCELEROMETER)
+    // 40ms = 25Hz (Half of quaternion rate)
+    if (!bno08x.enableReport(SH2_ACCELEROMETER, 40000)) {
+        Serial.println("Could not enable accelerometer");
+    }
+
+    // Enable Calibrated Gyroscope (SH2_GYROSCOPE_CALIBRATED)
+    // 40ms = 25Hz
+    if (!bno08x.enableReport(SH2_GYROSCOPE_CALIBRATED, 40000)) {
+        Serial.println("Could not enable gyroscope");
+    }
+
+    // Enable Calibrated Magnetometer (SH2_MAGNETIC_FIELD_CALIBRATED)
+    // 40ms = 25Hz
+    if (!bno08x.enableReport(SH2_MAGNETIC_FIELD_CALIBRATED, 40000)) {
+        Serial.println("Could not enable magnetometer");
     }
 }
 
@@ -232,7 +253,8 @@ void BNO085::update() {
         enableReports();
     }
     
-    if (bno08x.getSensorEvent(&sensorValue)) {
+    // Process all available events
+    while (bno08x.getSensorEvent(&sensorValue)) {
         switch (sensorValue.sensorId) {
             case SH2_GAME_ROTATION_VECTOR:
                 quaternion_x = sensorValue.un.gameRotationVector.i;
@@ -252,6 +274,24 @@ void BNO085::update() {
                 }
                 break;
             }
+
+            case SH2_ACCELEROMETER:
+                rawData.accel_x = sensorValue.un.accelerometer.x;
+                rawData.accel_y = sensorValue.un.accelerometer.y;
+                rawData.accel_z = sensorValue.un.accelerometer.z;
+                break;
+
+            case SH2_GYROSCOPE_CALIBRATED:
+                rawData.gyro_x = sensorValue.un.gyroscope.x;
+                rawData.gyro_y = sensorValue.un.gyroscope.y;
+                rawData.gyro_z = sensorValue.un.gyroscope.z;
+                break;
+
+            case SH2_MAGNETIC_FIELD_CALIBRATED:
+                rawData.mag_x = sensorValue.un.magneticField.x;
+                rawData.mag_y = sensorValue.un.magneticField.y;
+                rawData.mag_z = sensorValue.un.magneticField.z;
+                break;
         }
 
         // Quaternion output disabled to reduce serial overhead
@@ -269,6 +309,11 @@ void BNO085::getQuaternion(float &w, float &x, float &y, float &z) {
     x = quaternion_x;
     y = quaternion_y;
     z = quaternion_z;
+}
+
+// Function to get current raw data
+void BNO085::getRawData(RawMotionData &data) {
+    data = rawData;
 }
 
 // Function to convert quaternion to euler angles

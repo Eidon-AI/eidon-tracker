@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <string>
 #include <NimBLEDevice.h>
 #include <NimBLEServer.h>
 #include <NimBLEUtils.h>
@@ -12,6 +13,7 @@
 #include "BLE_Services/BLE_Polling_Service.h" //TODO: Move this from BLE Services
 #include "DeviceConfig.h"
 #include "Role_Services/Hub_Structures.h"
+#include "Version.h"
 
 // Function declarations
 void sendQuaternionReport();
@@ -27,6 +29,7 @@ void updateBatteryLevel();
 // ESP-NOW sender functions for child devices
 bool initializeESPNowSender();
 void sendESPNowQuaternionData();
+void sendESPNowRawData(); // Add declaration for raw data sender
 void updateESPNowHubMacAddress();
 void restoreESPNowPeers();  // ESP-NOW peer recovery function
 
@@ -54,6 +57,11 @@ BNO085 imu;
 #define CALIBRATION_CHAR_UUID     "E1D00003-8B5A-3E5B-9E23-4F9B5C91BBDE"
 #define DEVICE_INFO_CHAR_UUID     "E1D00005-8B5A-3E5B-9E23-4F9B5C91BBDE"
 
+// Raw Data Characteristics
+#define HUB_RAW_DATA_CHAR_UUID      "E1D0000B-8B5A-3E5B-9E23-4F9B5C91BBDE"
+#define HAND_RAW_DATA_CHAR_UUID     "E1D0000C-8B5A-3E5B-9E23-4F9B5C91BBDE"
+#define FOREARM_RAW_DATA_CHAR_UUID  "E1D0000D-8B5A-3E5B-9E23-4F9B5C91BBDE"
+
 // Message type constants for ESP-NOW packets
 #define MESSAGE_TYPE_QUAT 0x01    // Quaternion data
 #define MESSAGE_TYPE_CMD  0x02    // Command
@@ -64,6 +72,7 @@ BNO085 imu;
 
 // QuaternionData structure is now defined in Role_Services/Hub_Structures.h
 QuaternionData gattQuaternionData;
+// RawMotionData gattRawData; // Removed redundant global variable - using local vars or member access
 
 // Global quaternion variables (for backward compatibility)
 float quaternion_x = 0;
@@ -235,8 +244,8 @@ void updateStatusLED() {
     static unsigned long lastDebug = 0;
     static bool lastConnectedState = false;
 
-    // Debug output every 5 seconds
-    if (currentTime - lastDebug >= 5000) {
+    // Debug output every 30 seconds
+    if (currentTime - lastDebug >= 30000) {
         Serial.printf("LED: Connected=%d, State=%d, Pin=%d\n", isConnected(), statusLedState, STATUS_LED_PIN);
         lastDebug = currentTime;
     }
@@ -279,20 +288,29 @@ float readBatteryVoltage() {
 
     // Detect battery presence
     // When USB powered but no battery, ADC floats around 3.8-4.0V (giving false 80% reading)
+    static bool firstRun = true;
     if (Vbattf < BATTERY_MIN_VALID_VOLTAGE) {
         batteryPresent = false;
-        Serial.printf("BATTERY DEBUG: Total ADC mV=%u, Average mV=%u, Battery Voltage=%.3fV - NO BATTERY (too low)\n",
-                      Vbatt, Vbatt / numSamples, Vbattf);
+        if (firstRun) {
+            Serial.printf("BATTERY DEBUG: Total ADC mV=%u, Average mV=%u, Battery Voltage=%.3fV - NO BATTERY (too low)\n",
+                          Vbatt, Vbatt / numSamples, Vbattf);
+        }
     } else if (Vbattf >= BATTERY_FLOATING_MIN && Vbattf <= BATTERY_FLOATING_MAX) {
         // Likely floating ADC reading (USB powered, no battery)
         batteryPresent = false;
-        Serial.printf("BATTERY DEBUG: Total ADC mV=%u, Average mV=%u, Battery Voltage=%.3fV - NO BATTERY (floating ADC)\n",
-                      Vbatt, Vbatt / numSamples, Vbattf);
+        if (firstRun) {
+            Serial.printf("BATTERY DEBUG: Total ADC mV=%u, Average mV=%u, Battery Voltage=%.3fV - NO BATTERY (floating ADC)\n",
+                          Vbatt, Vbatt / numSamples, Vbattf);
+        }
     } else {
         batteryPresent = true;
-        Serial.printf("BATTERY DEBUG: Total ADC mV=%u, Average mV=%u, Battery Voltage=%.3fV - Battery present\n",
-                      Vbatt, Vbatt / numSamples, Vbattf);
+        if (firstRun) {
+            Serial.printf("BATTERY DEBUG: Total ADC mV=%u, Average mV=%u, Battery Voltage=%.3fV - Battery present\n",
+                          Vbatt, Vbatt / numSamples, Vbattf);
+        }
     }
+    
+    firstRun = false;
 
     return Vbattf;
 }
@@ -314,8 +332,12 @@ uint8_t calculateBatteryPercentage(float voltage) {
         result = (uint8_t)percentage;
     }
 
-    Serial.printf("BATTERY DEBUG: Voltage=%.3fV -> Percentage=%d%% (range: %.1fV-%.1fV)\n",
-                  voltage, result, BATTERY_MIN_VOLTAGE, BATTERY_MAX_VOLTAGE);
+    static bool firstRun = true;
+    if (firstRun) {
+        Serial.printf("BATTERY DEBUG: Voltage=%.3fV -> Percentage=%d%% (range: %.1fV-%.1fV)\n",
+                      voltage, result, BATTERY_MIN_VOLTAGE, BATTERY_MAX_VOLTAGE);
+        firstRun = false;
+    }
 
     return result;
 }
@@ -332,6 +354,11 @@ NimBLECharacteristic* deviceInfoChar = nullptr;
 // New characteristics for hub devices only (child data)
 NimBLECharacteristic* handQuaternionChar = nullptr;
 NimBLECharacteristic* forearmQuaternionChar = nullptr;
+
+// Raw data characteristics
+NimBLECharacteristic* hubRawDataChar = nullptr;
+NimBLECharacteristic* handRawDataChar = nullptr;
+NimBLECharacteristic* forearmRawDataChar = nullptr;
 
 // Function to get current BLE connection state (similar to Bluefruit.connected())
 bool isConnected() {
@@ -469,16 +496,24 @@ void updateBatteryLevel() {
 
         // Read battery voltage
         batteryVoltage = readBatteryVoltage();
+        
+        static bool firstRun = true;
 
         // Only calculate percentage if battery is present
         if (batteryPresent) {
             batteryPercentage = calculateBatteryPercentage(batteryVoltage);
-            Serial.printf("BATTERY: Voltage: %.2fV, Percentage: %d%%\n", batteryVoltage, batteryPercentage);
+            if (firstRun) {
+                Serial.printf("BATTERY: Voltage: %.2fV, Percentage: %d%%\n", batteryVoltage, batteryPercentage);
+            }
         } else {
             // No battery detected (USB powered only or disconnected)
             batteryPercentage = 0;
-            Serial.printf("BATTERY: NO BATTERY DETECTED (USB powered only or disconnected)\n");
+            if (firstRun) {
+                Serial.printf("BATTERY: NO BATTERY DETECTED (USB powered only or disconnected)\n");
+            }
         }
+        
+        firstRun = false;
 
         // Update device info characteristic with new battery level
         if (deviceInfoChar != nullptr) {
@@ -487,7 +522,7 @@ void updateBatteryLevel() {
 
             uint8_t deviceInfo[14] = {
                 0x01, 0x00,  // Device ID
-                0x01, 0x02,  // Firmware version 1.2
+                FIRMWARE_VERSION_MAJOR, FIRMWARE_VERSION_MINOR,  // Firmware version
                 batteryPercentage,  // Updated battery level (0 if no battery)
                 (uint8_t)deviceConfig.getRole(),  // Device role
                 deviceMac[0], deviceMac[1], deviceMac[2], deviceMac[3], deviceMac[4], deviceMac[5]  // MAC address
@@ -676,6 +711,29 @@ void sendESPNowQuaternionData() {
     }
 }
 
+void sendESPNowRawData() {
+    if (!espNowInitialized || !hubMacAssigned) {
+        return; // Not ready to send
+    }
+
+    // Get current raw data from IMU
+    RawMotionData raw;
+    imu.getRawData(raw);
+
+    // Create ESP-NOW packet
+    ESPNowRawPacket packet;
+    packet.header.messageType = MESSAGE_TYPE_RAW;
+    packet.header.senderRole = (uint8_t)deviceConfig.getRole();
+    packet.header.reserved[0] = 0;
+    packet.header.reserved[1] = 0;
+    packet.data = raw;
+
+    // Send packet to hub
+    // Note: We don't track errors/stats separately for raw data to avoid log spam
+    // The quaternion packet handles the connection health tracking
+    esp_now_send(hubMacAddress, (uint8_t*)&packet, sizeof(packet));
+}
+
 void setup() {
     // Setup LED pins
     pinMode(LED_PIN, OUTPUT);
@@ -803,7 +861,7 @@ void setup() {
         QUATERNION_CHAR_UUID,
         NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
     );
-    quaternionChar->setValue((uint8_t*)&gattQuaternionData, sizeof(gattQuaternionData));
+    quaternionChar->setValue((const uint8_t*)&gattQuaternionData, sizeof(gattQuaternionData));
     quaternionChar->setCallbacks(&quaternionCallbacksInstance);
     
     // Configure Calibration characteristic
@@ -825,12 +883,12 @@ void setup() {
     // Extended device info with MAC address (14 bytes total)
     uint8_t deviceInfo[14] = {
         0x01, 0x00,  // Device ID
-        0x01, 0x02,  // Firmware version 1.2
+        FIRMWARE_VERSION_MAJOR, FIRMWARE_VERSION_MINOR,  // Firmware version
         batteryPercentage,  // Battery level (actual reading from ADC)
         (uint8_t)deviceConfig.getRole(),  // Device role
         deviceMac[0], deviceMac[1], deviceMac[2], deviceMac[3], deviceMac[4], deviceMac[5]  // MAC address
     };
-    deviceInfoChar->setValue(deviceInfo, sizeof(deviceInfo));
+    deviceInfoChar->setValue((const uint8_t*)deviceInfo, sizeof(deviceInfo));
     
     // Add child data characteristics for all devices (populated when device becomes hub)
     // Configure Hand Quaternion characteristic
@@ -838,15 +896,38 @@ void setup() {
         HAND_QUATERNION_CHAR_UUID,
         NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
     );
-    handQuaternionChar->setValue((uint8_t*)&gattQuaternionData, sizeof(gattQuaternionData));
+    handQuaternionChar->setValue((const uint8_t*)&gattQuaternionData, sizeof(gattQuaternionData));
     
     // Configure Forearm Quaternion characteristic
     forearmQuaternionChar = eidonService->createCharacteristic(
         FOREARM_QUATERNION_CHAR_UUID,
         NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
     );
-    forearmQuaternionChar->setValue((uint8_t*)&gattQuaternionData, sizeof(gattQuaternionData));
+    forearmQuaternionChar->setValue((const uint8_t*)&gattQuaternionData, sizeof(gattQuaternionData));
     
+    // Configure Hub Raw Data characteristic
+    hubRawDataChar = eidonService->createCharacteristic(
+        HUB_RAW_DATA_CHAR_UUID,
+        NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
+    );
+    // Initialize with zeros using a local variable
+    RawMotionData zeroRawData = {0};
+    hubRawDataChar->setValue((const uint8_t*)&zeroRawData, sizeof(zeroRawData));
+
+    // Configure Hand Raw Data characteristic
+    handRawDataChar = eidonService->createCharacteristic(
+        HAND_RAW_DATA_CHAR_UUID,
+        NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
+    );
+    handRawDataChar->setValue((const uint8_t*)&zeroRawData, sizeof(zeroRawData));
+
+    // Configure Forearm Raw Data characteristic
+    forearmRawDataChar = eidonService->createCharacteristic(
+        FOREARM_RAW_DATA_CHAR_UUID,
+        NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
+    );
+    forearmRawDataChar->setValue((const uint8_t*)&zeroRawData, sizeof(zeroRawData));
+
     // Start custom service
     eidonService->start();
     
@@ -1007,6 +1088,13 @@ void loop() {
                                           deviceConfig.getRole() == ROLE_LEFT_FOREARM || 
                                           deviceConfig.getRole() == ROLE_RIGHT_FOREARM)) {
             sendESPNowQuaternionData();
+            
+            // Send raw data at half rate (24Hz) since sensor only updates at 25Hz
+            static bool sendRawNext = true;
+            if (sendRawNext) {
+                sendESPNowRawData(); 
+            }
+            sendRawNext = !sendRawNext;
         }
     }
     
@@ -1049,6 +1137,33 @@ void loop() {
             lastTransmission = currentTime;
             // Send quaternion report if connected
             sendQuaternionReport();
+            
+            // Send raw data report if connected
+            if (isConnected()) {
+                // 1. Hub Raw Data
+                if (hubRawDataChar != nullptr && imu.isAvailable()) {
+                    RawMotionData hubRaw;
+                    imu.getRawData(hubRaw);
+                    hubRawDataChar->notify((uint8_t*)&hubRaw, sizeof(hubRaw));
+                }
+
+                // 2. Child Raw Data (if Hub Mode)
+                if (deviceConfig.isHubMode()) {
+                    // Access child devices to get their latest raw data
+                    ESPNowChildDevice* children = getChildDevices();
+                    int childCount = 2; // Fixed max children
+
+                    for (int i = 0; i < childCount; i++) {
+                        if (children[i].dataAvailable) {
+                             if ((children[i].role == ROLE_LEFT_HAND || children[i].role == ROLE_RIGHT_HAND) && handRawDataChar != nullptr) {
+                                handRawDataChar->notify((uint8_t*)&children[i].lastRawData, sizeof(RawMotionData));
+                             } else if ((children[i].role == ROLE_LEFT_FOREARM || children[i].role == ROLE_RIGHT_FOREARM) && forearmRawDataChar != nullptr) {
+                                forearmRawDataChar->notify((uint8_t*)&children[i].lastRawData, sizeof(RawMotionData));
+                             }
+                        }
+                    }
+                }
+            }
             
             // Log BLE transmission for hub devices
             if (deviceConfig.isHubMode()) {
@@ -1104,6 +1219,8 @@ void loop() {
             imuUpdateCount = 0;
             espNowSendCount = 0;
             lastChildLogTime = currentTime;
+            
+            // Raw Data Debug removed to reduce serial noise
         }
         
         // Hub status check (every 5x the regular interval)

@@ -215,6 +215,25 @@ void HubClientService::update(bool bleConnected) {
         
         Serial.printf("HUB: ESP-NOW received: %.1f Hz, Children: %d/%d, BLE: %s\n", 
                      espNowRate, connectedCount, 2, bleConnected ? "Connected" : "Disconnected");
+
+        // Raw Data Debug (same frequency as HUB log)
+        // Print HUB's own raw data (need access to IMU, but it's global in main.cpp)
+        // Since we can't easily access the global IMU here without circular deps or externs, 
+        // we'll rely on the fact that this service is for managing children.
+        // However, we CAN print the raw data of the connected children if available.
+        
+        for (int i = 0; i < childDeviceCount; i++) {
+            if (childDevices[i].dataAvailable) {
+                RawMotionData& raw = childDevices[i].lastRawData;
+                Serial.printf("RAW DEBUG (Child %d %s): Accel(%.2f, %.2f, %.2f) Gyro(%.2f, %.2f, %.2f)\n", 
+                             i, childDevices[i].role == ROLE_LEFT_HAND ? "L_HAND" : 
+                                (childDevices[i].role == ROLE_RIGHT_HAND ? "R_HAND" : 
+                                (childDevices[i].role == ROLE_LEFT_FOREARM ? "L_FORE" : 
+                                (childDevices[i].role == ROLE_RIGHT_FOREARM ? "R_FORE" : "UNK"))),
+                             raw.accel_x, raw.accel_y, raw.accel_z,
+                             raw.gyro_x, raw.gyro_y, raw.gyro_z);
+            }
+        }
                 
         // Reset counters
         packetCounter = 0;
@@ -232,13 +251,30 @@ void HubClientService::processESPNowPacket(const uint8_t* macAddr, const uint8_t
     // Extract header to determine packet type
     ESPNowPacketHeader* header = (ESPNowPacketHeader*)data;
     
-    // Only handle quaternion packets for now
+    // Only handle quaternion and raw data packets
     if (header->messageType == MESSAGE_TYPE_QUAT) {
-        // Increment packet counter for periodic logging (moved from old callback)
+        // Increment packet counter for periodic logging
         packetCounter++;
         processQuaternionPacket(macAddr, data, dataLen);
+    } else if (header->messageType == MESSAGE_TYPE_RAW) {
+        // Increment packet counter
+        packetCounter++;
+        // Process raw data packet (inline implementation for now as it's simple)
+        if (dataLen != sizeof(ESPNowRawPacket)) {
+            return;
+        }
+        
+        ESPNowRawPacket* packet = (ESPNowRawPacket*)data;
+        int slotIndex = findChildByMac(macAddr);
+        
+        if (slotIndex != -1) {
+            ESPNowChildDevice& child = childDevices[slotIndex];
+            child.lastRawData = packet->data;
+            // Note: We don't update dataAvailable flag here as it's driven by quaternion updates
+            // which are the primary heartbeat
+        }
     }
-    // Silently ignore non-quaternion packets to reduce log spam
+    // Silently ignore other packets to reduce log spam
 }
 
 // Process quaternion packet (simplified - uses MAC address instead of role)
@@ -502,4 +538,8 @@ bool isChildConnected(DeviceRole childRole) {
 
 AggregatedQuaternionData* getAggregatedData() {
     return hubClientService.getAggregatedData();
+}
+
+ESPNowChildDevice* getChildDevices() {
+    return hubClientService.getChildDevices();
 } 

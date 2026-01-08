@@ -11,6 +11,13 @@
 #define I2C_ADR 18  // D10 on XIAO ESP32-C6 (GPIO18) - controls I2C address (0x4A/0x4B)
 #define I2C_ADDR 0x4B
 
+// Define RawMotionData here to avoid circular dependencies with Hub_Structures.h
+struct RawMotionData {
+    float accel_x, accel_y, accel_z; // Accelerometer (m/s^2)
+    float gyro_x,  gyro_y,  gyro_z;  // Gyroscope (rad/s)
+    float mag_x,   mag_y,   mag_z;   // Magnetometer (uT)
+} __attribute__((packed));
+
 // Declare the struct type
 struct euler_t {
     float yaw;
@@ -30,6 +37,7 @@ public:
     // Data access
     void getQuaternion(float &w, float &x, float &y, float &z);
     void getEulerAngles(float &yaw, float &pitch, float &roll);
+    void getRawData(RawMotionData &data);
     
     // Configuration and utilities
     void enableReports();
