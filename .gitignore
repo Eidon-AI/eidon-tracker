@@ -6,6 +6,9 @@
 # PlatformIO build output
 .pio/
 
+# Cache
+.cache/
+
 # macOS
 .DS_Store
 
