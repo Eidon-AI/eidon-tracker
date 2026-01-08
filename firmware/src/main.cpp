@@ -115,6 +115,10 @@ unsigned long espNowSendCount = 0;
 unsigned long lastHubStatusCheck = 0;
 const unsigned long HUB_STATUS_CHECK_INTERVAL = 40000; // 40 seconds (5x the regular interval)
 
+// Raw data logging interval for debugging
+const unsigned long RAW_DATA_LOG_INTERVAL = 5000; // 5 seconds for raw data logs
+unsigned long lastRawDataLogTime = 0;
+
 // BLE advertising timeout for child devices
 const unsigned long BLE_STARTUP_TIMEOUT = 30000; // 30 seconds for devices that start as children
 const unsigned long BLE_DISCONNECT_TIMEOUT = 60000; // 60 seconds after role change to child
@@ -1141,14 +1145,21 @@ void loop() {
             
             // Send raw data report if connected
             if (isConnected()) {
-                // 1. Hub Raw Data
-                if (hubRawDataChar != nullptr && imu.isAvailable()) {
+                // 1. Hub Raw Data (hub devices send their own raw data)
+                if (deviceConfig.isHubMode() && hubRawDataChar != nullptr && imu.isAvailable()) {
                     RawMotionData hubRaw;
                     imu.getRawData(hubRaw);
                     hubRawDataChar->notify((uint8_t*)&hubRaw, sizeof(hubRaw));
                 }
+                
+                // 2. Child Raw Data (child devices send their own raw data when connected to phone)
+                if (deviceConfig.isNodeMode() && hubRawDataChar != nullptr && imu.isAvailable()) {
+                    RawMotionData childRaw;
+                    imu.getRawData(childRaw);
+                    hubRawDataChar->notify((uint8_t*)&childRaw, sizeof(childRaw));
+                }
 
-                // 2. Child Raw Data (if Hub Mode)
+                // 3. Child Raw Data from ESP-NOW (hub devices forward child data received via ESP-NOW)
                 if (deviceConfig.isHubMode()) {
                     // Access child devices to get their latest raw data
                     ESPNowChildDevice* children = getChildDevices();
