@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 This project follows [Semantic Versioning](https://semver.org/).
 
-## [Unreleased] – 2025-12-30
+## [1.0.0] – 2026-01-08
 ### Added
 - Raw data support (required by app)
 - Central versioning
