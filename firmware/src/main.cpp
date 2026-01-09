@@ -595,16 +595,17 @@ void updateESPNowHubMacAddress() {
  * Unified ESP-NOW callback function for both hub and child devices
  * 
  * This function handles all incoming ESP-NOW packets and routes them based on device role:
- * - HUB devices: Process MESSAGE_TYPE_QUAT (quaternion packets) from children
+ * - HUB devices: Process MESSAGE_TYPE_QUAT (quaternion packets) and MESSAGE_TYPE_RAW (raw data packets) from children
  * - CHILD devices: Process MESSAGE_TYPE_CMD (calibration commands) from hub
  * 
  * Packet Flow:
  * 1. Children send quaternions (MESSAGE_TYPE_QUAT) → Hub receives and processes
- * 2. Hub sends calibration (MESSAGE_TYPE_CMD) → Children receive and process
+ * 2. Children send raw data (MESSAGE_TYPE_RAW) → Hub receives and processes
+ * 3. Hub sends calibration (MESSAGE_TYPE_CMD) → Children receive and process
  * 
  * Expected Behavior:
  * - Hub ignores command packets (it only sends them)
- * - Children ignore quaternion packets (they only send them)
+ * - Children ignore quaternion and raw data packets (they only send them)
  * - All packets are validated for minimum size before processing
  * 
  * @param esp_now_info ESP-NOW receive information including source MAC address
@@ -623,8 +624,8 @@ void onESPNowDataRecv(const esp_now_recv_info_t* esp_now_info, const uint8_t* da
     
     // Route packets based on device role
     if (deviceConfig.isHubMode()) {
-        // HUB: Process quaternion packets only
-        if (header->messageType == MESSAGE_TYPE_QUAT) {
+        // HUB: Process quaternion and raw data packets from children
+        if (header->messageType == MESSAGE_TYPE_QUAT || header->messageType == MESSAGE_TYPE_RAW) {
             // Forward to hub client service for processing
             hubClientService.processESPNowPacket(esp_now_info->src_addr, data, dataLen);
         }

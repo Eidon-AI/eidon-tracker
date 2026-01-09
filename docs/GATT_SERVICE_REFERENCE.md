@@ -1,8 +1,8 @@
 EIDON TRACKER - BLE GATT SERVICE REFERENCE
 ==========================================
 
-FIRMWARE VERSION: 1.2
-DEVICE: nRF52840 with BNO085 IMU
+FIRMWARE VERSION: 1.0.0
+DEVICE: Seeed XIAO ESP32-C6 with BNO085 IMU
 
 SERVICE AND CHARACTERISTIC UUIDS
 ================================
@@ -47,12 +47,15 @@ Byte 0: Red (0-255)
 Byte 1: Green (0-255)
 Byte 2: Blue (0-255)
 
-4. DEVICE INFO (8 bytes)
-------------------------
-Bytes 0-1: Device ID (uint16, little-endian)
-Bytes 2-3: Firmware version (major.minor)
-Byte 4:    Battery level (0-100%)
-Bytes 5-7: Reserved
+4. DEVICE INFO (14 bytes)
+-------------------------
+Bytes 0-1:   Device ID (uint16, little-endian)
+Byte 2:      Firmware version major (uint8)
+Byte 3:      Firmware version minor (uint8)
+Byte 4:      Firmware version patch (uint8)
+Byte 5:      Battery level (0-100%)
+Byte 6:      Device role (DeviceRole enum value)
+Bytes 7-12:  MAC address (6 bytes, WiFi MAC address)
 
 
 FLUTTER/DART CODE EXAMPLES
@@ -93,15 +96,24 @@ class DeviceInfo {
   int deviceId;
   String firmwareVersion;
   int batteryLevel;
+  int deviceRole;
+  List<int> macAddress;
   
   DeviceInfo.fromBytes(Uint8List bytes) {
+    if (bytes.length < 14) {
+      throw Exception('Device info must be 14 bytes, got ${bytes.length}');
+    }
+    
     var data = ByteData.view(bytes.buffer);
     
     deviceId = data.getUint16(0, Endian.little);
     int major = bytes[2];
     int minor = bytes[3];
-    firmwareVersion = "$major.$minor";
-    batteryLevel = bytes[4];
+    int patch = bytes[4];
+    firmwareVersion = "$major.$minor.$patch";
+    batteryLevel = bytes[5];
+    deviceRole = bytes[6];
+    macAddress = bytes.sublist(7, 13);
   }
 }
 
@@ -147,6 +159,8 @@ Future<void> connectToDevice(BluetoothDevice device) async {
             print('Device ID: ${deviceInfo.deviceId}');
             print('Firmware: ${deviceInfo.firmwareVersion}');
             print('Battery: ${deviceInfo.batteryLevel}%');
+            print('Role: ${deviceInfo.deviceRole}');
+            print('MAC: ${deviceInfo.macAddress.map((b) => b.toRadixString(16).padLeft(2, '0')).join(':')}');
             break;
         }
       }
