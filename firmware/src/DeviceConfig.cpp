@@ -79,7 +79,7 @@ const char* DeviceConfig::getRoleName(DeviceRole role) {
 }
 
 bool DeviceConfig::isHubMode() {
-    return (config.role == ROLE_LEFT_HUB || config.role == ROLE_RIGHT_HUB);
+    return (config.role == ROLE_LEFT_HUB || config.role == ROLE_RIGHT_HUB || config.role == ROLE_CHEST);
 }
 
 bool DeviceConfig::isNodeMode() {

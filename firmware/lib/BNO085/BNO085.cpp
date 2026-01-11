@@ -235,9 +235,22 @@ bool BNO085::reset() {
         return false;
     }
     
+    // Disable ALL reports to fully reset sensor fusion state
+    // When multiple reports are enabled, the sensor fusion maintains state across them
+    // Disabling only GAME_ROTATION_VECTOR isn't enough - we need to disable everything
     bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 0);
+    bno08x.enableReport(SH2_ACCELEROMETER, 0);
+    bno08x.enableReport(SH2_GYROSCOPE_CALIBRATED, 0);
+    bno08x.enableReport(SH2_MAGNETIC_FIELD_CALIBRATED, 0);
     delay(100);
-    bno08x.enableReport(SH2_GAME_ROTATION_VECTOR, 1000);
+    
+    // Re-enable all reports to get fresh sensor fusion state
+    enableReports();
+    
+    // Give sensor time to start sending data after reports are re-enabled
+    // This ensures raw data reports start populating
+    delay(50);
+    
     return true;
 }
 
