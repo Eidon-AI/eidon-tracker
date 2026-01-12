@@ -16,6 +16,9 @@ extern bool initializeESPNowSender();
 extern void updateESPNowHubMacAddress();
 extern void sendCalibrationCommand();
 
+// Hub client service function declarations
+extern void setupHubClientService();
+
 // External variables that handlers need access to
 extern BNO085 imu;
 extern DeviceConfig deviceConfig;
@@ -420,17 +423,28 @@ void handleRoleChange(const std::string& value, bool success) {
         RoleConfigData* data = (RoleConfigData*)value.data();
         uint8_t newRole = data->role;
         
-        // Validate role value (0-6 are valid roles, 255 is ROLE_UNKNOWN)
+        // Validate role value (0-6 are valid roles: LEFT_HAND, RIGHT_HAND, LEFT_FOREARM, RIGHT_FOREARM, LEFT_SHOULDER, RIGHT_SHOULDER, CHEST; 255 is ROLE_UNKNOWN)
         if (newRole <= 6 || newRole == 255) {
             Serial.printf("ROLE CHANGE: %s\n", deviceConfig.getRoleName((DeviceRole)newRole));
             
             // Validate and set hub MAC address if provided
+            // Only clear if explicitly all zeros AND this is a child device that needs a hub
+            bool needsHubMac = (newRole == ROLE_LEFT_HAND || newRole == ROLE_LEFT_FOREARM || newRole == ROLE_LEFT_SHOULDER);
+            
             if (!deviceConfig.isAllZerosMacAddress(data->hubMacAddress)) {
                 if (deviceConfig.isValidMacAddress(data->hubMacAddress)) {
                     deviceConfig.setHubMacAddress(data->hubMacAddress);
+                    Serial.printf("ROLE CHANGE: Hub MAC address set: %02X:%02X:%02X:%02X:%02X:%02X\n",
+                                 data->hubMacAddress[0], data->hubMacAddress[1], data->hubMacAddress[2],
+                                 data->hubMacAddress[3], data->hubMacAddress[4], data->hubMacAddress[5]);
+                } else {
+                    Serial.println("ROLE CHANGE: Invalid hub MAC address provided, keeping existing");
                 }
-            } else {
+            } else if (needsHubMac) {
+                // Only clear if this is a child device that needs a hub MAC
+                // Don't clear if it's a hub device (hubs don't need hub MACs)
                 deviceConfig.clearHubMacAddress();
+                Serial.println("ROLE CHANGE: Hub MAC address cleared (all zeros provided for child device)");
             }
             
             // Apply the role change
@@ -442,10 +456,11 @@ void handleRoleChange(const std::string& value, bool success) {
                 // 2. Update advertising data with new role
                 updateAdvertisingData();
                 
-                // 3. Handle child behavior - disconnect from phone when CHILD role assigned
-                if (deviceConfig.isNodeMode() && (newRole == ROLE_LEFT_HAND || newRole == ROLE_RIGHT_HAND || 
-                                                 newRole == ROLE_LEFT_FOREARM || newRole == ROLE_RIGHT_FOREARM)) {
-                    // Initialize ESP-NOW communication with assigned hub
+                // 3. Handle child behavior - disconnect from phone when LEFT CHILD role assigned
+                // Left children (hand, forearm, shoulder) send data to their corresponding right hub
+                if (deviceConfig.isNodeMode() && (newRole == ROLE_LEFT_HAND || newRole == ROLE_LEFT_FOREARM || 
+                                                 newRole == ROLE_LEFT_SHOULDER)) {
+                    // Initialize ESP-NOW communication with assigned right hub
                     if (initializeESPNowSender()) {
                         updateESPNowHubMacAddress();
                     }
@@ -457,6 +472,15 @@ void handleRoleChange(const std::string& value, bool success) {
                         delay(100); // Brief delay to ensure disconnect
                         updateAdvertisingData(); // Restart advertising with updated role information
                     }
+                }
+                
+                // 4. Handle hub behavior - initialize hub client service when HUB role assigned
+                // Right hubs (hand, forearm, shoulder) receive data from left children
+                // Chest has no children, so skip hub client service initialization
+                if (deviceConfig.isHubMode() && (newRole == ROLE_RIGHT_HAND || newRole == ROLE_RIGHT_FOREARM || 
+                                                 newRole == ROLE_RIGHT_SHOULDER)) {
+                    // Initialize hub client service to receive ESP-NOW data from left children
+                    setupHubClientService();
                 }
                 
                 // 5. Provide LED feedback
@@ -474,7 +498,7 @@ void handleRoleChange(const std::string& value, bool success) {
     else if (value.length() == 1) {
         uint8_t newRole = (uint8_t)value[0];
         
-        // Validate role value (0-6 are valid roles, 255 is ROLE_UNKNOWN)
+        // Validate role value (0-6 are valid roles: LEFT_HAND, RIGHT_HAND, LEFT_FOREARM, RIGHT_FOREARM, LEFT_SHOULDER, RIGHT_SHOULDER, CHEST; 255 is ROLE_UNKNOWN)
         if (newRole <= 6 || newRole == 255) {
             
             // Clear hub MAC address for legacy role assignment
@@ -489,11 +513,12 @@ void handleRoleChange(const std::string& value, bool success) {
                 // 2. Update advertising data with new role
                 updateAdvertisingData();
                 
-                // 3. Handle child behavior - disconnect from phone when CHILD role assigned
-                if (deviceConfig.isNodeMode() && (newRole == ROLE_LEFT_HAND || newRole == ROLE_RIGHT_HAND || 
-                                                 newRole == ROLE_LEFT_FOREARM || newRole == ROLE_RIGHT_FOREARM)) {
-                    Serial.println("=== CHILD BEHAVIOR: Child role assigned ===");
-                    Serial.println("Child device will now disconnect from phone and accept hub connections");
+                // 3. Handle child behavior - disconnect from phone when LEFT CHILD role assigned
+                // Left children (hand, forearm, shoulder) send data to their corresponding right hub
+                if (deviceConfig.isNodeMode() && (newRole == ROLE_LEFT_HAND || newRole == ROLE_LEFT_FOREARM || 
+                                                 newRole == ROLE_LEFT_SHOULDER)) {
+                    Serial.println("=== CHILD BEHAVIOR: Left child role assigned ===");
+                    Serial.println("Left child device will send data to corresponding right hub via ESP-NOW");
                     
                     // Disconnect from current phone connection if connected
                     if (deviceConnected) {
@@ -508,6 +533,15 @@ void handleRoleChange(const std::string& value, bool success) {
                     // Child devices should continue advertising normally
                     // They will accept connections from both phones and hubs
                     // The hub will be the one doing the seeking and connecting
+                }
+                
+                // 4. Handle hub behavior - initialize hub client service when HUB role assigned
+                // Right hubs (hand, forearm, shoulder) receive data from left children
+                // Chest has no children, so skip hub client service initialization
+                if (deviceConfig.isHubMode() && (newRole == ROLE_RIGHT_HAND || newRole == ROLE_RIGHT_FOREARM || 
+                                                 newRole == ROLE_RIGHT_SHOULDER)) {
+                    // Initialize hub client service to receive ESP-NOW data from left children
+                    setupHubClientService();
                 }
                 
                 // 5. Provide LED feedback
@@ -551,18 +585,20 @@ void handleCalibration(const std::string& value, bool success) {
         if (cmd == 0x01) { // Calibration command
             Serial.println("HUB: Calibration command detected");
             
+            // Reset hub's own IMU first
             if (imu.isAvailable()) {
                 imu.reset();
-                
-                // Send calibration command to children via ESP-NOW
-                sendCalibrationCommand();
-                Serial.println("HUB: Calibration command sent to children");
-                
-                // Reset the GATT characteristic to its original value (empty/0x00)
-                // This ensures future calibration commands are properly detected
-                if (calibrationChar != nullptr) {
-                    calibrationChar->setValue((uint8_t*)"", 0);
-                }
+                Serial.println("HUB: Hub's own IMU reset");
+            }
+            
+            // Send calibration command to left child via ESP-NOW (right hubs only)
+            // Note: Chest has no children, so this will not send anything for chest
+            sendCalibrationCommand();
+            
+            // Reset the GATT characteristic to its original value (empty/0x00)
+            // This ensures future calibration commands are properly detected
+            if (calibrationChar != nullptr) {
+                calibrationChar->setValue((uint8_t*)"", 0);
             }
         }
     }

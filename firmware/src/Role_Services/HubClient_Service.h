@@ -8,7 +8,7 @@
 #include "Hub_Structures.h"
 
 // Hub ESP-NOW receiver configuration
-#define MAX_CHILDREN 2
+#define MAX_CHILDREN 1  // Each hub has exactly one child: right hand <- left hand, right forearm <- left forearm, right shoulder <- left shoulder
 #define ESP_NOW_CHANNEL 1
 #define CHILD_DISCONNECT_TIMEOUT_SECONDS 1  // Timeout in seconds for child disconnection detection
 
@@ -23,6 +23,7 @@ private:
     // Simple disconnection tracking - one counter per type
     unsigned int handMissedPolls;
     unsigned int forearmMissedPolls;
+    unsigned int shoulderMissedPolls;
     
     // Periodic logging variables
     unsigned long lastLogTime;
@@ -36,6 +37,7 @@ public:
     int findChildByMac(const uint8_t* macAddress);
     int createChildSlot();
     void syncConnectionStatus();
+    bool isValidSenderRole(DeviceRole senderRole);  // Validates sender matches receiver's opposite side
     
     // ESP-NOW peer management
     bool registerChildAsESPNowPeer(const uint8_t* macAddress);

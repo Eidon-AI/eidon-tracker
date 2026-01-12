@@ -118,13 +118,10 @@ void BNO085::enableReports() {
 
 // Function to initialize the BNO085 sensor
 bool BNO085::begin() {    
-    Serial.println("BNO085: Starting initialization...");
-    
     // Configure ADR pin for I2C address selection
     // ADR pin HIGH = 0x4B, ADR pin LOW = 0x4A
     pinMode(I2C_ADR, OUTPUT);
     digitalWrite(I2C_ADR, HIGH); // Set to 0x4B address
-    Serial.printf("BNO085: ADR pin set HIGH for I2C address 0x%02X\n", I2C_ADDR);
     
     // Initialize I2C with explicit pins for ESP32-C6
     Wire.setPins(I2C_SDA, I2C_SCL);

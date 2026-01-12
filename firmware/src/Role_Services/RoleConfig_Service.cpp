@@ -70,11 +70,13 @@ void updateRoleConfigCharacteristic() {
 // LED feedback pattern for role changes
 void startRoleChangeLEDPattern() {
     // Quick double-blink pattern: on-off-on-off
-    digitalWrite(2, HIGH);  // LED on
+    // Use GPIO15 (LED_PIN) which is already configured in setup() as OUTPUT
+    const int LED_PIN = 15;  // Seeed XIAO ESP32-C6 onboard LED
+    digitalWrite(LED_PIN, HIGH);  // LED on
     delay(100);
-    digitalWrite(2, LOW);   // LED off
+    digitalWrite(LED_PIN, LOW);   // LED off
     delay(100);
-    digitalWrite(2, HIGH);  // LED on
+    digitalWrite(LED_PIN, HIGH);  // LED on
     delay(100);
-    digitalWrite(2, LOW);   // LED off
+    digitalWrite(LED_PIN, LOW);   // LED off
 } 
