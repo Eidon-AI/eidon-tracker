@@ -14,7 +14,7 @@ HubClientService hubClientService;
 // Constructor
 HubClientService::HubClientService() 
     : childDeviceCount(0), espNowInitialized(false), packetCounter(0), lastLogTime(0),
-      handMissedPolls(0), forearmMissedPolls(0) {
+      handMissedPolls(0), forearmMissedPolls(0), shoulderMissedPolls(0) {
     // Initialize child devices
     for (int i = 0; i < MAX_CHILDREN; i++) {
         memset(childDevices[i].macAddress, 0, sizeof(childDevices[i].macAddress));
@@ -26,16 +26,26 @@ HubClientService::HubClientService()
     memset(&aggregatedData, 0, sizeof(aggregatedData));
     aggregatedData.handConnected = false;
     aggregatedData.forearmConnected = false;
+    aggregatedData.shoulderConnected = false;
     
     // Reset disconnection tracking
     handMissedPolls = 0;
     forearmMissedPolls = 0;
+    shoulderMissedPolls = 0;
 }
 
-// Send calibration command to all connected children
+// Send calibration command to left child via ESP-NOW
+// Note: Right hubs (hand, forearm, shoulder) send to their corresponding left child
+// Note: Chest has no children, so this function will not send anything for chest
 void HubClientService::sendCalibrationCommand() {
     if (!espNowInitialized) {
         Serial.println("HubClient: ESP-NOW not initialized, cannot send command");
+        return;
+    }
+    
+    // Check if we have any children (right hubs have 1 child, chest has 0)
+    if (childDeviceCount == 0) {
+        Serial.println("HubClient: No children registered, skipping calibration command");
         return;
     }
     
@@ -49,7 +59,8 @@ void HubClientService::sendCalibrationCommand() {
     cmd.reserved[1] = 0;
     cmd.reserved[2] = 0;
     
-    // Send to all registered children (ignore dataAvailable status for calibration)
+    // Send to all registered children (each right hub has exactly one left child)
+    // Ignore dataAvailable status for calibration - send even if child hasn't sent data recently
     int sentCount = 0;
     Serial.printf("HUB: Attempting to send calibration to %d children\n", childDeviceCount);
     
@@ -61,7 +72,7 @@ void HubClientService::sendCalibrationCommand() {
                      childDevices[i].macAddress[3], childDevices[i].macAddress[4], childDevices[i].macAddress[5],
                      deviceConfig.getRoleName(childDevices[i].role));
         
-        // Send calibration command to all registered children, regardless of recent data status
+        // Send calibration command to registered child, regardless of recent data status
         esp_err_t result = esp_now_send(childDevices[i].macAddress, (const uint8_t*)&cmd, sizeof(cmd));
         if (result == ESP_OK) {
             sentCount++;
@@ -135,11 +146,9 @@ bool HubClientService::initializeESPNow() {
     // Force WiFi channel to ESP-NOW channel first
     WiFi.setChannel(1);
     delay(50); // Give WiFi time to settle (shorter than re-initialization)
-    Serial.println("HubClient: WiFi channel set to 1 for ESP-NOW");
     
     // Configure WiFi for BLE coexistence
     WiFi.setSleep(false); // Disable WiFi sleep to prevent conflicts
-    Serial.println("HubClient: WiFi sleep disabled for BLE coexistence");
     
     // Initialize ESP-NOW (same sequence as working re-initialization)
     if (esp_now_init() != ESP_OK) {
@@ -166,6 +175,11 @@ void HubClientService::begin() {
         return;
     }
     
+    // Chest has no children, so skip ESP-NOW initialization
+    if (deviceConfig.getRole() == ROLE_CHEST) {
+        return;
+    }
+    
     // Initialize ESP-NOW
     if (!initializeESPNow()) {
         return;
@@ -183,10 +197,12 @@ void HubClientService::begin() {
     memset(&aggregatedData, 0, sizeof(aggregatedData));
     aggregatedData.handConnected = false;
     aggregatedData.forearmConnected = false;
+    aggregatedData.shoulderConnected = false;
     
     // Reset disconnection tracking
     handMissedPolls = 0;
     forearmMissedPolls = 0;
+    shoulderMissedPolls = 0;
     
 
 }
@@ -195,6 +211,11 @@ void HubClientService::begin() {
 void HubClientService::update(bool bleConnected) {
     if (!deviceConfig.isHubMode() || !espNowInitialized) {
         return; // Not a hub or ESP-NOW not initialized
+    }
+    
+    // Chest has no children, so skip updates
+    if (deviceConfig.getRole() == ROLE_CHEST) {
+        return;
     }
     
     // Child timeout handling removed - just burning CPU cycles and giving useless data
@@ -214,26 +235,13 @@ void HubClientService::update(bool bleConnected) {
         float espNowRate = (float)packetCounter / 30.0; // packets per second over 30 seconds
         
         Serial.printf("HUB: ESP-NOW received: %.1f Hz, Children: %d/%d, BLE: %s\n", 
-                     espNowRate, connectedCount, 2, bleConnected ? "Connected" : "Disconnected");
+                     espNowRate, connectedCount, MAX_CHILDREN, bleConnected ? "Connected" : "Disconnected");
 
         // Raw Data Debug (same frequency as HUB log)
         // Print HUB's own raw data (need access to IMU, but it's global in main.cpp)
         // Since we can't easily access the global IMU here without circular deps or externs, 
         // we'll rely on the fact that this service is for managing children.
         // However, we CAN print the raw data of the connected children if available.
-        
-        for (int i = 0; i < childDeviceCount; i++) {
-            if (childDevices[i].dataAvailable) {
-                RawMotionData& raw = childDevices[i].lastRawData;
-                Serial.printf("RAW DEBUG (Child %d %s): Accel(%.2f, %.2f, %.2f) Gyro(%.2f, %.2f, %.2f)\n", 
-                             i, childDevices[i].role == ROLE_LEFT_HAND ? "L_HAND" : 
-                                (childDevices[i].role == ROLE_RIGHT_HAND ? "R_HAND" : 
-                                (childDevices[i].role == ROLE_LEFT_FOREARM ? "L_FORE" : 
-                                (childDevices[i].role == ROLE_RIGHT_FOREARM ? "R_FORE" : "UNK"))),
-                             raw.accel_x, raw.accel_y, raw.accel_z,
-                             raw.gyro_x, raw.gyro_y, raw.gyro_z);
-            }
-        }
                 
         // Reset counters
         packetCounter = 0;
@@ -243,6 +251,11 @@ void HubClientService::update(bool bleConnected) {
 
 // Process incoming ESP-NOW packet (simplified - only handles quaternions)
 void HubClientService::processESPNowPacket(const uint8_t* macAddr, const uint8_t* data, int dataLen) {
+    // Chest has no children, so skip packet processing
+    if (deviceConfig.getRole() == ROLE_CHEST) {
+        return;
+    }
+    
     // Check minimum packet size (header size)
     if (dataLen < sizeof(ESPNowPacketHeader)) {
         return;
@@ -265,6 +278,13 @@ void HubClientService::processESPNowPacket(const uint8_t* macAddr, const uint8_t
         }
         
         ESPNowRawPacket* packet = (ESPNowRawPacket*)data;
+        
+        // Validate that sender role matches receiver's opposite side
+        DeviceRole senderRole = (DeviceRole)packet->header.senderRole;
+        if (!isValidSenderRole(senderRole)) {
+            return; // Silently ignore packets from non-matching roles
+        }
+        
         int slotIndex = findChildByMac(macAddr);
         
         if (slotIndex != -1) {
@@ -286,6 +306,12 @@ void HubClientService::processQuaternionPacket(const uint8_t* macAddr, const uin
     }
     
     ESPNowQuaternionPacket* packet = (ESPNowQuaternionPacket*)data;
+    
+    // Validate that sender role matches receiver's opposite side
+    DeviceRole senderRole = (DeviceRole)packet->header.senderRole;
+    if (!isValidSenderRole(senderRole)) {
+        return; // Silently ignore packets from non-matching roles
+    }
     
     // Find or create child device slot by MAC address
     int slotIndex = findChildByMac(macAddr);
@@ -319,10 +345,12 @@ void HubClientService::processQuaternionPacket(const uint8_t* macAddr, const uin
     }
     
     // Reset the appropriate missed polls counter based on role
-    if (child.role == ROLE_LEFT_HAND || child.role == ROLE_RIGHT_HAND) {
+    if (child.role == ROLE_LEFT_HAND) {
         handMissedPolls = 0;
-    } else if (child.role == ROLE_LEFT_FOREARM || child.role == ROLE_RIGHT_FOREARM) {
+    } else if (child.role == ROLE_LEFT_FOREARM) {
         forearmMissedPolls = 0;
+    } else if (child.role == ROLE_LEFT_SHOULDER) {
+        shoulderMissedPolls = 0;
     }
 }
 
@@ -344,6 +372,25 @@ int HubClientService::findChildByMac(const uint8_t* macAddress) {
         }
     }
     return -1; // Not found
+}
+
+// Validate that sender role matches receiver's opposite side
+// Right hand hub should only accept from left hand, etc.
+bool HubClientService::isValidSenderRole(DeviceRole senderRole) {
+    DeviceRole receiverRole = deviceConfig.getRole();
+    
+    // Check if sender role matches the expected left-side role for this right-side hub
+    if (receiverRole == ROLE_RIGHT_HAND) {
+        return senderRole == ROLE_LEFT_HAND;
+    } else if (receiverRole == ROLE_RIGHT_FOREARM) {
+        return senderRole == ROLE_LEFT_FOREARM;
+    } else if (receiverRole == ROLE_RIGHT_SHOULDER) {
+        return senderRole == ROLE_LEFT_SHOULDER;
+    }
+    
+    // Chest has no children, so no valid sender
+    // Unknown or invalid receiver role
+    return false;
 }
 
 // Create new child slot
@@ -442,7 +489,7 @@ void HubClientService::checkChildDisconnections() {
         // Mark all hand children as disconnected
         for (int i = 0; i < childDeviceCount; i++) {
             ESPNowChildDevice& child = childDevices[i];
-            if (child.dataAvailable && (child.role == ROLE_LEFT_HAND || child.role == ROLE_RIGHT_HAND)) {
+            if (child.dataAvailable && child.role == ROLE_LEFT_HAND) {
                 child.dataAvailable = false;
             }
         }
@@ -454,7 +501,19 @@ void HubClientService::checkChildDisconnections() {
         // Mark all forearm children as disconnected
         for (int i = 0; i < childDeviceCount; i++) {
             ESPNowChildDevice& child = childDevices[i];
-            if (child.dataAvailable && (child.role == ROLE_LEFT_FOREARM || child.role == ROLE_RIGHT_FOREARM)) {
+            if (child.dataAvailable && child.role == ROLE_LEFT_FOREARM) {
+                child.dataAvailable = false;
+            }
+        }
+    }
+    
+    // Increment shoulder missed polls
+    shoulderMissedPolls++;
+    if (shoulderMissedPolls >= CHILD_DISCONNECT_TIMEOUT_SECONDS) {
+        // Mark all shoulder children as disconnected
+        for (int i = 0; i < childDeviceCount; i++) {
+            ESPNowChildDevice& child = childDevices[i];
+            if (child.dataAvailable && child.role == ROLE_LEFT_SHOULDER) {
                 child.dataAvailable = false;
             }
         }
@@ -469,18 +528,23 @@ void HubClientService::syncConnectionStatus() {
     // Reset connection flags - we'll set them based on actual child status
     aggregatedData.handConnected = false;
     aggregatedData.forearmConnected = false;
+    aggregatedData.shoulderConnected = false;
     
     // Iterate through all child devices to determine actual status
+    // Note: Each right hub has exactly one left child (hand, forearm, or shoulder)
     for (int i = 0; i < childDeviceCount; i++) {
         ESPNowChildDevice& child = childDevices[i];
         
         if (child.dataAvailable) {
-            if (child.role == ROLE_LEFT_HAND || child.role == ROLE_RIGHT_HAND) {
+            if (child.role == ROLE_LEFT_HAND) {
                 aggregatedData.handData = child.lastData;
                 aggregatedData.handConnected = true;
-            } else if (child.role == ROLE_LEFT_FOREARM || child.role == ROLE_RIGHT_FOREARM) {
+            } else if (child.role == ROLE_LEFT_FOREARM) {
                 aggregatedData.forearmData = child.lastData;
                 aggregatedData.forearmConnected = true;
+            } else if (child.role == ROLE_LEFT_SHOULDER) {
+                aggregatedData.shoulderData = child.lastData;
+                aggregatedData.shoulderConnected = true;
             }
         }
     }

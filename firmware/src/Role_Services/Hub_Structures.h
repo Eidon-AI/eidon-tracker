@@ -55,23 +55,30 @@ struct ESPNowChildDevice {
     RawMotionData lastRawData; // Last received raw data
 } __attribute__((packed));
 
-// Aggregated quaternion data for hub (unchanged structure)
+// Aggregated quaternion data for hub
+// Note: Each right hub has exactly one left child (hand, forearm, or shoulder)
+// The hub aggregates its own data + its left child's data
 struct AggregatedQuaternionData {
-    QuaternionData hubData;
-    QuaternionData handData;
-    QuaternionData forearmData;
-    bool handConnected;
-    bool forearmConnected;
+    QuaternionData hubData;        // Hub's own quaternion data
+    QuaternionData handData;        // Left hand child data (for right hand hub)
+    QuaternionData forearmData;    // Left forearm child data (for right forearm hub)
+    QuaternionData shoulderData;   // Left shoulder child data (for right shoulder hub)
+    bool handConnected;             // Left hand child connection status
+    bool forearmConnected;          // Left forearm child connection status
+    bool shoulderConnected;         // Left shoulder child connection status
     unsigned long timestamp;
 } __attribute__((packed));
 
 // Aggregated raw data for hub
+// Note: Each right hub has exactly one left child (hand, forearm, or shoulder)
 struct AggregatedRawData {
-    RawMotionData hubData;
-    RawMotionData handData;
-    RawMotionData forearmData;
-    bool handConnected;
-    bool forearmConnected;
+    RawMotionData hubData;          // Hub's own raw data
+    RawMotionData handData;         // Left hand child data (for right hand hub)
+    RawMotionData forearmData;      // Left forearm child data (for right forearm hub)
+    RawMotionData shoulderData;     // Left shoulder child data (for right shoulder hub)
+    bool handConnected;             // Left hand child connection status
+    bool forearmConnected;          // Left forearm child connection status
+    bool shoulderConnected;         // Left shoulder child connection status
     unsigned long timestamp;
 } __attribute__((packed));
 

@@ -4,7 +4,23 @@ All notable changes to this project will be documented in this file.
 
 This project follows [Semantic Versioning](https://semver.org/).
 
-## [1.0.1] – 2026-01-08
+## [2.0.0] – 2026-01-10
+### Notes
+Not backwards compatible. Requires App version 2.0.0+
+
+### Added
+
+### Changed
+- Major reworking of hub <> child architectue
+- Right sides are now hubs, all left sides connect to right side
+
+### Fixed
+- This fixes Android BLE limitations
+
+### Removed
+- 
+
+## [1.0.1] – 2026-01-10
 ### Added
 
 ### Changed

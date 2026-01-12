@@ -70,8 +70,8 @@ const char* DeviceConfig::getRoleName(DeviceRole role) {
         case ROLE_RIGHT_HAND: return "Right Hand";
         case ROLE_LEFT_FOREARM: return "Left Forearm";
         case ROLE_RIGHT_FOREARM: return "Right Forearm";
-        case ROLE_LEFT_HUB: return "Left Hub";
-        case ROLE_RIGHT_HUB: return "Right Hub";
+        case ROLE_LEFT_SHOULDER: return "Left Shoulder";
+        case ROLE_RIGHT_SHOULDER: return "Right Shoulder";
         case ROLE_CHEST: return "Chest";
         case ROLE_UNKNOWN: return "Unknown";
         default: return "Invalid";
@@ -79,12 +79,13 @@ const char* DeviceConfig::getRoleName(DeviceRole role) {
 }
 
 bool DeviceConfig::isHubMode() {
-    return (config.role == ROLE_LEFT_HUB || config.role == ROLE_RIGHT_HUB || config.role == ROLE_CHEST);
+    return (config.role == ROLE_RIGHT_HAND || config.role == ROLE_RIGHT_FOREARM || 
+            config.role == ROLE_RIGHT_SHOULDER || config.role == ROLE_CHEST);
 }
 
 bool DeviceConfig::isNodeMode() {
-    return (config.role == ROLE_LEFT_HAND || config.role == ROLE_RIGHT_HAND ||
-            config.role == ROLE_LEFT_FOREARM || config.role == ROLE_RIGHT_FOREARM);
+    return (config.role == ROLE_LEFT_HAND || config.role == ROLE_LEFT_FOREARM || 
+            config.role == ROLE_LEFT_SHOULDER);
 }
 
 // Hub MAC address management functions
@@ -257,5 +258,5 @@ String DeviceConfig::generateDeviceName() {
 }
 
 bool DeviceConfig::isValidRole(DeviceRole role) {
-    return (role >= ROLE_LEFT_HAND && role <= ROLE_RIGHT_HUB) || role == ROLE_CHEST || role == ROLE_UNKNOWN;
+    return (role >= ROLE_LEFT_HAND && role <= ROLE_RIGHT_SHOULDER) || role == ROLE_CHEST || role == ROLE_UNKNOWN;
 } 

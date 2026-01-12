@@ -6,14 +6,14 @@
 
 // Device role enumeration with clear documentation
 enum DeviceRole {
-    ROLE_LEFT_HAND = 0,      // Left hand/arm
-    ROLE_RIGHT_HAND = 1,     // Right hand/arm
-    ROLE_LEFT_FOREARM = 2,   // Left forearm
-    ROLE_RIGHT_FOREARM = 3,  // Right forearm
-    ROLE_LEFT_HUB = 4,       // Left hub/upper arm
-    ROLE_RIGHT_HUB = 5,      // Right hub/upper arm
-    ROLE_CHEST = 6,          // Chest
-    ROLE_UNKNOWN = 255       // No role assigned (default state)
+    ROLE_LEFT_HAND = 0,         // Left hand (child - sends to right hand hub)
+    ROLE_RIGHT_HAND = 1,       // Right hand (hub - receives from left hand)
+    ROLE_LEFT_FOREARM = 2,     // Left forearm (child - sends to right forearm hub)
+    ROLE_RIGHT_FOREARM = 3,    // Right forearm (hub - receives from left forearm)
+    ROLE_LEFT_SHOULDER = 4,    // Left shoulder (child - sends to right shoulder hub)
+    ROLE_RIGHT_SHOULDER = 5,   // Right shoulder (hub - receives from left shoulder)
+    ROLE_CHEST = 6,            // Chest (hub - sends directly to phone)
+    ROLE_UNKNOWN = 255         // No role assigned (default state)
 };
 
 // Device configuration structure (enhanced for ESP-NOW support)
