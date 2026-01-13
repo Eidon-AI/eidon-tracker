@@ -752,7 +752,7 @@ void setup() {
 
     // Initialize WiFi for ESP-NOW support and MAC address retrieval
     WiFi.mode(WIFI_MODE_STA);
-    // Note: WiFi.begin() not needed for ESP-NOW - MAC address available after setting mode
+    WiFi.begin(); // Required for ESP-NOW - initializes WiFi stack
 
     // LED TEST CODE - Commented out but kept for hardware debugging
     /*

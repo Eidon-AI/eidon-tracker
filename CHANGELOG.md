@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [2.0.1] – 2026-10-13
+### Added
+
+### Changed
+
+### Fixed
+- Fixed low child transmition rate errors
+
+### Removed
+- 
+
+
 ## [2.0.0] – 2026-01-10
 ### Notes
 Not backwards compatible. Requires App version 2.0.0+
