@@ -1,0 +1,27 @@
+Drill report for eidon-tracker.kicad_pcb
+Created on 2025-09-23T11:37:26-0500
+
+Copper Layer Stackup:
+    =============================================================
+    L1 :  F.Cu                      front
+    L1 :  B.Cu                      back
+
+
+Drill file 'eidon-tracker-PTH.drl' contains
+    plated through holes:
+    =============================================================
+    T1  0.300mm  0.0118"  (15 holes)
+    T2  0.750mm  0.0295"  (2 holes)
+    T3  0.889mm  0.0350"  (22 holes)
+    T4  0.900mm  0.0354"  (3 holes)
+    T5  1.500mm  0.0591"  (5 holes)  (with 3 slots)
+    T6  3.000mm  0.1181"  (1 hole)
+
+    Total plated holes count 48
+
+
+Drill file 'eidon-tracker-NPTH.drl' contains
+    unplated through holes:
+    =============================================================
+
+    Total unplated holes count 0
