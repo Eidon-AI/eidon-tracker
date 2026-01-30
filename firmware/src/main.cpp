@@ -139,6 +139,11 @@ const unsigned long IMU_UPDATE_INTERVAL = 21; // 48 Hz (20.83ms interval) - matc
 // Status LED pin (second LED for simple status indication on GPIO1)
 #define STATUS_LED_PIN A1
 
+// User button (wired in parallel with boot button on GPIO9)
+#define USER_BUTTON_PIN 9
+unsigned long buttonLastPressed = 0;
+const unsigned long BUTTON_DEBOUNCE_MS = 300;
+
 // Status LED variables
 const unsigned long STATUS_LED_BLINK_INTERVAL = 500; // Blink every 500ms when advertising
 
@@ -675,6 +680,9 @@ void setup() {
     pinMode(LED_PIN, OUTPUT);
     pinMode(STATUS_LED_PIN, OUTPUT);
 
+    // Setup user button (active-low, uses internal pull-up)
+    pinMode(USER_BUTTON_PIN, INPUT_PULLUP);
+
     // LED TEST CODE - Commented out but kept for hardware debugging
     // Uncomment below to test LED functionality with different resistor values
     /*
@@ -951,6 +959,15 @@ void loop() {
 
     // Update both onboard and status LEDs
     updateStatusLED();
+
+    // Check user button (active-low: LOW when pressed)
+    if (digitalRead(USER_BUTTON_PIN) == LOW && (currentTime - buttonLastPressed >= BUTTON_DEBOUNCE_MS)) {
+        buttonLastPressed = currentTime;
+        Serial.println("BUTTON: User button pressed");
+        // TODO: uncomment to trigger IMU reset on button press
+        // imu.reset();
+        // Serial.println("BUTTON: IMU reset triggered");
+    }
 
     // Update battery level (periodic reading - updates device info characteristic silently)
     updateBatteryLevel();
