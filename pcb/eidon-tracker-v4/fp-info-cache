@@ -1,4 +1,4 @@
-24760446330281418
+24767549277418610
 Audio_Module
 Reverb_BTDR-1H
 Digital Reverberation Unit, http://www.belton.co.kr/inc/downfile.php?seq=17&file=pdf (footprint from http://www.uk-electronic.de/PDF/BTDR-1.pdf)
@@ -99581,6 +99581,34 @@ GY-BNO085
 0
 13
 13
+eidon-tracker
+LGA-28_CEV
+
+BNO085 
+0
+28
+28
+eidon-tracker
+LGA14-L_2P59X3P1X0P5_STM
+
+LSM6DSV 
+0
+14
+14
+eidon-tracker
+LGA14-L_2P59X3P1X0P5_STM-L
+
+LSM6DSV 
+0
+14
+14
+eidon-tracker
+LGA14-L_2P59X3P1X0P5_STM-M
+
+LSM6DSV 
+0
+14
+14
 eidon-tracker
 SW_Slide_SPDT_Angled_CK_OS102011MA1Q
 CuK miniature slide switch, OS series, SPDT, right angle, http://www.ckswitches.com/media/1428/os.pdf
