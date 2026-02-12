@@ -72,6 +72,7 @@ BNO085 imu;
 // LEFT characteristics: Left child data (right hubs only - receives ESP-NOW from left child)
 #define LEFT_QUATERNION_CHAR_UUID  "E1D00008-8B5A-3E5B-9E23-4F9B5C91BBDE"  // Left child quaternion data
 #define LEFT_RAW_DATA_CHAR_UUID    "E1D0000C-8B5A-3E5B-9E23-4F9B5C91BBDE"  // Left child raw data
+#define LEFT_BATTERY_CHAR_UUID     "E1D0000D-8B5A-3E5B-9E23-4F9B5C91BBDE"  // Left child battery level
 
 // QuaternionData structure is now defined in Role_Services/Hub_Structures.h
 QuaternionData gattQuaternionData;
@@ -330,6 +331,7 @@ NimBLECharacteristic* hubRawDataChar = nullptr;  // MAIN raw data (device's own 
 // LEFT characteristics (left child data - right hubs only)
 NimBLECharacteristic* leftQuaternionChar = nullptr;  // Left child quaternion data
 NimBLECharacteristic* leftRawDataChar = nullptr;     // Left child raw data
+NimBLECharacteristic* leftBatteryChar = nullptr;     // Left child battery level
 
 // Function to get current BLE connection state (similar to Bluefruit.connected())
 bool isConnected() {
@@ -493,6 +495,12 @@ void updateBatteryLevel() {
             };
             deviceInfoChar->setValue(deviceInfo, sizeof(deviceInfo));
         }
+
+        // Update left child battery characteristic (right hubs only)
+        if (leftBatteryChar != nullptr) {
+            uint8_t childBattery = getChildBatteryLevel();
+            leftBatteryChar->setValue(&childBattery, 1);
+        }
     }
 }
 
@@ -646,7 +654,7 @@ void sendESPNowQuaternionData() {
     ESPNowQuaternionPacket packet;
     packet.header.messageType = MESSAGE_TYPE_QUAT;  // QUAT
     packet.header.senderRole = (uint8_t)deviceConfig.getRole();  // Include role for categorization
-    packet.header.reserved[0] = 0;
+    packet.header.reserved[0] = batteryPercentage;
     packet.header.reserved[1] = 0;
     packet.quaternion.w = corrected_w;
     packet.quaternion.x = corrected_x;
@@ -699,7 +707,7 @@ void sendESPNowRawData() {
     ESPNowRawPacket packet;
     packet.header.messageType = MESSAGE_TYPE_RAW;
     packet.header.senderRole = (uint8_t)deviceConfig.getRole();
-    packet.header.reserved[0] = 0;
+    packet.header.reserved[0] = batteryPercentage;
     packet.header.reserved[1] = 0;
     packet.data = raw;
 
@@ -896,6 +904,14 @@ void setup() {
             NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
         );
         leftRawDataChar->setValue((const uint8_t*)&zeroRawData, sizeof(zeroRawData));
+
+        // Configure LEFT Battery characteristic (for left child battery level)
+        leftBatteryChar = eidonService->createCharacteristic(
+            LEFT_BATTERY_CHAR_UUID,
+            NIMBLE_PROPERTY::READ
+        );
+        uint8_t zeroBattery = 0;
+        leftBatteryChar->setValue(&zeroBattery, 1);
     }
 
     // Start custom service

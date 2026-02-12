@@ -71,6 +71,7 @@ public:
     // Access to child devices for external use
     ESPNowChildDevice* getChildDevices() { return childDevices; }
     int getChildDeviceCount() const { return childDeviceCount; }
+    uint8_t getChildBatteryLevel() const;
 };
 
 // Global instance
@@ -90,6 +91,7 @@ ESPNowChildDevice* getChildDevices(); // Added getter
 void sendCalibrationCommand();
 bool registerChildAsESPNowPeer(const uint8_t* macAddress);
 void restoreESPNowPeers();  // Global recovery function
+uint8_t getChildBatteryLevel();
 
 // ESP-NOW callback function declaration (defined in main.cpp)
 void onESPNowDataRecv(const esp_now_recv_info_t* esp_now_info, const uint8_t* data, int dataLen);
