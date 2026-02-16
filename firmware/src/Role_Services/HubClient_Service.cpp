@@ -20,6 +20,7 @@ HubClientService::HubClientService()
         memset(childDevices[i].macAddress, 0, sizeof(childDevices[i].macAddress));
         childDevices[i].role = ROLE_UNKNOWN;
         childDevices[i].dataAvailable = false;
+        childDevices[i].batteryLevel = 0;
     }
     
     // Initialize aggregated data
@@ -191,6 +192,7 @@ void HubClientService::begin() {
         memset(childDevices[i].macAddress, 0, sizeof(childDevices[i].macAddress));
         childDevices[i].role = ROLE_UNKNOWN;
         childDevices[i].dataAvailable = false;
+        childDevices[i].batteryLevel = 0;
     }
     
     // Initialize aggregated data
@@ -290,6 +292,7 @@ void HubClientService::processESPNowPacket(const uint8_t* macAddr, const uint8_t
         if (slotIndex != -1) {
             ESPNowChildDevice& child = childDevices[slotIndex];
             child.lastRawData = packet->data;
+            child.batteryLevel = packet->header.reserved[0];
             // Note: We don't update dataAvailable flag here as it's driven by quaternion updates
             // which are the primary heartbeat
         }
@@ -333,6 +336,7 @@ void HubClientService::processQuaternionPacket(const uint8_t* macAddr, const uin
     memcpy(child.macAddress, macAddr, sizeof(child.macAddress));
     child.role = (DeviceRole)packet->header.senderRole;  // Get role from packet
     child.lastData = packet->quaternion;
+    child.batteryLevel = packet->header.reserved[0];
     child.dataAvailable = true;
     
     // If this is a new child, register it as an ESP-NOW peer so we can send commands to it
@@ -606,4 +610,17 @@ AggregatedQuaternionData* getAggregatedData() {
 
 ESPNowChildDevice* getChildDevices() {
     return hubClientService.getChildDevices();
-} 
+}
+
+uint8_t HubClientService::getChildBatteryLevel() const {
+    for (int i = 0; i < childDeviceCount; i++) {
+        if (childDevices[i].dataAvailable) {
+            return childDevices[i].batteryLevel;
+        }
+    }
+    return 0;
+}
+
+uint8_t getChildBatteryLevel() {
+    return hubClientService.getChildBatteryLevel();
+}

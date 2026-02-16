@@ -51,6 +51,7 @@ struct ESPNowChildDevice {
     uint8_t macAddress[6];     // Child device MAC address
     DeviceRole role;           // Child device role
     bool dataAvailable;        // Whether we've received data recently
+    uint8_t batteryLevel;      // Child battery percentage (0 = no data)
     QuaternionData lastData;   // Last received quaternion data
     RawMotionData lastRawData; // Last received raw data
 } __attribute__((packed));
