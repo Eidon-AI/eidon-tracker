@@ -17,7 +17,6 @@
 
 // Function declarations
 void sendQuaternionReport();
-void updateLEDStatus();
 void updateStatusLED();
 void startIMUResetPattern();
 bool isConnected();
@@ -141,9 +140,12 @@ const unsigned long IMU_UPDATE_INTERVAL = 21; // 48 Hz (20.83ms interval) - matc
 // Status LED pin (second LED for simple status indication on GPIO1)
 #define STATUS_LED_PIN A1
 
+// User button (wired in parallel with boot button on GPIO9)
+#define USER_BUTTON_PIN 9
+unsigned long buttonLastPressed = 0;
+const unsigned long BUTTON_DEBOUNCE_MS = 300;
+
 // Status LED variables
-unsigned long statusLedLastUpdate = 0;
-bool statusLedState = false;
 const unsigned long STATUS_LED_BLINK_INTERVAL = 500; // Blink every 500ms when advertising
 
 // Battery level monitoring (following Seeed XIAO ESP32 wiki)
@@ -177,11 +179,8 @@ int ledBrightness = 0;
 bool ledState = false;
 
 // Simple timer for debugging LED
-unsigned long debugLedTimer = 0;
-const unsigned long LED_FLASH_INTERVAL = 50; // Very slow flash for debugging
 
 // LED brightness settings
-#define LED_DIM_BRIGHTNESS 50  // Dim brightness level (0-255) when connected
 
 // Add interrupt flag for faster sensor reading
 volatile bool sensorDataReady = false;
@@ -194,75 +193,42 @@ void IRAM_ATTR sensorISR() {
     sensorDataReady = true;
 }
 
-// Function to update LED status based on current state
-void updateLEDStatus() {
-    unsigned long currentTime = millis();
-    
-    // Special test mode for connected state LED
-    if (isConnected()) {
-        // SIMPLIFIED: Just toggle LED every LED_FLASH_INTERVAL ms when connected
-        if (currentTime - debugLedTimer >= LED_FLASH_INTERVAL) {
-            debugLedTimer = currentTime;
-            // Toggle between full on and full off for debugging
-            ledState = !ledState;
-            
-            if (ledState) {
-                digitalWrite(LED_PIN, HIGH); // Full ON for testing
-            } else {
-                digitalWrite(LED_PIN, LOW);  // Full OFF
-            }
-        }
-        return; // Skip normal LED logic when connected
-    }
-    
-    // Handle IMU reset pattern with priority
-    if (currentLEDPattern == LED_IMU_RESET) {
-        digitalWrite(LED_PIN, HIGH); // Solid ON during IMU reset
-        
-        // Check if IMU reset period is over
-        if (currentTime - imuResetStartTime >= IMU_RESET_DURATION) {
-            // Return to appropriate pattern based on connection state
-            currentLEDPattern = isConnected() ? LED_CONNECTED : LED_ADVERTISING;
-            ledLastUpdate = currentTime; // Reset timer to start new pattern immediately
-        }
-        return;
-    }
-    
-    // Only handle advertising when not connected - simplified and less frequent
-    if (currentLEDPattern == LED_ADVERTISING) {
-        // Simple blinking pattern instead of complex sine wave
-        if (currentTime - ledLastUpdate >= 100) { // Update every 100ms instead of 20ms
-            ledLastUpdate = currentTime;
-            ledState = !ledState;
-            digitalWrite(LED_PIN, ledState ? HIGH : LOW);
-        }
-    }
-}
-
 // Function to trigger IMU reset LED pattern
 void startIMUResetPattern() {
     currentLEDPattern = LED_IMU_RESET;
     imuResetStartTime = millis();
 }
 
-// Function to update status LED (second LED) - simple on/off control
-// Blinks when advertising, solid when connected
+// Drives both LED_PIN (active-low) and STATUS_LED_PIN (active-high)
+static void setLEDs(bool on) {
+    digitalWrite(LED_PIN, on ? LOW : HIGH);
+    digitalWrite(STATUS_LED_PIN, on ? HIGH : LOW);
+}
+
+// Unified LED update for both onboard and status LEDs
 void updateStatusLED() {
     unsigned long currentTime = millis();
-    static bool lastConnectedState = false;
+
+    // IMU reset pattern takes priority - solid ON
+    if (currentLEDPattern == LED_IMU_RESET) {
+        setLEDs(true);
+        if (currentTime - imuResetStartTime >= IMU_RESET_DURATION) {
+            currentLEDPattern = isConnected() ? LED_CONNECTED : LED_ADVERTISING;
+            ledLastUpdate = currentTime;
+        }
+        return;
+    }
 
     if (isConnected()) {
         // Solid ON when connected
-        digitalWrite(STATUS_LED_PIN, HIGH);
-        lastConnectedState = true;
+        setLEDs(true);
     } else {
-        // Blink when advertising (not connected)
-        if (currentTime - statusLedLastUpdate >= STATUS_LED_BLINK_INTERVAL) {
-            statusLedLastUpdate = currentTime;
-            statusLedState = !statusLedState;
-            digitalWrite(STATUS_LED_PIN, statusLedState ? HIGH : LOW);
+        // Blink when advertising
+        if (currentTime - ledLastUpdate >= STATUS_LED_BLINK_INTERVAL) {
+            ledLastUpdate = currentTime;
+            ledState = !ledState;
+            setLEDs(ledState);
         }
-        lastConnectedState = false;
     }
 }
 
@@ -456,7 +422,7 @@ void sendQuaternionReport() {
             }
         }
         
-        // LED is now controlled by updateLEDStatus() in the main loop
+        // LED is now controlled by updateStatusLED() in the main loop
     }
 }
 
@@ -721,6 +687,9 @@ void setup() {
     // Setup LED pins
     pinMode(LED_PIN, OUTPUT);
     pinMode(STATUS_LED_PIN, OUTPUT);
+
+    // Setup user button (active-low, uses internal pull-up)
+    pinMode(USER_BUTTON_PIN, INPUT_PULLUP);
 
     // LED TEST CODE - Commented out but kept for hardware debugging
     // Uncomment below to test LED functionality with different resistor values
@@ -1004,11 +973,17 @@ void loop() {
     // Single millis() call for all timing operations
     unsigned long currentTime = millis();
 
-    // Update LED status first - DISABLED for performance
-    // updateLEDStatus();
+    // Update both onboard and status LEDs
+    updateStatusLED();
 
-    // Update status LED (second LED) - simple on/off control
-    // updateStatusLED(); // Disabled to reduce log noise
+    // Check user button (active-low: LOW when pressed)
+    if (digitalRead(USER_BUTTON_PIN) == LOW && (currentTime - buttonLastPressed >= BUTTON_DEBOUNCE_MS)) {
+        buttonLastPressed = currentTime;
+        Serial.println("BUTTON: User button pressed");
+        // TODO: uncomment to trigger IMU reset on button press
+        // imu.reset();
+        // Serial.println("BUTTON: IMU reset triggered");
+    }
 
     // Update battery level (periodic reading - updates device info characteristic silently)
     updateBatteryLevel();
