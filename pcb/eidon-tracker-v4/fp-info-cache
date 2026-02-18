@@ -1,4 +1,4 @@
-24767549277418610
+24767550882542739
 Audio_Module
 Reverb_BTDR-1H
 Digital Reverberation Unit, http://www.belton.co.kr/inc/downfile.php?seq=17&file=pdf (footprint from http://www.uk-electronic.de/PDF/BTDR-1.pdf)
@@ -99568,6 +99568,13 @@ SS-12D00-G 4 E
 3
 3
 eidon-tracker
+BNO085
+
+BNO085 
+0
+28
+28
+eidon-tracker
 EIDON_LOGO
 
 
@@ -99581,13 +99588,6 @@ GY-BNO085
 0
 13
 13
-eidon-tracker
-LGA-28_CEV
-
-BNO085 
-0
-28
-28
 eidon-tracker
 LGA14-L_2P59X3P1X0P5_STM
 
