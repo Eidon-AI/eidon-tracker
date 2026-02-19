@@ -979,7 +979,6 @@ void loop() {
     // Check user button (active-low: LOW when pressed)
     if (digitalRead(USER_BUTTON_PIN) == LOW && (currentTime - buttonLastPressed >= BUTTON_DEBOUNCE_MS)) {
         buttonLastPressed = currentTime;
-        Serial.println("BUTTON: User button pressed");
         // TODO: uncomment to trigger IMU reset on button press
         // imu.reset();
         // Serial.println("BUTTON: IMU reset triggered");
