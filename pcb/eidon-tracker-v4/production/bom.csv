@@ -1,0 +1,11 @@
+﻿Designator,Footprint,Quantity,Value,LCSC Part #
+BT1,JST_PH_S2B-PH-K_1x02_P2.00mm_Horizontal_Inversed,1,Battery,
+"C1, C2",0603,2,22pF,
+"C3, C4, C5",0603,3,100nF,
+"R1, R2",0805,2,220K,
+"R3, R4",0805,2,2.2K,
+"R5, R6, R7",0805,3,10K,
+SW1,SW_Slide_SPDT_Angled_CK_OS102011MA1Q,1,SW_SPDT,
+U1,XIAO-ESP32C6-SMD,1,XIAO-ESP32-C6,
+U2,BNO085,1,BNO085,
+X1,Crystal_SMD_3215-2Pin_3.2x1.5mm,1,32.768KHz,

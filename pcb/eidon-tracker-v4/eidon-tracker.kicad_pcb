@@ -35,7 +35,6 @@
 	)
 	(setup
 		(pad_to_mask_clearance 0.05)
-		(solder_mask_min_width 0.05)
 		(allow_soldermask_bridges_in_footprints no)
 		(tenting front back)
 		(aux_axis_origin 134 111.5)
@@ -1466,7 +1465,7 @@
 				)
 			)
 		)
-		(property "Value" "10k"
+		(property "Value" "10kΩ"
 			(at 0 1.65 0)
 			(layer "F.Fab")
 			(hide yes)
@@ -1707,8 +1706,8 @@
 				)
 			)
 		)
-		(property "Datasheet" "BNO085"
-			(at 0 0 270)
+		(property "Datasheet" "https://www.ceva-ip.com/wp-content/uploads/BNO080_085-Datasheet.pdf"
+			(at 0 0 90)
 			(layer "F.Fab")
 			(hide yes)
 			(uuid "eeef2bf0-c45a-4c67-82ec-fa10c94ee927")
@@ -1719,14 +1718,66 @@
 				)
 			)
 		)
-		(property "Description" ""
-			(at 0 0 270)
+		(property "Description" "9-Axis IMU Sensor Hub LGA-28"
+			(at 0 0 90)
 			(layer "F.Fab")
 			(hide yes)
 			(uuid "903755c0-b971-4a34-abe9-04f00bfc9044")
 			(effects
 				(font
 					(size 1.27 1.27)
+					(thickness 0.15)
+				)
+			)
+		)
+		(property "Manufacturer" "CEVA Technologies"
+			(at 0 0 0)
+			(unlocked yes)
+			(layer "F.Fab")
+			(hide yes)
+			(uuid "0894dea0-eba5-4c13-81d4-f1091da16fb7")
+			(effects
+				(font
+					(size 1 1)
+					(thickness 0.15)
+				)
+			)
+		)
+		(property "Manufacturer Part Number (MPN)" "BNO085"
+			(at 0 0 0)
+			(unlocked yes)
+			(layer "F.Fab")
+			(hide yes)
+			(uuid "bce10f54-5f8a-44f6-85aa-d11370e4aa34")
+			(effects
+				(font
+					(size 1 1)
+					(thickness 0.15)
+				)
+			)
+		)
+		(property "Supplier" "DigiKey"
+			(at 0 0 0)
+			(unlocked yes)
+			(layer "F.Fab")
+			(hide yes)
+			(uuid "15e01a29-c6df-40b6-bb0a-a9a0800d1411")
+			(effects
+				(font
+					(size 1 1)
+					(thickness 0.15)
+				)
+			)
+		)
+		(property "Supplier_PN" "1888-1006-1-ND"
+			(at 0 0 0)
+			(unlocked yes)
+			(layer "F.Fab")
+			(hide yes)
+			(uuid "0e0b8625-4c30-422b-b2f8-c27de09ec2b3")
+			(effects
+				(font
+					(size 1 1)
 					(thickness 0.15)
 				)
 			)
@@ -2039,7 +2090,7 @@
 			)
 		)
 		(fp_text user "*"
-			(at 2.2356 -2.2625 270)
+			(at 2.2356 -2.2625 90)
 			(layer "F.SilkS")
 			(hide yes)
 			(uuid "e5167b04-6b23-4479-b118-759f0b245365")
@@ -2064,7 +2115,7 @@
 			)
 		)
 		(fp_text user "*"
-			(at 1.143 -2.2606 270)
+			(at 1.143 -2.2606 90)
 			(layer "F.Fab")
 			(hide yes)
 			(uuid "a7791e01-c24f-4f5a-80b3-4fdf7819a3e8")
@@ -2371,7 +2422,7 @@
 				)
 			)
 		)
-		(property "Value" "10k"
+		(property "Value" "10kΩ"
 			(at 0 1.65 0)
 			(layer "F.Fab")
 			(hide yes)
@@ -2600,7 +2651,7 @@
 				)
 			)
 		)
-		(property "Value" "220k"
+		(property "Value" "220kΩ"
 			(at 0 0 90)
 			(layer "F.Fab")
 			(hide yes)
@@ -2830,7 +2881,7 @@
 				)
 			)
 		)
-		(property "Value" "220k"
+		(property "Value" "220kΩ"
 			(at 0 0 90)
 			(layer "F.Fab")
 			(hide yes)
@@ -3866,7 +3917,7 @@
 				)
 			)
 		)
-		(property "Value" "10k"
+		(property "Value" "10kΩ"
 			(at 0 1.65 0)
 			(layer "F.Fab")
 			(hide yes)
@@ -4554,7 +4605,7 @@
 				)
 			)
 		)
-		(property "Value" "2.2k"
+		(property "Value" "2.2kΩ"
 			(at 0 1.65 0)
 			(layer "F.Fab")
 			(hide yes)
@@ -4783,7 +4834,7 @@
 				)
 			)
 		)
-		(property "Value" "2.2k"
+		(property "Value" "2.2kΩ"
 			(at 0 1.65 0)
 			(layer "F.Fab")
 			(hide yes)
@@ -5252,7 +5303,7 @@
 				)
 			)
 		)
-		(property "Datasheet" ""
+		(property "Datasheet" "https://jlcpcb.com/api/file/downloadByFileSystemAccessId/8588897358871973888"
 			(at 0 0 180)
 			(unlocked yes)
 			(layer "F.Fab")
@@ -5278,7 +5329,7 @@
 				)
 			)
 		)
-		(property "Manufacturer Part Number (MPN)" "CK OS102011MA1Q"
+		(property "Manufacturer Part Number (MPN)" "CK OS102011MA1QN1"
 			(at 0 0 180)
 			(unlocked yes)
 			(layer "F.Fab")
@@ -5291,7 +5342,7 @@
 				)
 			)
 		)
-		(property "Supplier & Ref" "Mouser 611-OS102011MA1Q"
+		(property "Supplier & Ref" "LCSC C226259"
 			(at 0 0 180)
 			(unlocked yes)
 			(layer "F.Fab")
